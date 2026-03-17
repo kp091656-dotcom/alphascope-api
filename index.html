@@ -1518,8 +1518,6 @@ function setGroqStatus(msg, type) {
 
 function loadSavedKeys() {
   const gemk = localStorage.getItem('nd_groq_key');
-  const mxk = localStorage.getItem('nd_marketaux_key');
-  if (mxk) { document.getElementById('marketauxKey').value = mxk; }
   if (gemk) { groqApiKey = gemk; document.getElementById('groqKey').value = gemk; setGroqStatus('✓ 已啟用（已記住）', 'ok'); }
 }
 
