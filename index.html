@@ -983,9 +983,12 @@ async function fetchMarketaux() {
 
   try {
     // Fetch all+top pages concurrently via Vercel proxy
-    // Fetch 10 pages × 3 articles = up to 30 articles from Bloomberg/Reuters/CNBC/WSJ/FT
-    const reqs = [1,2,3,4,5,6,7,8,9,10].map(p =>
-      fetch(`https://newsdigest-api.vercel.app/api/news?page=${p}`).then(r=>r.json()).catch(()=>null)
+    // 每個來源各抓 2 頁，確保來源多樣性
+    const sources = ['bloomberg.com','reuters.com','cnbc.com','wsj.com','ft.com','seekingalpha.com','finance.yahoo.com'];
+    const reqs = sources.flatMap(src =>
+      [1,2].map(p =>
+        fetch(`https://newsdigest-api.vercel.app/api/news?source=${src}&page=${p}`).then(r=>r.json()).catch(()=>null)
+      )
     );
     const results = await Promise.all(reqs);
 
