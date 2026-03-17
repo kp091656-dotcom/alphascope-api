@@ -605,7 +605,7 @@
     <input class="api-input" id="marketauxKey" type="password" placeholder="Bloomberg · Reuters · CNBC · WSJ · FT（自動載入）" readonly style="opacity:0.5;cursor:default;">
     <button class="api-fetch-btn" id="fetchBtn" onclick="fetchMarketaux()">載入財經新聞</button>
     <span class="api-status" id="apiStatus">示範模式</span>
-    <span class="api-hint">透過 Vercel 伺服器自動轉接 · 每日 200 次</span>
+    <span class="api-hint">RSS 直連 Reuters · CNBC · Bloomberg · WSJ · MarketWatch · FT · 無請求限制</span>
   </div>
   <div class="api-row">
     <label>◆ GROQ KEY</label>
@@ -979,17 +979,12 @@ async function fetchMarketaux() {
   btn.disabled = true;
   btn.textContent = '載入中…';
   setStatus('連線中…', 'loading');
-  document.getElementById('newsFeed').innerHTML = '<div class="feed-state"><div class="spinner"></div><p>正在從 Bloomberg · Reuters · CNBC · WSJ · FT 載入新聞…</p></div>';
+  document.getElementById('newsFeed').innerHTML = '<div class="feed-state"><div class="spinner"></div><p>正在從 Reuters · CNBC · Bloomberg · WSJ · MarketWatch · Yahoo Finance · FT 載入新聞…</p></div>';
 
   try {
     // Fetch all+top pages concurrently via Vercel proxy
-    // 每個來源各抓 2 頁，確保來源多樣性
-    const sources = ['bloomberg.com','reuters.com','cnbc.com','wsj.com','ft.com','seekingalpha.com','finance.yahoo.com'];
-    const reqs = sources.flatMap(src =>
-      [1,2].map(p =>
-        fetch(`https://newsdigest-api.vercel.app/api/news?source=${src}&page=${p}`).then(r=>r.json()).catch(()=>null)
-      )
-    );
+    // RSS feeds via Vercel proxy (Reuters, CNBC, Bloomberg, WSJ, MarketWatch, Yahoo Finance, FT)
+    const reqs = [fetch('https://newsdigest-api.vercel.app/api/news').then(r=>r.json()).catch(()=>null)];
     const results = await Promise.all(reqs);
 
     let articles = [];
@@ -1002,15 +997,15 @@ async function fetchMarketaux() {
         const indiaCheck = (a.source||'') + ' ' + (a.url||'') + ' ' + (a.title||'') + ' ' + (a.description||'');
         if (/indiatimes|hindustantimes|livemint|moneycontrol|economictimes|ndtv|thehindubusinessline|zeebiz|sensex|nifty|sebi|rupee|mumbai|bengaluru|hyderabad|chennai|kolkata/i.test(indiaCheck)) continue;
 
-        // 過濾：必須是財經相關（放寬條件，來源已限定財經媒體）
-        const isBiz = /stock|market|trade|economy|finance|invest|bank|rate|inflation|gdp|earnings|crypto|bitcoin|tech|ai|chip|energy|oil|gold|bond|fund|fed|nasdaq|s&p|trump|tariff|sanction|china|taiwan|ukraine|russia|war|election|policy|microsoft|apple|google|amazon|nvidia|tesla|meta|revenue|profit|quarter|fiscal|merger|acquisition|ipo|valuation|shares|equity|debt|yield|currency|dollar|euro|yen|interest|central bank|monetary|fiscal|budget|deficit|surplus|export|import|supply chain|semiconductor|electric|battery|cloud|software|hardware|startup|venture|billion|trillion|million/i.test((a.title||'') + ' ' + (a.description||''));
+        // 過濾：必須是財經相關
+        const isBiz = /stock|market|trade|economy|finance|invest|bank|rate|inflation|gdp|earnings|crypto|bitcoin|tech|ai|chip|energy|oil|gold|bond|fund|fed|nasdaq|s&p|trump|tariff|sanction|china|taiwan|ukraine|russia|war|election|policy|microsoft|apple|google|amazon|nvidia|tesla|meta|revenue|profit|quarter|fiscal|merger|acquisition|ipo|valuation|shares|equity|debt|yield|currency|dollar|euro|yen|interest|central bank|monetary|budget|deficit|surplus|export|import|supply chain|semiconductor|electric|battery|cloud|software|hardware|startup|venture|billion|trillion|million/i.test((a.title||'') + ' ' + (a.description||''));
         if (!isBiz) continue;
 
         articles.push({
           title: a.title || '',
           description: (a.description || '').slice(0, 300),
           url: a.url || '#',
-          publishedAt: a.published_at || new Date().toISOString(),
+          publishedAt: a.publishedAt || new Date().toISOString(),
           source: a.source || '',
           category: classifyArticle(a.title || '', a.description || ''),
           popularityScore: 0,
@@ -1037,6 +1032,7 @@ async function fetchMarketaux() {
     setStatus(`✓ 科技 ${techCnt} · 經濟 ${econCnt} · 地緣政治 ${geoCnt}`, 'ok');
 
     renderFeed(getFiltered());
+    localStorage.setItem('nd_marketaux_key', key);
     renderTrending();
     generateBrief();
 
@@ -1524,6 +1520,7 @@ function setGroqStatus(msg, type) {
 function loadSavedKeys() {
   const gemk = localStorage.getItem('nd_groq_key');
   const mxk = localStorage.getItem('nd_marketaux_key');
+  if (mxk) { document.getElementById('marketauxKey').value = mxk; }
   if (gemk) { groqApiKey = gemk; document.getElementById('groqKey').value = gemk; setGroqStatus('✓ 已啟用（已記住）', 'ok'); }
 }
 
