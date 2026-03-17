@@ -48,19 +48,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  // RSS news feeds
+  // RSS news feeds - only fresh sources
   const RSS_FEEDS = [
-    { url: 'https://feeds.reuters.com/reuters/businessNews', source: 'Reuters' },
-    { url: 'https://feeds.reuters.com/reuters/technologyNews', source: 'Reuters' },
-    { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', source: 'CNBC' },
-    { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664', source: 'CNBC' },
-    { url: 'https://feeds.bloomberg.com/markets/news.rss', source: 'Bloomberg' },
-    { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', source: 'WSJ' },
-    { url: 'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml', source: 'WSJ' },
-    { url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories', source: 'MarketWatch' },
-    { url: 'https://finance.yahoo.com/news/rssindex', source: 'Yahoo Finance' },
-    { url: 'https://www.ft.com/?format=rss', source: 'FT' },
+    { url: 'https://feeds.reuters.com/reuters/businessNews',                                                      source: 'Reuters' },
+    { url: 'https://feeds.reuters.com/reuters/technologyNews',                                                    source: 'Reuters' },
+    { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114',                source: 'CNBC' },
+    { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664',                 source: 'CNBC' },
+    { url: 'https://feeds.bloomberg.com/markets/news.rss',                                                        source: 'Bloomberg' },
+    { url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories',                                         source: 'MarketWatch' },
+    { url: 'https://feeds.content.dowjones.io/public/rss/mw_marketpulse',                                        source: 'MarketWatch' },
+    { url: 'https://www.ft.com/?format=rss',                                                                      source: 'FT' },
   ];
+
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
 
   try {
     const results = await Promise.all(RSS_FEEDS.map(async ({ url, source }) => {
@@ -75,45 +75,46 @@ export default async function handler(req, res) {
         const xml = await r.text();
         return { source, xml };
       } catch(e) {
-        return { source, xml: null, error: e.message };
+        return { source, xml: null };
       }
     }));
 
-    // Parse XML to extract articles
     const articles = [];
     for (const { source, xml } of results) {
       if (!xml) continue;
-      // Extract <item> blocks
       const items = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
-      for (const item of items.slice(0, 15)) {
+      for (const item of items.slice(0, 20)) {
         const get = (tag) => {
           const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'));
           return m ? (m[1] || m[2] || '').trim() : '';
         };
-        const title = get('title');
-        const description = get('description').replace(/<[^>]+>/g, '').slice(0, 300);
+        const title = get('title').replace(/&amp;/g,'&').replace(/&apos;/g,"'").replace(/&#x2019;/g,"'").replace(/&#x2018;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+        const description = get('description').replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&apos;/g,"'").replace(/&#[^;]+;/g,'').trim().slice(0, 300);
         const link = get('link') || item.match(/<link>([^<]+)<\/link>/i)?.[1] || '';
         const pubDate = get('pubDate');
+
         if (!title || title.length < 5) continue;
+        if (!description || description.length < 20) continue; // skip empty descriptions
+
+        // Only keep articles from last 24 hours
+        const pub = pubDate ? new Date(pubDate) : new Date();
+        if (pub < cutoff) continue;
+
         articles.push({
           title,
           description,
           url: link.trim(),
-          publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+          publishedAt: pub.toISOString(),
           source,
         });
       }
     }
 
-    // Deduplicate by title
+    // Deduplicate + sort newest first
     const seen = new Set();
-    const unique = articles.filter(a => {
-      if (seen.has(a.title)) return false;
-      seen.add(a.title); return true;
-    });
-
-    // Sort newest first
-    unique.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    const unique = articles
+      .filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true; })
+      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
     res.status(200).json({ data: unique, count: unique.length });
   } catch(e) {
