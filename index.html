@@ -1548,3 +1548,36 @@ async function loadFutures() {
 }
 
 
+function setGroqStatus(msg, type) {
+  const el = document.getElementById('groqStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'api-status' + (type ? ' ' + type : '');
+}
+
+function saveGroqKey() {
+  const key = document.getElementById('groqKey').value.trim();
+  if (!key) { setGroqStatus('請輸入 Key', 'err'); return; }
+  groqApiKey = key;
+  localStorage.setItem('nd_groq_key', key);
+  setGroqStatus('✓ 已啟用（已記住）', 'ok');
+}
+
+function loadSavedKeys() {
+  const gemk = localStorage.getItem('nd_groq_key');
+  if (gemk) { groqApiKey = gemk; document.getElementById('groqKey').value = gemk; setGroqStatus('✓ 已啟用（已記住）', 'ok'); }
+}
+
+// ── Init ──
+renderTrending();
+loadSavedKeys();
+loadFearGreed();
+loadCryptoFearGreed();
+loadVix();
+setTimeout(() => {
+  allArticles = mockArticles;
+  renderFeed(getFiltered());
+}, 500);
+</script>
+</body>
+</html>
