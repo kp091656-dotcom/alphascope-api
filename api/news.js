@@ -48,82 +48,57 @@ export default async function handler(req, res) {
     return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   }
 
-  // Global Futures via stooq.com (free, no API key, no CORS issues)
+  // Global Futures via stooq.com (server-side, no CORS issues)
   if (endpoint === 'futures') {
-    const FUTURES = [
-      // 美股指數 - stooq format
-      { symbol: '%5Edji',   name: '道瓊',        cat: '美股指數' },
-      { symbol: '%5Espx',   name: 'S&P500',      cat: '美股指數' },
-      { symbol: '%5Endx',   name: '那斯達克100', cat: '美股指數' },
-      { symbol: '%5Erut',   name: '羅素2000',    cat: '美股指數' },
-      { symbol: '%5Esox',   name: '費城半導體',  cat: '美股指數' },
-      { symbol: '%5Edax',   name: '德國DAX',     cat: '美股指數' },
-      // 亞股
-      { symbol: '%5Etwii',  name: '台灣加權',    cat: '亞股指數' },
-      { symbol: '%5Enk225', name: '日經225',     cat: '亞股指數' },
-      { symbol: '%5Ehsi',   name: '香港恆生',    cat: '亞股指數' },
-      { symbol: '%5Essi',   name: '新加坡STI',   cat: '亞股指數' },
-      // 能源 - stooq futures (uppercase)
-      { symbol: 'CL.F',    name: '輕原油',      cat: '能源' },
-      { symbol: 'CB.F',    name: '布倫特原油',  cat: '能源' },
-      { symbol: 'NG.F',    name: '天然氣',      cat: '能源' },
-      { symbol: 'HO.F',    name: '燃料油',      cat: '能源' },
-      { symbol: 'RB.F',    name: '汽油',        cat: '能源' },
-      // 金屬 - stooq spot
-      { symbol: 'XAUUSD',  name: '黃金',        cat: '金屬' },
-      { symbol: 'XAGUSD',  name: '白銀',        cat: '金屬' },
-      { symbol: 'XPTUSD',  name: '白金',        cat: '金屬' },
-      { symbol: 'XPDUSD',  name: '鈀金',        cat: '金屬' },
-      { symbol: 'HG.F',    name: '銅',          cat: '金屬' },
-      // 農產品 - stooq futures
-      { symbol: 'ZS.F',    name: '黃豆',        cat: '農產品' },
-      { symbol: 'ZC.F',    name: '玉米',        cat: '農產品' },
-      { symbol: 'ZW.F',    name: '小麥',        cat: '農產品' },
-      { symbol: 'SB.F',    name: '11號糖',      cat: '農產品' },
-      { symbol: 'CC.F',    name: '可可',        cat: '農產品' },
-      { symbol: 'KC.F',    name: '咖啡',        cat: '農產品' },
-      { symbol: 'CT.F',    name: '棉花',        cat: '農產品' },
-      { symbol: 'LE.F',    name: '活牛',        cat: '農產品' },
-      { symbol: 'HE.F',    name: '瘦豬',        cat: '農產品' },
-      // 外匯
-      { symbol: 'eurusd',  name: '歐元/美元',   cat: '外匯' },
-      { symbol: 'gbpusd',  name: '英鎊/美元',   cat: '外匯' },
-      { symbol: 'usdjpy',  name: '美元/日圓',   cat: '外匯' },
-      { symbol: 'audusd',  name: '澳幣/美元',   cat: '外匯' },
-      { symbol: 'usdcad',  name: '美元/加幣',   cat: '外匯' },
-      // 債券殖利率
-      { symbol: '10usy.b', name: '10年美債殖利率', cat: '債券' },
-      { symbol: '30usy.b', name: '30年美債殖利率', cat: '債券' },
-      // 加密貨幣
-      { symbol: 'btcusd',  name: '比特幣',      cat: '加密貨幣' },
-      { symbol: 'ethusd',  name: '以太幣',      cat: '加密貨幣' },
+    const SYMBOLS = [
+      { symbol: '%5Edji',   name: '道瓊',            cat: '美股指數' },
+      { symbol: '%5Espx',   name: 'S&P500',          cat: '美股指數' },
+      { symbol: '%5Endx',   name: '那斯達克100',     cat: '美股指數' },
+      { symbol: '%5Edax',   name: '德國DAX',         cat: '美股指數' },
+      { symbol: '%5Esox',   name: '費城半導體',      cat: '美股指數' },
+      { symbol: '%5Etwii',  name: '台灣加權',        cat: '亞股指數' },
+      { symbol: '%5Enk225', name: '日經225',         cat: '亞股指數' },
+      { symbol: '%5Ehsi',   name: '香港恆生',        cat: '亞股指數' },
+      { symbol: '%5Essi',   name: '新加坡STI',       cat: '亞股指數' },
+      { symbol: 'XAUUSD',   name: '黃金',            cat: '金屬' },
+      { symbol: 'XAGUSD',   name: '白銀',            cat: '金屬' },
+      { symbol: 'XPTUSD',   name: '白金',            cat: '金屬' },
+      { symbol: 'XPDUSD',   name: '鈀金',            cat: '金屬' },
+      { symbol: 'EURUSD',   name: '歐元/美元',       cat: '外匯' },
+      { symbol: 'GBPUSD',   name: '英鎊/美元',       cat: '外匯' },
+      { symbol: 'USDJPY',   name: '美元/日圓',       cat: '外匯' },
+      { symbol: 'AUDUSD',   name: '澳幣/美元',       cat: '外匯' },
+      { symbol: 'USDCAD',   name: '美元/加幣',       cat: '外匯' },
+      { symbol: 'USDCNH',   name: '美元/人民幣',     cat: '外匯' },
+      { symbol: '10USY.B',  name: '10年美債殖利率',  cat: '債券' },
+      { symbol: '30USY.B',  name: '30年美債殖利率',  cat: '債券' },
+      { symbol: 'BTCUSD',   name: '比特幣',          cat: '加密貨幣' },
+      { symbol: 'ETHUSD',   name: '以太幣',          cat: '加密貨幣' },
     ];
 
-    try {
-      // Support pagination: page=0 returns all, page=1,2,3 returns batches of 12
-      const page = parseInt(req.query.page || '0');
-      const BATCH_SIZE = 12;
-      const batch = page > 0
-        ? FUTURES.slice((page-1)*BATCH_SIZE, page*BATCH_SIZE)
-        : FUTURES;
+    const today = new Date();
+    const d2 = today.toISOString().slice(0,10).replace(/-/g,'');
+    const past = new Date(today - 7*24*60*60*1000);
+    const d1 = past.toISOString().slice(0,10).replace(/-/g,'');
 
-      const results = await Promise.all(batch.map(async f => {
+    try {
+      const results = await Promise.all(SYMBOLS.map(async s => {
         try {
-          const url = `https://stooq.com/q/d/l/?s=${f.symbol}&i=d&d1=${getStooqDate(5)}&d2=${getStooqDate(0)}`;
+          const url = `https://stooq.com/q/d/l/?s=${s.symbol}&d1=${d1}&d2=${d2}&i=d`;
           const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
           const csv = await r.text();
-          if (csv.includes('No data') || csv.includes('Brak') || csv.length < 20) return null;
-          const lines = csv.trim().split('\n');
-          if (lines.length < 2) return null;
-          const latest = lines[lines.length - 1].split(',');
-          const prevLine = lines.length >= 3 ? lines[lines.length - 2].split(',') : latest;
+          if (!csv || csv.includes('No data') || csv.length < 20) return null;
+          const lines = csv.trim().split('\n').filter(l => l && !l.startsWith('Date'));
+          if (lines.length < 1) return null;
+          const latest = lines[lines.length-1].split(',');
+          const prev   = lines.length >= 2 ? lines[lines.length-2].split(',') : latest;
           const curr  = parseFloat(latest[4]);
-          const prevC = parseFloat(prevLine[4]);
+          const prevC = parseFloat(prev[4]);
           const hi    = parseFloat(latest[2]);
           const lo    = parseFloat(latest[3]);
           if (!curr || isNaN(curr)) return null;
           return {
-            symbol: f.symbol, name: f.name, cat: f.cat,
+            symbol: s.symbol, name: s.name, cat: s.cat,
             prev: prevC, price: curr, high: hi, low: lo,
             chg: curr - prevC,
             chgPct: prevC ? (curr - prevC) / prevC : 0,
@@ -133,12 +108,13 @@ export default async function handler(req, res) {
       }));
 
       const data = results.filter(r => r !== null);
-      res.status(200).json({ data, count: data.length, total: FUTURES.length, pages: Math.ceil(FUTURES.length / BATCH_SIZE) });
+      res.status(200).json({ data, count: data.length });
     } catch(e) {
       res.status(500).json({ error: e.message });
     }
     return;
   }
+
   // RSS news feeds
   const RSS_FEEDS = [
     { url: 'https://feeds.reuters.com/reuters/businessNews',                                       source: 'Reuters' },
