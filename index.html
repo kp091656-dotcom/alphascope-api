@@ -634,6 +634,7 @@
   <button class="cat-tab" data-cat="tech">💻 科技</button>
   <button class="cat-tab" data-cat="economy">📈 經濟</button>
   <button class="cat-tab" data-cat="geopolitics">🌐 地緣政治</button>
+  <button class="cat-tab" id="futuresTab" onclick="showFutures()" style="margin-left:1rem;border-left:1px solid var(--border);padding-left:1rem;">📊 全球期貨</button>
 </div>
 
 <main>
@@ -659,7 +660,27 @@
     <div id="newsFeed">
       <div class="feed-state"><div class="spinner"></div><p>載入示範資料中…</p></div>
     </div>
-    <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
+    <!-- Futures Leaderboard Panel -->
+<div id="futuresPanel" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">全球期貨排行榜</div>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+      <span id="futuresTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);"></span>
+      <button onclick="loadFutures()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--muted);">↻ 更新</button>
+    </div>
+  </div>
+  <div id="futuresLoading" style="text-align:center;padding:3rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.78rem;">載入中…</div>
+  <div id="futuresContent" style="display:none;">
+    <!-- Sort tabs -->
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+      <button class="fut-sort-btn active" onclick="renderFuturesChart('chgPct')" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.8rem;border:1px solid var(--accent);border-radius:20px;background:var(--accent);color:#fff;cursor:pointer;">漲跌幅</button>
+      <button class="fut-sort-btn" onclick="renderFuturesChart('volPct')" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--muted);cursor:pointer;">波幅</button>
+    </div>
+    <div id="futuresChart"></div>
+  </div>
+</div>
+
+<button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
   </div>
 
   <aside class="sidebar">
@@ -1498,6 +1519,97 @@ async function loadVix() {
     document.getElementById('vixLoading').textContent = '載入失敗：' + e.message;
     console.warn('VIX error:', e);
   }
+}
+
+
+// ── Global Futures Leaderboard ──
+let futuresData = [];
+let futuresSortKey = 'chgPct';
+
+async function loadFutures() {
+  document.getElementById('futuresLoading').style.display = 'block';
+  document.getElementById('futuresContent').style.display = 'none';
+  try {
+    const res = await fetch('https://newsdigest-api.vercel.app/api/news?endpoint=futures');
+    const json = await res.json();
+    if (!json.data?.length) throw new Error('no data');
+    futuresData = json.data;
+    document.getElementById('futuresTs').textContent = '15分鐘延遲 · ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('futuresLoading').style.display = 'none';
+    document.getElementById('futuresContent').style.display = 'block';
+    renderFuturesChart(futuresSortKey);
+  } catch(e) {
+    document.getElementById('futuresLoading').textContent = '載入失敗：' + e.message;
+  }
+}
+
+function renderFuturesChart(sortKey) {
+  futuresSortKey = sortKey;
+  // Update sort button styles
+  document.querySelectorAll('.fut-sort-btn').forEach(btn => {
+    const isActive = (sortKey === 'chgPct' && btn.textContent === '漲跌幅') || (sortKey === 'volPct' && btn.textContent === '波幅');
+    btn.style.background = isActive ? 'var(--accent)' : 'var(--surface)';
+    btn.style.color = isActive ? '#fff' : 'var(--muted)';
+    btn.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+  });
+
+  // Sort by absolute value descending
+  const sorted = [...futuresData].sort((a, b) => Math.abs(b[sortKey]) - Math.abs(a[sortKey]));
+  const maxVal = Math.max(...sorted.map(d => Math.abs(d[sortKey])));
+
+  const container = document.getElementById('futuresChart');
+  container.innerHTML = '';
+
+  // Group by category
+  const cats = ['美股指數','亞股指數','能源','金屬','農產品','外匯','債券','加密貨幣'];
+  for (const cat of cats) {
+    const items = sorted.filter(d => d.cat === cat);
+    if (!items.length) continue;
+
+    const section = document.createElement('div');
+    section.style.cssText = 'margin-bottom:1.5rem;';
+    section.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.5rem;padding-bottom:0.3rem;border-bottom:1px solid var(--border);">${cat}</div>`;
+
+    for (const item of items) {
+      const val = item[sortKey];
+      const pct = maxVal ? Math.abs(val) / maxVal * 100 : 0;
+      const isUp = val >= 0;
+      const color = isUp ? '#16a34a' : '#ef4444';
+      const barColor = isUp ? '#bbf7d0' : '#fecaca';
+      const label = sortKey === 'chgPct'
+        ? (val >= 0 ? '+' : '') + (val * 100).toFixed(2) + '%'
+        : (val * 100).toFixed(2) + '%';
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;cursor:default;';
+      row.innerHTML = `
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--text);width:5.5rem;flex-shrink:0;">${item.name}</div>
+        <div style="flex:1;height:14px;background:#f5f3ee;border-radius:3px;overflow:hidden;position:relative;">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width 0.4s ease;"></div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:${color};font-weight:700;width:4.5rem;text-align:right;">${label}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);width:5rem;text-align:right;">${item.price.toLocaleString('en',{maximumFractionDigits:3})}</div>
+      `;
+      section.appendChild(row);
+    }
+    container.appendChild(section);
+  }
+}
+
+function showFutures() {
+  // Toggle active tab
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('futuresTab').classList.add('active');
+  // Hide news feed, show futures panel
+  document.getElementById('newsFeed').style.display = 'none';
+  document.getElementById('loadMoreBtn').style.display = 'none';
+  document.getElementById('futuresPanel').style.display = 'block';
+  if (!futuresData.length) loadFutures();
+}
+
+function hideFutures() {
+  document.getElementById('futuresPanel').style.display = 'none';
+  document.getElementById('newsFeed').style.display = 'block';
 }
 
 // ── localStorage: remember keys ──
