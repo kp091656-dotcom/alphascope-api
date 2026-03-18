@@ -43,6 +43,11 @@ export default async function handler(req, res) {
     return;
   }
 
+  function getStooqDate(daysAgo) {
+    const d = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  }
+
   // Global Futures via stooq.com (free, no API key, no CORS issues)
   if (endpoint === 'futures') {
     const FUTURES = [
@@ -103,7 +108,9 @@ export default async function handler(req, res) {
 
       const results = await Promise.all(batch.map(async f => {
         try {
-          const url = `https://stooq.com/q/d/l/?s=${f.symbol}&i=d`;
+          // stooq CSV: lowercase symbol, range=5 days to get prev close
+          const sym = f.symbol.toLowerCase();
+          const url = `https://stooq.com/q/d/l/?s=${sym}&i=d&d1=${getStooqDate(5)}&d2=${getStooqDate(0)}`;
           const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
           const csv = await r.text();
           if (csv.includes('No data') || csv.includes('Brak') || csv.length < 20) return null;
