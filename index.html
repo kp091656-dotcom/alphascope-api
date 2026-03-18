@@ -1548,6 +1548,65 @@ async function loadFutures() {
 }
 
 
+
+function renderFuturesChart(sortKey) {
+  futuresSortKey = sortKey;
+  document.querySelectorAll('.fut-sort-btn').forEach(btn => {
+    const isActive = (sortKey === 'chgPct' && btn.textContent === '漲跌幅') || (sortKey === 'volPct' && btn.textContent === '波幅');
+    btn.style.background = isActive ? 'var(--accent)' : 'var(--surface)';
+    btn.style.color = isActive ? '#fff' : 'var(--muted)';
+    btn.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+  });
+
+  const sorted = [...futuresData].sort((a, b) => Math.abs(b[sortKey]) - Math.abs(a[sortKey]));
+  const maxVal = Math.max(...sorted.map(d => Math.abs(d[sortKey])));
+  const container = document.getElementById('futuresChart');
+  container.innerHTML = '';
+
+  const cats = ['美股指數','亞股指數','能源','金屬','農產品','外匯','債券','加密貨幣'];
+  for (const cat of cats) {
+    const items = sorted.filter(d => d.cat === cat);
+    if (!items.length) continue;
+    const section = document.createElement('div');
+    section.style.cssText = 'margin-bottom:1.5rem;';
+    section.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.5rem;padding-bottom:0.3rem;border-bottom:1px solid var(--border);">${cat}</div>`;
+    for (const item of items) {
+      const val = item[sortKey];
+      const pct = maxVal ? Math.abs(val) / maxVal * 100 : 0;
+      const isUp = val >= 0;
+      const color = isUp ? '#16a34a' : '#ef4444';
+      const barColor = isUp ? '#bbf7d0' : '#fecaca';
+      const label = (val >= 0 ? '+' : '') + (val * 100).toFixed(2) + '%';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;';
+      row.innerHTML = `
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--text);width:5.5rem;flex-shrink:0;">${item.name}</div>
+        <div style="flex:1;height:14px;background:#f5f3ee;border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width 0.4s ease;"></div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:${color};font-weight:700;width:4.5rem;text-align:right;">${label}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);width:5rem;text-align:right;">${item.price.toLocaleString('en',{maximumFractionDigits:3})}</div>
+      `;
+      section.appendChild(row);
+    }
+    container.appendChild(section);
+  }
+}
+
+function showFutures() {
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('futuresTab').classList.add('active');
+  document.getElementById('newsFeed').style.display = 'none';
+  document.getElementById('loadMoreBtn').style.display = 'none';
+  document.getElementById('futuresPanel').style.display = 'block';
+  if (!futuresData.length) loadFutures();
+}
+
+function hideFutures() {
+  document.getElementById('futuresPanel').style.display = 'none';
+  document.getElementById('newsFeed').style.display = 'block';
+}
+
 function setGroqStatus(msg, type) {
   const el = document.getElementById('groqStatus');
   if (!el) return;
