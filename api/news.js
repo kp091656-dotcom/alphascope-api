@@ -43,107 +43,91 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Global Futures Leaderboard via Yahoo Finance
+  // Global Futures via Twelve Data
   if (endpoint === 'futures') {
+    const TWELVE_KEY = process.env.TWELVE_DATA_KEY;
+    if (!TWELVE_KEY) return res.status(500).json({ error: 'TWELVE_DATA_KEY not configured' });
+
+    // Twelve Data symbols for futures & indices
     const FUTURES = [
-      { symbol: 'YM=F',     name: '小道瓊',     cat: '美股指數' },
-      { symbol: 'ES=F',     name: '小SP500',     cat: '美股指數' },
-      { symbol: 'NQ=F',     name: '小那斯達克',  cat: '美股指數' },
-      { symbol: '^GDAXI',   name: '德國DAX',     cat: '美股指數' },
-      { symbol: 'DX=F',     name: '美元指數',    cat: '外匯' },
-      { symbol: 'EURUSD=X', name: '歐元',        cat: '外匯' },
-      { symbol: 'GBPUSD=X', name: '英鎊',        cat: '外匯' },
-      { symbol: 'JPY=X',    name: '日圓',        cat: '外匯' },
-      { symbol: 'AUDUSD=X', name: '澳幣',        cat: '外匯' },
-      { symbol: 'CADUSD=X', name: '加幣',        cat: '外匯' },
-      { symbol: 'ZF=F',     name: '5年美債',     cat: '債券' },
-      { symbol: 'ZN=F',     name: '10年美債',    cat: '債券' },
-      { symbol: 'ZB=F',     name: '30年美債',    cat: '債券' },
-      { symbol: 'GC=F',     name: '黃金',        cat: '金屬' },
-      { symbol: 'SI=F',     name: '白銀',        cat: '金屬' },
-      { symbol: 'PL=F',     name: '白金',        cat: '金屬' },
-      { symbol: 'HG=F',     name: '銅',          cat: '金屬' },
-      { symbol: 'CL=F',     name: '輕原油',      cat: '能源' },
-      { symbol: 'HO=F',     name: '燃料油',      cat: '能源' },
-      { symbol: 'RB=F',     name: '汽油',        cat: '能源' },
-      { symbol: 'NG=F',     name: '天然氣',      cat: '能源' },
-      { symbol: 'ZS=F',     name: '黃豆',        cat: '農產品' },
-      { symbol: 'ZC=F',     name: '玉米',        cat: '農產品' },
-      { symbol: 'ZW=F',     name: '小麥',        cat: '農產品' },
-      { symbol: 'SB=F',     name: '11號糖',      cat: '農產品' },
-      { symbol: 'CC=F',     name: '可可',        cat: '農產品' },
-      { symbol: 'KC=F',     name: '咖啡',        cat: '農產品' },
-      { symbol: 'CT=F',     name: '棉花',        cat: '農產品' },
-      { symbol: 'LE=F',     name: '活牛',        cat: '農產品' },
-      { symbol: 'HE=F',     name: '瘦豬',        cat: '農產品' },
-      { symbol: 'ZO=F',     name: '燕麥',        cat: '農產品' },
-      { symbol: 'ZL=F',     name: '大豆油',      cat: '農產品' },
-      { symbol: 'ZM=F',     name: '大豆粉',      cat: '農產品' },
-      { symbol: '^SOX',     name: '費城半導體',  cat: '美股指數' },
-      { symbol: 'RTY=F',    name: '羅素2000',    cat: '美股指數' },
-      { symbol: 'BTC=F',    name: '比特幣',      cat: '加密貨幣' },
-      { symbol: 'ETH=F',    name: '以太幣',      cat: '加密貨幣' },
-      { symbol: 'PA=F',     name: '鈀金',        cat: '金屬' },
-      { symbol: 'TW=F',     name: '台指期',      cat: '亞股指數' },
-      { symbol: '^N225',    name: '日經225',     cat: '亞股指數' },
-      { symbol: '^HSI',     name: '香港恆生',    cat: '亞股指數' },
-      { symbol: '000300.SS',name: '中國滬深300', cat: '亞股指數' },
+      // 美股指數期貨
+      { symbol: 'YM',      name: '小道瓊',     cat: '美股指數', type: 'futures' },
+      { symbol: 'ES',      name: '小SP500',     cat: '美股指數', type: 'futures' },
+      { symbol: 'NQ',      name: '小那斯達克',  cat: '美股指數', type: 'futures' },
+      { symbol: 'RTY',     name: '羅素2000',    cat: '美股指數', type: 'futures' },
+      { symbol: 'FDAX',    name: '德國DAX',     cat: '美股指數', type: 'futures' },
+      { symbol: 'SOX',     name: '費城半導體',  cat: '美股指數', type: 'index' },
+      // 亞股指數
+      { symbol: 'TWN',     name: '台指期',      cat: '亞股指數', type: 'futures' },
+      { symbol: 'NKD',     name: '日經225',     cat: '亞股指數', type: 'futures' },
+      { symbol: 'HSI',     name: '香港恆生',    cat: '亞股指數', type: 'futures' },
+      { symbol: 'CN50',    name: '中國A50',     cat: '亞股指數', type: 'futures' },
+      // 能源
+      { symbol: 'CL',      name: '輕原油',      cat: '能源', type: 'futures' },
+      { symbol: 'HO',      name: '燃料油',      cat: '能源', type: 'futures' },
+      { symbol: 'RB',      name: '汽油',        cat: '能源', type: 'futures' },
+      { symbol: 'NG',      name: '天然氣',      cat: '能源', type: 'futures' },
+      // 金屬
+      { symbol: 'GC',      name: '黃金',        cat: '金屬', type: 'futures' },
+      { symbol: 'SI',      name: '白銀',        cat: '金屬', type: 'futures' },
+      { symbol: 'PL',      name: '白金',        cat: '金屬', type: 'futures' },
+      { symbol: 'HG',      name: '銅',          cat: '金屬', type: 'futures' },
+      { symbol: 'PA',      name: '鈀金',        cat: '金屬', type: 'futures' },
+      // 農產品
+      { symbol: 'ZS',      name: '黃豆',        cat: '農產品', type: 'futures' },
+      { symbol: 'ZC',      name: '玉米',        cat: '農產品', type: 'futures' },
+      { symbol: 'ZW',      name: '小麥',        cat: '農產品', type: 'futures' },
+      { symbol: 'SB',      name: '11號糖',      cat: '農產品', type: 'futures' },
+      { symbol: 'CC',      name: '可可',        cat: '農產品', type: 'futures' },
+      { symbol: 'KC',      name: '咖啡',        cat: '農產品', type: 'futures' },
+      { symbol: 'CT',      name: '棉花',        cat: '農產品', type: 'futures' },
+      { symbol: 'LE',      name: '活牛',        cat: '農產品', type: 'futures' },
+      { symbol: 'HE',      name: '瘦豬',        cat: '農產品', type: 'futures' },
+      { symbol: 'ZO',      name: '燕麥',        cat: '農產品', type: 'futures' },
+      { symbol: 'ZL',      name: '大豆油',      cat: '農產品', type: 'futures' },
+      { symbol: 'ZM',      name: '大豆粉',      cat: '農產品', type: 'futures' },
+      // 外匯
+      { symbol: 'DX',      name: '美元指數',    cat: '外匯', type: 'futures' },
+      { symbol: 'EUR/USD', name: '歐元',        cat: '外匯', type: 'forex' },
+      { symbol: 'GBP/USD', name: '英鎊',        cat: '外匯', type: 'forex' },
+      { symbol: 'USD/JPY', name: '日圓',        cat: '外匯', type: 'forex' },
+      { symbol: 'AUD/USD', name: '澳幣',        cat: '外匯', type: 'forex' },
+      { symbol: 'USD/CAD', name: '加幣',        cat: '外匯', type: 'forex' },
+      // 債券
+      { symbol: 'ZF',      name: '5年美債',     cat: '債券', type: 'futures' },
+      { symbol: 'ZN',      name: '10年美債',    cat: '債券', type: 'futures' },
+      { symbol: 'ZB',      name: '30年美債',    cat: '債券', type: 'futures' },
+      // 加密貨幣
+      { symbol: 'BTC/USD', name: '比特幣',      cat: '加密貨幣', type: 'crypto' },
+      { symbol: 'ETH/USD', name: '以太幣',      cat: '加密貨幣', type: 'crypto' },
     ];
 
     try {
-      // Fetch each symbol via Yahoo Finance chart API (more reliable than quote API)
-      const allQuotes = [];
-      await Promise.all(FUTURES.map(async f => {
-        try {
-          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(f.symbol)}?interval=1d&range=2d`;
-          const r = await fetch(url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': '*/*',
-              'Accept-Language': 'en-US,en;q=0.9',
-              'Origin': 'https://finance.yahoo.com',
-              'Referer': 'https://finance.yahoo.com/',
-            }
-          });
-          const d = await r.json();
-          const meta = d?.chart?.result?.[0]?.meta;
-          if (!meta || !meta.regularMarketPrice) return;
-          const prev = meta.chartPreviousClose || meta.previousClose || meta.regularMarketPrice;
-          allQuotes.push({
-            symbol: f.symbol,
-            regularMarketPrice: meta.regularMarketPrice,
-            regularMarketPreviousClose: prev,
-            regularMarketDayHigh: meta.regularMarketDayHigh || meta.regularMarketPrice,
-            regularMarketDayLow: meta.regularMarketDayLow || meta.regularMarketPrice,
-            regularMarketChange: meta.regularMarketPrice - prev,
-            regularMarketChangePercent: prev ? ((meta.regularMarketPrice - prev) / prev * 100) : 0,
-          });
-        } catch(e) {}
-      }));
-      const quotes = allQuotes;
+      // Twelve Data quote endpoint supports batch requests (comma-separated)
+      const syms = FUTURES.map(f => f.symbol).join(',');
+      const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(syms)}&apikey=${TWELVE_KEY}`;
+      const r = await fetch(url);
+      const data = await r.json();
 
       const symMap = Object.fromEntries(FUTURES.map(f => [f.symbol, f]));
-      const results = quotes.map(q => {
-        const info = symMap[q.symbol] || { name: q.symbol, cat: '其他' };
-        const prev = q.regularMarketPreviousClose || 0;
-        const curr = q.regularMarketPrice || 0;
-        const hi   = q.regularMarketDayHigh || curr;
-        const lo   = q.regularMarketDayLow  || curr;
-        const chgPct = q.regularMarketChangePercent || 0;
+      const results = [];
+
+      for (const [sym, q] of Object.entries(data)) {
+        if (q.status === 'error' || !q.close) continue;
+        const info = symMap[sym] || { name: sym, cat: '其他' };
+        const curr = parseFloat(q.close);
+        const prev = parseFloat(q.previous_close) || curr;
+        const hi   = parseFloat(q.high) || curr;
+        const lo   = parseFloat(q.low)  || curr;
+        const chg  = curr - prev;
+        const chgPct = prev ? chg / prev : 0;
         const volPct = prev ? (hi - lo) / prev : 0;
-        return {
-          symbol:  q.symbol,
-          name:    info.name,
-          cat:     info.cat,
-          prev:    prev,
-          price:   curr,
-          high:    hi,
-          low:     lo,
-          chg:     q.regularMarketChange || 0,
-          chgPct:  chgPct / 100,
-          volPct:  volPct,
-        };
-      }).filter(r => r.price > 0);
+        results.push({
+          symbol: sym, name: info.name, cat: info.cat,
+          prev, price: curr, high: hi, low: lo,
+          chg, chgPct, volPct,
+        });
+      }
 
       res.status(200).json({ data: results, count: results.length });
     } catch(e) {
