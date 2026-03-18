@@ -91,11 +91,27 @@ export default async function handler(req, res) {
     ];
 
     try {
-      const syms = FUTURES.map(f => f.symbol).join(',');
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketDayHigh,regularMarketDayLow,regularMarketChange,regularMarketChangePercent`;
-      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const data = await r.json();
-      const quotes = data?.quoteResponse?.result || [];
+      // Fetch in batches of 10 to avoid URL length limits
+      const allQuotes = [];
+      const batchSize = 10;
+      for (let i = 0; i < FUTURES.length; i += batchSize) {
+        const batch = FUTURES.slice(i, i + batchSize);
+        const syms = batch.map(f => f.symbol).join(',');
+        const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(syms)}`;
+        try {
+          const r = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'application/json',
+              'Accept-Language': 'en-US,en;q=0.9',
+            }
+          });
+          const data = await r.json();
+          const quotes = data?.quoteResponse?.result || [];
+          allQuotes.push(...quotes);
+        } catch(e) { continue; }
+      }
+      const quotes = allQuotes;
 
       const symMap = Object.fromEntries(FUTURES.map(f => [f.symbol, f]));
       const results = quotes.map(q => {
