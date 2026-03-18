@@ -91,26 +91,35 @@ export default async function handler(req, res) {
     ];
 
     try {
-      // Fetch in batches of 10 to avoid URL length limits
+      // Fetch each symbol via Yahoo Finance chart API (more reliable than quote API)
       const allQuotes = [];
-      const batchSize = 10;
-      for (let i = 0; i < FUTURES.length; i += batchSize) {
-        const batch = FUTURES.slice(i, i + batchSize);
-        const syms = batch.map(f => f.symbol).join(',');
-        const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(syms)}`;
+      await Promise.all(FUTURES.map(async f => {
         try {
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(f.symbol)}?interval=1d&range=2d`;
           const r = await fetch(url, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': '*/*',
               'Accept-Language': 'en-US,en;q=0.9',
+              'Origin': 'https://finance.yahoo.com',
+              'Referer': 'https://finance.yahoo.com/',
             }
           });
-          const data = await r.json();
-          const quotes = data?.quoteResponse?.result || [];
-          allQuotes.push(...quotes);
-        } catch(e) { continue; }
-      }
+          const d = await r.json();
+          const meta = d?.chart?.result?.[0]?.meta;
+          if (!meta || !meta.regularMarketPrice) return;
+          const prev = meta.chartPreviousClose || meta.previousClose || meta.regularMarketPrice;
+          allQuotes.push({
+            symbol: f.symbol,
+            regularMarketPrice: meta.regularMarketPrice,
+            regularMarketPreviousClose: prev,
+            regularMarketDayHigh: meta.regularMarketDayHigh || meta.regularMarketPrice,
+            regularMarketDayLow: meta.regularMarketDayLow || meta.regularMarketPrice,
+            regularMarketChange: meta.regularMarketPrice - prev,
+            regularMarketChangePercent: prev ? ((meta.regularMarketPrice - prev) / prev * 100) : 0,
+          });
+        } catch(e) {}
+      }));
       const quotes = allQuotes;
 
       const symMap = Object.fromEntries(FUTURES.map(f => [f.symbol, f]));
