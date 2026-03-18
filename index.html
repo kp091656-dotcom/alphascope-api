@@ -1530,81 +1530,15 @@ async function loadFutures() {
   document.getElementById('futuresLoading').style.display = 'block';
   document.getElementById('futuresLoading').textContent = '載入中…';
   document.getElementById('futuresContent').style.display = 'none';
-
-  const FUTURES = [
-    { symbol: 'YM=F',      name: '小道瓊',     cat: '美股指數' },
-    { symbol: 'ES=F',      name: '小SP500',     cat: '美股指數' },
-    { symbol: 'NQ=F',      name: '小那斯達克',  cat: '美股指數' },
-    { symbol: 'RTY=F',     name: '羅素2000',    cat: '美股指數' },
-    { symbol: '^GDAXI',    name: '德國DAX',     cat: '美股指數' },
-    { symbol: '^SOX',      name: '費城半導體',  cat: '美股指數' },
-    { symbol: 'TW=F',      name: '台指期',      cat: '亞股指數' },
-    { symbol: '^N225',     name: '日經225',     cat: '亞股指數' },
-    { symbol: '^HSI',      name: '香港恆生',    cat: '亞股指數' },
-    { symbol: '000300.SS', name: '中國滬深300', cat: '亞股指數' },
-    { symbol: 'CL=F',      name: '輕原油',      cat: '能源' },
-    { symbol: 'HO=F',      name: '燃料油',      cat: '能源' },
-    { symbol: 'RB=F',      name: '汽油',        cat: '能源' },
-    { symbol: 'NG=F',      name: '天然氣',      cat: '能源' },
-    { symbol: 'GC=F',      name: '黃金',        cat: '金屬' },
-    { symbol: 'SI=F',      name: '白銀',        cat: '金屬' },
-    { symbol: 'PL=F',      name: '白金',        cat: '金屬' },
-    { symbol: 'HG=F',      name: '銅',          cat: '金屬' },
-    { symbol: 'PA=F',      name: '鈀金',        cat: '金屬' },
-    { symbol: 'ZS=F',      name: '黃豆',        cat: '農產品' },
-    { symbol: 'ZC=F',      name: '玉米',        cat: '農產品' },
-    { symbol: 'ZW=F',      name: '小麥',        cat: '農產品' },
-    { symbol: 'SB=F',      name: '11號糖',      cat: '農產品' },
-    { symbol: 'CC=F',      name: '可可',        cat: '農產品' },
-    { symbol: 'KC=F',      name: '咖啡',        cat: '農產品' },
-    { symbol: 'CT=F',      name: '棉花',        cat: '農產品' },
-    { symbol: 'LE=F',      name: '活牛',        cat: '農產品' },
-    { symbol: 'HE=F',      name: '瘦豬',        cat: '農產品' },
-    { symbol: 'ZO=F',      name: '燕麥',        cat: '農產品' },
-    { symbol: 'ZL=F',      name: '大豆油',      cat: '農產品' },
-    { symbol: 'ZM=F',      name: '大豆粉',      cat: '農產品' },
-    { symbol: 'DX=F',      name: '美元指數',    cat: '外匯' },
-    { symbol: 'EURUSD=X',  name: '歐元',        cat: '外匯' },
-    { symbol: 'GBPUSD=X',  name: '英鎊',        cat: '外匯' },
-    { symbol: 'JPY=X',     name: '日圓',        cat: '外匯' },
-    { symbol: 'AUDUSD=X',  name: '澳幣',        cat: '外匯' },
-    { symbol: 'CADUSD=X',  name: '加幣',        cat: '外匯' },
-    { symbol: 'ZF=F',      name: '5年美債',     cat: '債券' },
-    { symbol: 'ZN=F',      name: '10年美債',    cat: '債券' },
-    { symbol: 'ZB=F',      name: '30年美債',    cat: '債券' },
-    { symbol: 'BTC=F',     name: '比特幣',      cat: '加密貨幣' },
-    { symbol: 'ETH=F',     name: '以太幣',      cat: '加密貨幣' },
-  ];
-
   try {
-    // Fetch via Yahoo Finance directly from browser (CORS ok for chart endpoint)
-    const results = await Promise.all(FUTURES.map(async f => {
-      try {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(f.symbol)}?interval=1d&range=1d`;
-        const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const d = await r.json();
-        const meta = d?.chart?.result?.[0]?.meta;
-        if (!meta) return null;
-        const prev = meta.chartPreviousClose || meta.previousClose || 0;
-        const curr = meta.regularMarketPrice || 0;
-        const hi   = meta.regularMarketDayHigh || curr;
-        const lo   = meta.regularMarketDayLow  || curr;
-        return {
-          symbol:  f.symbol,
-          name:    f.name,
-          cat:     f.cat,
-          prev, price: curr, high: hi, low: lo,
-          chg:     curr - prev,
-          chgPct:  prev ? (curr - prev) / prev : 0,
-          volPct:  prev ? (hi - lo) / prev : 0,
-        };
-      } catch(e) { return null; }
-    }));
-
-    futuresData = results.filter(r => r && r.price > 0);
+    // Fetch in 3 pages of 12 concurrently
+    const pages = await Promise.all([1,2,3].map(p =>
+      fetch(`https://newsdigest-api.vercel.app/api/news?endpoint=futures&page=${p}`)
+        .then(r=>r.json()).catch(()=>({data:[]}))
+    ));
+    futuresData = pages.flatMap(p => p.data || []);
     if (!futuresData.length) throw new Error('no data');
-
-    document.getElementById('futuresTs').textContent = '15分鐘延遲 · ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('futuresTs').textContent = '每日收盤價 · ' + new Date().toLocaleDateString('zh-TW');
     document.getElementById('futuresLoading').style.display = 'none';
     document.getElementById('futuresContent').style.display = 'block';
     renderFuturesChart(futuresSortKey);
@@ -1613,105 +1547,4 @@ async function loadFutures() {
   }
 }
 
-function renderFuturesChart(sortKey) {
-  futuresSortKey = sortKey;
-  // Update sort button styles
-  document.querySelectorAll('.fut-sort-btn').forEach(btn => {
-    const isActive = (sortKey === 'chgPct' && btn.textContent === '漲跌幅') || (sortKey === 'volPct' && btn.textContent === '波幅');
-    btn.style.background = isActive ? 'var(--accent)' : 'var(--surface)';
-    btn.style.color = isActive ? '#fff' : 'var(--muted)';
-    btn.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
-  });
 
-  // Sort by absolute value descending
-  const sorted = [...futuresData].sort((a, b) => Math.abs(b[sortKey]) - Math.abs(a[sortKey]));
-  const maxVal = Math.max(...sorted.map(d => Math.abs(d[sortKey])));
-
-  const container = document.getElementById('futuresChart');
-  container.innerHTML = '';
-
-  // Group by category
-  const cats = ['美股指數','亞股指數','能源','金屬','農產品','外匯','債券','加密貨幣'];
-  for (const cat of cats) {
-    const items = sorted.filter(d => d.cat === cat);
-    if (!items.length) continue;
-
-    const section = document.createElement('div');
-    section.style.cssText = 'margin-bottom:1.5rem;';
-    section.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.5rem;padding-bottom:0.3rem;border-bottom:1px solid var(--border);">${cat}</div>`;
-
-    for (const item of items) {
-      const val = item[sortKey];
-      const pct = maxVal ? Math.abs(val) / maxVal * 100 : 0;
-      const isUp = val >= 0;
-      const color = isUp ? '#16a34a' : '#ef4444';
-      const barColor = isUp ? '#bbf7d0' : '#fecaca';
-      const label = sortKey === 'chgPct'
-        ? (val >= 0 ? '+' : '') + (val * 100).toFixed(2) + '%'
-        : (val * 100).toFixed(2) + '%';
-
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;cursor:default;';
-      row.innerHTML = `
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--text);width:5.5rem;flex-shrink:0;">${item.name}</div>
-        <div style="flex:1;height:14px;background:#f5f3ee;border-radius:3px;overflow:hidden;position:relative;">
-          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width 0.4s ease;"></div>
-        </div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:${color};font-weight:700;width:4.5rem;text-align:right;">${label}</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);width:5rem;text-align:right;">${item.price.toLocaleString('en',{maximumFractionDigits:3})}</div>
-      `;
-      section.appendChild(row);
-    }
-    container.appendChild(section);
-  }
-}
-
-function showFutures() {
-  // Toggle active tab
-  document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
-  document.getElementById('futuresTab').classList.add('active');
-  // Hide news feed, show futures panel
-  document.getElementById('newsFeed').style.display = 'none';
-  document.getElementById('loadMoreBtn').style.display = 'none';
-  document.getElementById('futuresPanel').style.display = 'block';
-  if (!futuresData.length) loadFutures();
-}
-
-function hideFutures() {
-  document.getElementById('futuresPanel').style.display = 'none';
-  document.getElementById('newsFeed').style.display = 'block';
-}
-
-// ── localStorage: remember keys ──
-function saveGroqKey() {
-  const key = document.getElementById('groqKey').value.trim();
-  if (!key) { setGroqStatus('請輸入 Key', 'err'); return; }
-  groqApiKey = key;
-  localStorage.setItem('nd_groq_key', key);
-  setGroqStatus('✓ 已啟用並記住', 'ok');
-}
-
-function setGroqStatus(msg, type) {
-  const el = document.getElementById('groqStatus');
-  el.textContent = msg;
-  el.className = 'api-status' + (type ? ' ' + type : '');
-}
-
-function loadSavedKeys() {
-  const gemk = localStorage.getItem('nd_groq_key');
-  if (gemk) { groqApiKey = gemk; document.getElementById('groqKey').value = gemk; setGroqStatus('✓ 已啟用（已記住）', 'ok'); }
-}
-
-// ── Init ──
-renderTrending();
-loadSavedKeys();
-loadFearGreed();
-loadCryptoFearGreed();
-loadVix();
-setTimeout(() => {
-  allArticles = mockArticles;
-  renderFeed(getFiltered());
-}, 500);
-</script>
-</body>
-</html>
