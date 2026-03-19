@@ -1599,6 +1599,7 @@ function showFutures() {
   document.getElementById('futuresTab').classList.add('active');
   document.getElementById('newsFeed').style.display = 'none';
   document.getElementById('loadMoreBtn').style.display = 'none';
+  document.querySelector('.feed-header').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'block';
   if (!futuresData.length) loadFutures();
 }
@@ -1606,6 +1607,7 @@ function showFutures() {
 function hideFutures() {
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('newsFeed').style.display = 'block';
+  document.querySelector('.feed-header').style.display = 'flex';
 }
 
 function setGroqStatus(msg, type) {
