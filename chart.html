@@ -342,15 +342,27 @@ async function loadChart(symbol, name) {
 
     if (!json.data?.length) throw new Error('無資料');
 
-    // Process data
-    allData = json.data.map(d => ({
+    // Process data - filter to position session only, then pick near-month contract per date
+    // Group by date, pick contract_date closest to date (near-month)
+    const byDate = {};
+    for (const d of json.data) {
+      if (d.trading_session !== 'position') continue; // 白盤只取 position
+      if (!d.open || d.open === 0) continue; // skip empty rows
+      // Keep near-month: contract_date with shortest distance to date
+      const cd = d.contract_date.toString();
+      const dateStr = d.date;
+      if (!byDate[dateStr] || cd < byDate[dateStr].contract_date) {
+        byDate[dateStr] = d;
+      }
+    }
+
+    allData = Object.values(byDate).map(d => ({
       time: d.date,
       open: d.open,
       high: d.max,
       low: d.min,
       close: d.close,
       volume: d.volume,
-      change: d.change_percent,
     })).sort((a, b) => a.time.localeCompare(b.time));
 
     renderRange();
