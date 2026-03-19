@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台指期 K 棒日線圖</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --accent: #c8521a;
+    --accent2: #1a6bc8;
+    --text: #e8e6e0;
+    --muted: #5a5850;
+    --up: #26a69a;
+    --down: #ef5350;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .symbol-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+
+  .symbol-btn:hover, .symbol-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(200,82,26,0.1);
+  }
+
+  .range-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .range-btn:hover, .range-btn.active {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: rgba(26,107,200,0.1);
+  }
+
+  .main {
+    padding: 1.5rem 2rem;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .symbol-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  .price-info {
+    display: flex;
+    gap: 1.5rem;
+    align-items: baseline;
+  }
+
+  #currentPrice {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 500;
+  }
+
+  #priceChange {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+  }
+
+  .ohlcv-bar {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  .ohlcv-bar span { color: var(--text); }
+
+  #chartContainer {
+    width: 100%;
+    height: calc(100vh - 220px);
+    min-height: 400px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1rem;
+    z-index: 10;
+  }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+  }
+
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">NewsDigest<span>.</span>AI <span style="font-size:0.65rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-left:0.5rem;">期貨K線</span></div>
+  <div class="controls">
+    <div style="display:flex;gap:0.4rem;">
+      <button class="symbol-btn active" onclick="loadChart('TX','台指期')">台指期 TX</button>
+      <button class="symbol-btn" onclick="loadChart('TXO','台指選)">台指選 TXO</button>
+      <button class="symbol-btn" onclick="loadChart('MTX','小台指')">小台指 MTX</button>
+    </div>
+    <div style="display:flex;gap:0.3rem;margin-left:1rem;">
+      <button class="range-btn" onclick="setRange(90)">3M</button>
+      <button class="range-btn" onclick="setRange(180)">6M</button>
+      <button class="range-btn active" onclick="setRange(365)">1Y</button>
+      <button class="range-btn" onclick="setRange(730)">2Y</button>
+      <button class="range-btn" onclick="setRange(1825)">5Y</button>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="chart-header">
+    <div class="symbol-name" id="symbolName">台指期 TX</div>
+    <div class="price-info">
+      <div id="currentPrice" style="color:var(--text);">—</div>
+      <div id="priceChange">—</div>
+    </div>
+  </div>
+
+  <div class="ohlcv-bar">
+    <div>開 <span id="ohlcO">—</span></div>
+    <div>高 <span id="ohlcH" class="up">—</span></div>
+    <div>低 <span id="ohlcL" class="down">—</span></div>
+    <div>收 <span id="ohlcC">—</span></div>
+    <div>量 <span id="ohlcV">—</span></div>
+  </div>
+
+  <div id="chartContainer">
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="loading-text" id="loadingText">載入台指期歷史資料…</div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div id="dataInfo">資料來源：FinMind · 台灣期交所盤後資料</div>
+    <div id="lastUpdate"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://newsdigest-api.vercel.app/api/news?endpoint=finmind';
+
+let chart, candleSeries, volumeSeries;
+let currentSymbol = 'TX';
+let currentDays = 365;
+let allData = [];
+
+function initChart() {
+  const container = document.getElementById('chartContainer');
+
+  chart = LightweightCharts.createChart(container, {
+    layout: {
+      background: { color: '#0f0f0f' },
+      textColor: '#5a5850',
+    },
+    grid: {
+      vertLines: { color: '#1a1a1a' },
+      horzLines: { color: '#1a1a1a' },
+    },
+    crosshair: {
+      vertLine: { color: '#3a3a3a', width: 1, style: 2 },
+      horzLine: { color: '#3a3a3a', width: 1, style: 2 },
+    },
+    rightPriceScale: {
+      borderColor: '#2a2a2a',
+      textColor: '#5a5850',
+    },
+    timeScale: {
+      borderColor: '#2a2a2a',
+      textColor: '#5a5850',
+      timeVisible: true,
+    },
+    width: container.clientWidth,
+    height: container.clientHeight,
+  });
+
+  // Candlestick series
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#26a69a',
+    downColor: '#ef5350',
+    borderUpColor: '#26a69a',
+    borderDownColor: '#ef5350',
+    wickUpColor: '#26a69a',
+    wickDownColor: '#ef5350',
+  });
+
+  // Volume series (histogram)
+  volumeSeries = chart.addHistogramSeries({
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'volume',
+    color: '#26a69a',
+  });
+  chart.priceScale('volume').applyOptions({
+    scaleMargins: { top: 0.8, bottom: 0 },
+  });
+
+  // Crosshair move → update OHLCV display
+  chart.subscribeCrosshairMove(param => {
+    if (!param.time || !param.seriesData) return;
+    const d = param.seriesData.get(candleSeries);
+    if (!d) return;
+    document.getElementById('ohlcO').textContent = d.open?.toLocaleString() ?? '—';
+    document.getElementById('ohlcH').textContent = d.high?.toLocaleString() ?? '—';
+    document.getElementById('ohlcL').textContent = d.low?.toLocaleString() ?? '—';
+    document.getElementById('ohlcC').textContent = d.close?.toLocaleString() ?? '—';
+    const vd = param.seriesData.get(volumeSeries);
+    document.getElementById('ohlcV').textContent = vd?.value ? Math.round(vd.value).toLocaleString() : '—';
+  });
+
+  // Resize observer
+  new ResizeObserver(() => {
+    chart.applyOptions({
+      width: container.clientWidth,
+      height: container.clientHeight,
+    });
+  }).observe(container);
+}
+
+function getStartDate(days) {
+  const d = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+async function loadChart(symbol, name) {
+  currentSymbol = symbol;
+  document.getElementById('symbolName').textContent = name || symbol;
+  document.querySelectorAll('.symbol-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.includes(symbol));
+  });
+
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('loadingText').textContent = `載入 ${symbol} 歷史資料…`;
+
+  try {
+    const start = getStartDate(Math.max(currentDays, 730)); // Always fetch 2Y, filter on display
+    const url = `${API_BASE}&symbol=${symbol}&start=${start}`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    if (!json.data?.length) throw new Error('無資料');
+
+    // Process data
+    allData = json.data.map(d => ({
+      time: d.date,
+      open: d.open,
+      high: d.max,
+      low: d.min,
+      close: d.close,
+      volume: d.volume,
+      change: d.change_percent,
+    })).sort((a, b) => a.time.localeCompare(b.time));
+
+    renderRange();
+    document.getElementById('dataInfo').textContent = `資料來源：FinMind · 台灣期交所 · ${allData.length} 個交易日`;
+    document.getElementById('lastUpdate').textContent = '更新：' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+
+  } catch(e) {
+    document.getElementById('loadingText').textContent = '載入失敗：' + e.message;
+    return;
+  }
+}
+
+function renderRange() {
+  const cutoff = getStartDate(currentDays);
+  const filtered = allData.filter(d => d.time >= cutoff);
+  if (!filtered.length) return;
+
+  const candles = filtered.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+  const volumes = filtered.map(d => ({
+    time: d.time,
+    value: d.volume,
+    color: d.close >= d.open ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)',
+  }));
+
+  candleSeries.setData(candles);
+  volumeSeries.setData(volumes);
+  chart.timeScale().fitContent();
+
+  // Update price display with last bar
+  const last = filtered[filtered.length - 1];
+  const prev = filtered[filtered.length - 2];
+  const chg = last.close - (prev?.close ?? last.open);
+  const chgPct = prev ? (chg / prev.close * 100) : 0;
+  const isUp = chg >= 0;
+
+  document.getElementById('currentPrice').textContent = last.close.toLocaleString();
+  document.getElementById('currentPrice').style.color = isUp ? '#26a69a' : '#ef5350';
+  document.getElementById('priceChange').textContent = `${isUp?'+':''}${chg.toFixed(0)} (${isUp?'+':''}${chgPct.toFixed(2)}%)`;
+  document.getElementById('priceChange').className = isUp ? 'up' : 'down';
+
+  document.getElementById('ohlcO').textContent = last.open.toLocaleString();
+  document.getElementById('ohlcH').textContent = last.high.toLocaleString();
+  document.getElementById('ohlcL').textContent = last.low.toLocaleString();
+  document.getElementById('ohlcC').textContent = last.close.toLocaleString();
+
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function setRange(days) {
+  currentDays = days;
+  document.querySelectorAll('.range-btn').forEach(b => {
+    const map = {'3M':90,'6M':180,'1Y':365,'2Y':730,'5Y':1825};
+    b.classList.toggle('active', map[b.textContent] === days);
+  });
+  if (allData.length) renderRange();
+  else loadChart(currentSymbol);
+}
+
+// Init
+initChart();
+loadChart('TX', '台指期 TX');
+</script>
+</body>
+</html>
