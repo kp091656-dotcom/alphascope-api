@@ -127,26 +127,63 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Taiwan VIX from FinMind
+  // Taiwan VIX - scrape from TAIFEX vixMinNew page
   if (endpoint === 'twvix') {
-    const TOKEN = process.env.FINMIND_TOKEN;
-    if (!TOKEN) return res.status(500).json({ error: 'FINMIND_TOKEN not configured' });
     try {
-      const start = req.query.start || '2010-01-01';
-      // TAIWAN VIX is in TaiwanFuturesDaily with futures_id = 'VIX'
-      const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanFuturesDaily&data_id=VIX&start_date=${start}&token=${TOKEN}`;
-      const r = await fetch(url);
-      const json = await r.json();
+      // TAIFEX VIX daily data - POST request with date range
+      // Fetch last 2 years of daily VIX data
+      const allData = [];
+      const today = new Date();
       
-      if (json.data?.length > 0) {
-        res.status(200).json({ data: json.data, source: 'finmind-VIX', count: json.data.length });
-      } else {
-        // Try alternative: TaiwanOptionDailyNearbySeries for implied vol
-        const url2 = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanOptionDailyNearbySeries&data_id=TXO&start_date=${start}&token=${TOKEN}`;
-        const r2 = await fetch(url2);
-        const json2 = await r2.json();
-        res.status(200).json({ data: json2.data || [], source: 'finmind-TXO', count: json2.data?.length || 0, msg: json.msg });
+      // Fetch monthly chunks for last 2 years
+      const fetches = [];
+      for (let m = 0; m < 24; m++) {
+        const d = new Date(today.getFullYear(), today.getMonth() - m, 1);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        fetches.push({ year, month });
       }
+
+      const results = await Promise.all(fetches.map(async ({ year, month }) => {
+        try {
+          const queryDate = `${year}/${month}/01`;
+          const body = new URLSearchParams({
+            queryDate,
+            MarketCode: '0',
+            commodity_idt: 'TVIX',
+          });
+          const r = await fetch('https://www.taifex.com.tw/cht/7/vixMinNew', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://www.taifex.com.tw/cht/7/vixMinNew',
+            },
+            body: body.toString(),
+          });
+          const html = await r.text();
+          
+          // Parse table rows from HTML
+          const rows = [];
+          const trMatches = html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
+          for (const tr of trMatches) {
+            const tds = [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+              .map(td => td[1].replace(/<[^>]+>/g, '').trim());
+            if (tds.length >= 2 && tds[0].match(/\d{4}\/\d{2}\/\d{2}/)) {
+              rows.push({ date: tds[0].replace(/\//g, '-'), vix: parseFloat(tds[1]?.replace(/,/g, '')) });
+            }
+          }
+          return rows;
+        } catch(e) { return []; }
+      }));
+
+      const flat = results.flat().filter(d => d.vix > 0);
+      // Deduplicate and sort
+      const seen = new Set();
+      const unique = flat.filter(d => { if (seen.has(d.date)) return false; seen.add(d.date); return true; })
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      res.status(200).json({ data: unique, count: unique.length, source: 'taifex-vix' });
     } catch(e) {
       res.status(500).json({ error: e.message });
     }
