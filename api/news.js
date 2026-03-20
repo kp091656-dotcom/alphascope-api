@@ -191,6 +191,59 @@ export default async function handler(req, res) {
   }
 
 
+  // FinMind - Commodities (Gold, Oil) for futures leaderboard
+  if (endpoint === 'commodities') {
+    const TOKEN = process.env.FINMIND_TOKEN;
+    if (!TOKEN) return res.status(500).json({ error: 'FINMIND_TOKEN not configured' });
+    try {
+      const today = new Date();
+      const start = new Date(today - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      const [goldRes, wtiRes, brentRes] = await Promise.all([
+        fetch(`https://api.finmindtrade.com/api/v4/data?dataset=GoldPrice&start_date=${start}&token=${TOKEN}`),
+        fetch(`https://api.finmindtrade.com/api/v4/data?dataset=CrudeOilPrices&data_id=WTI&start_date=${start}&token=${TOKEN}`),
+        fetch(`https://api.finmindtrade.com/api/v4/data?dataset=CrudeOilPrices&data_id=Brent&start_date=${start}&token=${TOKEN}`),
+      ]);
+
+      const [goldJson, wtiJson, brentJson] = await Promise.all([
+        goldRes.json(), wtiRes.json(), brentRes.json()
+      ]);
+
+      // Gold: take last 2 daily closes (group 5-min data by date)
+      const goldByDate = {};
+      for (const d of goldJson.data || []) {
+        const date = d.date.slice(0, 10);
+        goldByDate[date] = d.Price;
+      }
+      const goldDates = Object.keys(goldByDate).sort();
+      const goldCurr = goldByDate[goldDates[goldDates.length - 1]] || 0;
+      const goldPrev = goldByDate[goldDates[goldDates.length - 2]] || goldCurr;
+
+      // Oil: last 2 entries
+      const wti   = wtiJson.data   || [];
+      const brent = brentJson.data || [];
+      const mkItem = (name, cat, arr) => {
+        if (arr.length < 1) return null;
+        const curr = arr[arr.length - 1].price;
+        const prev = arr.length >= 2 ? arr[arr.length - 2].price : curr;
+        return { symbol: name, name, cat, price: curr, prev, high: curr, low: curr,
+          chg: curr - prev, chgPct: prev ? (curr - prev) / prev : 0, volPct: 0 };
+      };
+
+      const data = [
+        goldCurr ? { symbol: 'GOLD', name: '黃金(即時)', cat: '金屬', price: goldCurr, prev: goldPrev, high: goldCurr, low: goldCurr,
+          chg: goldCurr - goldPrev, chgPct: goldPrev ? (goldCurr - goldPrev) / goldPrev : 0, volPct: 0 } : null,
+        mkItem('WTI原油', '能源', wti),
+        mkItem('布倫特原油', '能源', brent),
+      ].filter(Boolean);
+
+      res.status(200).json({ data, count: data.length });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+    return;
+  }
+
   // FinMind - Taiwan Futures OHLCV data
   if (endpoint === 'finmind') {
     const TOKEN = process.env.FINMIND_TOKEN;
