@@ -1538,10 +1538,14 @@ async function loadFutures() {
   document.getElementById('futuresLoading').textContent = '載入中…';
   document.getElementById('futuresContent').style.display = 'none';
   try {
-    const res = await fetch('https://newsdigest-api.vercel.app/api/news?endpoint=futures');
-    const json = await res.json();
-    if (!json.data?.length) throw new Error('no data');
-    futuresData = json.data;
+    // Fetch stooq indices + FinMind commodities concurrently
+    const [futRes, commRes] = await Promise.all([
+      fetch('https://newsdigest-api.vercel.app/api/news?endpoint=futures'),
+      fetch('https://newsdigest-api.vercel.app/api/news?endpoint=commodities'),
+    ]);
+    const [futJson, commJson] = await Promise.all([futRes.json(), commRes.json()]);
+    futuresData = [...(futJson.data || []), ...(commJson.data || [])];
+    if (!futuresData.length) throw new Error('no data');
     document.getElementById('futuresTs').textContent = '每日收盤價 · ' + new Date().toLocaleDateString('zh-TW');
     document.getElementById('futuresLoading').style.display = 'none';
     document.getElementById('futuresContent').style.display = 'block';
