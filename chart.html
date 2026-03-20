@@ -207,6 +207,12 @@
       <button class="range-btn" onclick="setRange(730)">2Y</button>
       <button class="range-btn" onclick="setRange(1825)">5Y</button>
     </div>
+    <div style="display:flex;gap:0.3rem;margin-left:1rem;border-left:1px solid var(--border);padding-left:1rem;">
+      <button class="range-btn active" id="btnMA" onclick="toggleMA()">均線</button>
+      <button class="range-btn" id="btnBB" onclick="toggleBB()">布林</button>
+      <button class="range-btn" id="btnRSI" onclick="toggleRSI()">RSI</button>
+      <button class="range-btn" id="btnMACD" onclick="toggleMACD()">MACD</button>
+    </div>
   </div>
 </header>
 
@@ -233,6 +239,12 @@
       <div class="loading-text" id="loadingText">載入台指期歷史資料…</div>
     </div>
   </div>
+  <div id="rsiContainer" style="display:none;width:100%;height:120px;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:0.5rem;position:relative;">
+    <div style="position:absolute;top:4px;left:8px;font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);z-index:1;">RSI(14)</div>
+  </div>
+  <div id="macdContainer" style="display:none;width:100%;height:120px;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:0.5rem;position:relative;">
+    <div style="position:absolute;top:4px;left:8px;font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);z-index:1;">MACD(12,26,9)</div>
+  </div>
 
   <div class="status-bar">
     <div id="dataInfo">資料來源：FinMind · 台灣期交所盤後資料</div>
@@ -244,10 +256,98 @@
 const API_BASE = 'https://newsdigest-api.vercel.app/api/news?endpoint=finmind';
 
 let chart, candleSeries, volumeSeries, vixSeries;
+let rsiChart, rsiSeries;
+let macdChart, macdLineSeries, macdSignalSeries, macdHistSeries;
+let ma5, ma20, ma60, ma120, ma240;
+let bbUpper, bbMiddle, bbLower;
+let showMA = true, showBB = false, showRSI = false, showMACD = false;
 let currentSymbol = 'TX';
 let currentDays = 365;
 let allData = [];
 let vixMode = false;
+
+// ── Indicator calculations ──
+function calcMA(data, period) {
+  return data.map((d, i) => {
+    if (i < period - 1) return null;
+    const avg = data.slice(i - period + 1, i + 1).reduce((s, v) => s + v.close, 0) / period;
+    return { time: d.time, value: avg };
+  }).filter(Boolean);
+}
+
+function calcBB(data, period = 20, mult = 2) {
+  const upper = [], middle = [], lower = [];
+  for (let i = period - 1; i < data.length; i++) {
+    const slice = data.slice(i - period + 1, i + 1);
+    const avg = slice.reduce((s, v) => s + v.close, 0) / period;
+    const std = Math.sqrt(slice.reduce((s, v) => s + Math.pow(v.close - avg, 2), 0) / period);
+    upper.push({ time: data[i].time, value: avg + mult * std });
+    middle.push({ time: data[i].time, value: avg });
+    lower.push({ time: data[i].time, value: avg - mult * std });
+  }
+  return { upper, middle, lower };
+}
+
+function calcRSI(data, period = 14) {
+  const result = [];
+  for (let i = period; i < data.length; i++) {
+    let gains = 0, losses = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const chg = data[j].close - data[j-1].close;
+      if (chg > 0) gains += chg; else losses -= chg;
+    }
+    const rs = gains / (losses || 0.001);
+    result.push({ time: data[i].time, value: 100 - 100 / (1 + rs) });
+  }
+  return result;
+}
+
+function calcMACD(data, fast = 12, slow = 26, signal = 9) {
+  const ema = (arr, n) => {
+    const k = 2 / (n + 1);
+    const result = [arr[n-1].close];
+    for (let i = n; i < arr.length; i++) result.push(arr[i].close * k + result[result.length-1] * (1-k));
+    return result;
+  };
+  const fastEMA = ema(data, fast);
+  const slowEMA = ema(data, slow);
+  const offset = slow - fast;
+  const macdLine = fastEMA.slice(offset).map((v, i) => v - slowEMA[i]);
+  const signalLine = ema(macdLine.map((v,i) => ({close:v})), signal);
+  const sigOffset = signal - 1;
+  return data.slice(slow + signal - 2).map((d, i) => ({
+    time: d.time,
+    macd: macdLine[i + sigOffset],
+    signal: signalLine[i],
+    hist: macdLine[i + sigOffset] - signalLine[i],
+  }));
+}
+
+function toggleMA() {
+  showMA = !showMA;
+  document.getElementById('btnMA').classList.toggle('active', showMA);
+  [ma5, ma20, ma60, ma120, ma240].forEach(s => s?.applyOptions({ visible: showMA }));
+}
+
+function toggleBB() {
+  showBB = !showBB;
+  document.getElementById('btnBB').classList.toggle('active', showBB);
+  [bbUpper, bbMiddle, bbLower].forEach(s => s?.applyOptions({ visible: showBB }));
+}
+
+function toggleRSI() {
+  showRSI = !showRSI;
+  document.getElementById('btnRSI').classList.toggle('active', showRSI);
+  document.getElementById('rsiContainer').style.display = showRSI ? 'block' : 'none';
+  if (showRSI && allData.length) updateIndicators(allData.filter(d => d.time >= getStartDate(currentDays)));
+}
+
+function toggleMACD() {
+  showMACD = !showMACD;
+  document.getElementById('btnMACD').classList.toggle('active', showMACD);
+  document.getElementById('macdContainer').style.display = showMACD ? 'block' : 'none';
+  if (showMACD && allData.length) updateIndicators(allData.filter(d => d.time >= getStartDate(currentDays)));
+}
 
 function initChart() {
   const container = document.getElementById('chartContainer');
@@ -311,6 +411,18 @@ function initChart() {
     document.getElementById('ohlcV').textContent = vd?.value ? Math.round(vd.value).toLocaleString() : '—';
   });
 
+  // Moving averages
+  ma5   = chart.addLineSeries({ color: '#f97316', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ma20  = chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ma60  = chart.addLineSeries({ color: '#a855f7', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ma120 = chart.addLineSeries({ color: '#ec4899', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ma240 = chart.addLineSeries({ color: '#84cc16', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
+  // Bollinger Bands
+  bbUpper  = chart.addLineSeries({ color: 'rgba(251,191,36,0.6)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, visible: false });
+  bbMiddle = chart.addLineSeries({ color: 'rgba(251,191,36,0.9)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, visible: false });
+  bbLower  = chart.addLineSeries({ color: 'rgba(251,191,36,0.6)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, visible: false });
+
   // VIX line series (hidden by default)
   vixSeries = chart.addLineSeries({
     color: '#f97316',
@@ -326,6 +438,39 @@ function initChart() {
       height: container.clientHeight,
     });
   }).observe(container);
+
+  // RSI sub-chart
+  const rsiContainer = document.getElementById('rsiContainer');
+  rsiChart = LightweightCharts.createChart(rsiContainer, {
+    layout: { background: { color: '#0f0f0f' }, textColor: '#5a5850' },
+    grid: { vertLines: { color: '#1a1a1a' }, horzLines: { color: '#1a1a1a' } },
+    rightPriceScale: { borderColor: '#2a2a2a', scaleMargins: { top: 0.1, bottom: 0.1 } },
+    timeScale: { borderColor: '#2a2a2a', visible: false },
+    crosshair: { vertLine: { color: '#3a3a3a' }, horzLine: { color: '#3a3a3a' } },
+    width: rsiContainer.clientWidth, height: 120,
+  });
+  rsiSeries = rsiChart.addLineSeries({ color: '#f97316', lineWidth: 2, priceScaleId: 'right' });
+  // Overbought/oversold lines
+  rsiChart.addLineSeries({ color: 'rgba(239,83,80,0.4)', lineWidth: 1, lineStyle: 2, priceScaleId: 'right', lastValueVisible: false }).setData([]);
+
+  // MACD sub-chart
+  const macdContainer = document.getElementById('macdContainer');
+  macdChart = LightweightCharts.createChart(macdContainer, {
+    layout: { background: { color: '#0f0f0f' }, textColor: '#5a5850' },
+    grid: { vertLines: { color: '#1a1a1a' }, horzLines: { color: '#1a1a1a' } },
+    rightPriceScale: { borderColor: '#2a2a2a' },
+    timeScale: { borderColor: '#2a2a2a', visible: false },
+    crosshair: { vertLine: { color: '#3a3a3a' }, horzLine: { color: '#3a3a3a' } },
+    width: macdContainer.clientWidth, height: 120,
+  });
+  macdLineSeries   = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 2 });
+  macdSignalSeries = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1 });
+  macdHistSeries   = macdChart.addHistogramSeries({ color: '#26a69a', priceScaleId: 'right' });
+
+  new ResizeObserver(() => {
+    rsiChart.applyOptions({ width: rsiContainer.clientWidth });
+    macdChart.applyOptions({ width: macdContainer.clientWidth });
+  }).observe(rsiContainer);
 }
 
 function getStartDate(days) {
@@ -418,6 +563,56 @@ function renderRange() {
   document.getElementById('ohlcC').textContent = last.close.toLocaleString();
 
   document.getElementById('loadingOverlay').style.display = 'none';
+
+  // Update indicators
+  updateIndicators(filtered);
+}
+
+function updateIndicators(data) {
+  if (!data.length) return;
+
+  // MA
+  ma5.setData(calcMA(data, 5));
+  ma20.setData(calcMA(data, 20));
+  ma60.setData(calcMA(data, 60));
+  ma120.setData(calcMA(data, 120));
+  ma240.setData(calcMA(data, 240));
+
+  // Bollinger Bands
+  if (showBB) {
+    const bb = calcBB(data);
+    bbUpper.setData(bb.upper);
+    bbMiddle.setData(bb.middle);
+    bbLower.setData(bb.lower);
+  }
+
+  // RSI
+  if (showRSI && rsiSeries) {
+    const rsiData = calcRSI(data);
+    rsiSeries.setData(rsiData);
+    // Add overbought/oversold reference lines to RSI data
+    const firstTime = rsiData[0]?.time;
+    const lastTime = rsiData[rsiData.length-1]?.time;
+    if (firstTime && lastTime) {
+      rsiChart.series?.[1]?.setData([
+        { time: firstTime, value: 70 },
+        { time: lastTime, value: 70 },
+      ]);
+    }
+    rsiChart.timeScale().fitContent();
+  }
+
+  // MACD
+  if (showMACD && macdLineSeries) {
+    const macdData = calcMACD(data);
+    macdLineSeries.setData(macdData.map(d => ({ time: d.time, value: d.macd })));
+    macdSignalSeries.setData(macdData.map(d => ({ time: d.time, value: d.signal })));
+    macdHistSeries.setData(macdData.map(d => ({
+      time: d.time, value: d.hist,
+      color: d.hist >= 0 ? 'rgba(38,166,154,0.6)' : 'rgba(239,83,80,0.6)',
+    })));
+    macdChart.timeScale().fitContent();
+  }
 }
 
 function setRange(days) {
