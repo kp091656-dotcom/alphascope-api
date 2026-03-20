@@ -635,7 +635,7 @@
   <button class="cat-tab" data-cat="tech">💻 科技</button>
   <button class="cat-tab" data-cat="economy">📈 經濟</button>
   <button class="cat-tab" data-cat="geopolitics">🌐 地緣政治</button>
-  <button class="cat-tab" id="futuresTab" onclick="showFutures()" style="margin-left:1rem;border-left:1px solid var(--border);padding-left:1rem;">📊 全球期貨</button>
+  <button class="cat-tab" id="futuresTab" onclick="showFutures()" style="margin-left:1rem;border-left:1px solid var(--border);padding-left:1rem;">📊 全球商品</button>
 </div>
 
 <main>
@@ -664,9 +664,10 @@
     <!-- Futures Leaderboard Panel -->
 <div id="futuresPanel" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">全球期貨排行榜</div>
+    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">全球商品排行榜</div>
     <div style="display:flex;gap:0.5rem;align-items:center;">
       <span id="futuresTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);"></span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);margin-left:0.5rem;">指數: stooq · 能源/金屬: FinMind · 外匯: stooq</span>
       <button onclick="loadFutures()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--muted);">↻ 更新</button>
     </div>
   </div>
