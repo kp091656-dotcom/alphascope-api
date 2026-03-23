@@ -52,9 +52,7 @@ export default async function handler(req, res) {
   if (endpoint === 'futures') {
     const SYMBOLS = [
       // 美股指數 (confirmed working)
-      { symbol: '%5Espx',   name: 'S&P500',          cat: '美股指數' },
-      { symbol: '%5Endx',   name: '那斯達克100',     cat: '美股指數' },
-      { symbol: '%5Edji',   name: '道瓊',            cat: '美股指數' },
+      // 美股指數：透過 FinMind USStockPrice 取得（稍後合併）
       { symbol: '%5Edax',   name: '德國DAX',         cat: '美股指數' },
       { symbol: '%5Esox',   name: '費城半導體',      cat: '美股指數' },
       { symbol: '%5Eftse',  name: '英國FTSE100',     cat: '美股指數' },
@@ -119,7 +117,39 @@ export default async function handler(req, res) {
         } catch(e) { return null; }
       }));
 
-      const data = results.filter(r => r !== null);
+      const stooqData = results.filter(r => r !== null);
+
+      // Fetch US indices from FinMind USStockPrice
+      const TOKEN = process.env.FINMIND_TOKEN;
+      const usSymbols = [
+        { symbol: '^GSPC', name: 'S&P500',    cat: '美股指數' },
+        { symbol: '^IXIC', name: '那斯達克',  cat: '美股指數' },
+        { symbol: '^DJI',  name: '道瓊',      cat: '美股指數' },
+        { symbol: '^VIX',  name: 'VIX波動率', cat: '美股指數' },
+      ];
+
+      const usData = TOKEN ? await Promise.all(usSymbols.map(async s => {
+        try {
+          const start = new Date(Date.now() - 5*24*60*60*1000).toISOString().slice(0,10);
+          const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${encodeURIComponent(s.symbol)}&start_date=${start}&token=${TOKEN}`);
+          const json = await r.json();
+          const rows = (json.data || []).filter(d => d.Close > 0).sort((a,b) => a.date.localeCompare(b.date));
+          if (rows.length < 1) return null;
+          const curr = rows[rows.length-1].Close;
+          const prev = rows.length >= 2 ? rows[rows.length-2].Close : curr;
+          const hi   = rows[rows.length-1].High;
+          const lo   = rows[rows.length-1].Low;
+          return {
+            symbol: s.symbol, name: s.name, cat: s.cat,
+            prev, price: curr, high: hi, low: lo,
+            chg: curr - prev,
+            chgPct: prev ? (curr - prev) / prev : 0,
+            volPct: prev ? (hi - lo) / prev : 0,
+          };
+        } catch(e) { return null; }
+      })) : [];
+
+      const data = [...usData.filter(Boolean), ...stooqData];
       res.status(200).json({ data, count: data.length });
     } catch(e) {
       res.status(500).json({ error: e.message });
