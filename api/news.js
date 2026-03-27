@@ -306,35 +306,57 @@ export default async function handler(req, res) {
 
   // ── PTT Stock 板 RSS proxy ──
   if (endpoint === 'ptt') {
-    try {
-      const r = await fetch('https://www.ptt.cc/atom/Stock.xml', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Cookie': 'over18=1',
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!r.ok) throw new Error(`PTT HTTP ${r.status}`);
-      const xml = await r.text();
-      // Parse Atom entries
-      const entries = [];
-      const entryMatches = xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi);
-      for (const m of entryMatches) {
-        const block = m[1];
-        const title   = (block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i)?.[1] || '').trim();
-        const updated = (block.match(/<updated>([^<]+)<\/updated>/i)?.[1] || '').trim();
-        const link    = (block.match(/<link[^>]+href="([^"]+)"/i)?.[1] || '').trim();
-        const author  = (block.match(/<name>([^<]+)<\/name>/i)?.[1] || '').trim();
-        if (!title || title.startsWith('[公告]') || title.startsWith('[板規]')) continue;
-        entries.push({ title, updated, link, author });
+    const mkC = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
+    const parseAtom = (xml) => {
+      const out = [];
+      const re = /<entry>([\s\S]*?)<\/entry>/gi;
+      let m;
+      while ((m = re.exec(xml)) !== null) {
+        const blk = m[1];
+        const getTag = (tag) => {
+          const rx = new RegExp('<' + tag + '[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/' + tag + '>', 'i');
+          return (blk.match(rx) || ['',''])[1].replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim();
+        };
+        const title = getTag('title'), updated = getTag('updated');
+        const linkM = blk.match(/<link[^>]+href="([^"]+)"/i);
+        const link  = linkM ? linkM[1].trim() : '';
+        if (!title || title.startsWith('[公告]') || title.startsWith('[板規]') || title.startsWith('Fw:')) continue;
+        out.push({ title, updated, link });
       }
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).json({ data: entries, count: entries.length });
-    } catch(e) {
-      res.status(500).json({ error: e.message });
+      return out;
+    };
+    let entries = [];
+    try {
+      const ctrl = mkC(9000);
+      const r = await fetch('https://www.ptt.cc/atom/Stock.xml', {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1', 'Accept': 'application/xml,text/xml' },
+        signal: ctrl.signal,
+      });
+      if (r.ok) entries = parseAtom(await r.text());
+    } catch(e) { /* try HTML fallback */ }
+    if (entries.length === 0) {
+      try {
+        const ctrl2 = mkC(9000);
+        const r2 = await fetch('https://www.ptt.cc/bbs/Stock/index.html', {
+          headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' },
+          signal: ctrl2.signal,
+        });
+        if (r2.ok) {
+          const html = await r2.text();
+          const rx2 = /class="title">[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
+          let hm;
+          while ((hm = rx2.exec(html)) !== null) {
+            const t = hm[2].trim();
+            if (t.startsWith('[公告]') || t.startsWith('[板規]') || t.startsWith('Fw:')) continue;
+            entries.push({ title: t, updated: new Date().toISOString(), link: 'https://www.ptt.cc' + hm[1] });
+          }
+        }
+      } catch(e2) { /* ignore */ }
     }
+    res.status(200).json({ data: entries.slice(0, 25), count: entries.length });
     return;
   }
+
 
   // ── Reddit proxy（解決 CORS）──
   if (endpoint === 'reddit') {
@@ -344,6 +366,8 @@ export default async function handler(req, res) {
     if (!allowedSubs.includes(sub) || !allowedSorts.includes(sort)) {
       return res.status(400).json({ error: 'invalid params' });
     }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
     try {
       const url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${Math.min(parseInt(limit)||25, 50)}`;
       const r = await fetch(url, {
@@ -351,8 +375,9 @@ export default async function handler(req, res) {
           'User-Agent': 'Mozilla/5.0 (compatible; NewsDigestBot/1.0)',
           'Accept': 'application/json',
         },
-        signal: AbortSignal.timeout(10000),
+        signal: ctrl.signal,
       });
+      clearTimeout(timer);
       if (!r.ok) throw new Error(`Reddit HTTP ${r.status}`);
       const data = await r.json();
       const posts = (data?.data?.children || []).map(c => ({
@@ -365,6 +390,7 @@ export default async function handler(req, res) {
       }));
       res.status(200).json({ data: posts, count: posts.length, sub, sort });
     } catch(e) {
+      clearTimeout(timer);
       res.status(500).json({ error: e.message });
     }
     return;
@@ -388,7 +414,7 @@ export default async function handler(req, res) {
       try {
         const r = await fetch(url, {
           headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, application/xml, text/xml' },
-          signal: AbortSignal.timeout(8000),
+          signal: (()=>{ const c=new AbortController(); setTimeout(()=>c.abort(),8000); return c.signal; })(),
         });
         return { source, xml: await r.text() };
       } catch(e) { return { source, xml: null }; }
