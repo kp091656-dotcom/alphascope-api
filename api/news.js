@@ -304,6 +304,72 @@ export default async function handler(req, res) {
     return;
   }
 
+  // ── PTT Stock 板 RSS proxy ──
+  if (endpoint === 'ptt') {
+    try {
+      const r = await fetch('https://www.ptt.cc/atom/Stock.xml', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Cookie': 'over18=1',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!r.ok) throw new Error(`PTT HTTP ${r.status}`);
+      const xml = await r.text();
+      // Parse Atom entries
+      const entries = [];
+      const entryMatches = xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi);
+      for (const m of entryMatches) {
+        const block = m[1];
+        const title   = (block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i)?.[1] || '').trim();
+        const updated = (block.match(/<updated>([^<]+)<\/updated>/i)?.[1] || '').trim();
+        const link    = (block.match(/<link[^>]+href="([^"]+)"/i)?.[1] || '').trim();
+        const author  = (block.match(/<name>([^<]+)<\/name>/i)?.[1] || '').trim();
+        if (!title || title.startsWith('[公告]') || title.startsWith('[板規]')) continue;
+        entries.push({ title, updated, link, author });
+      }
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).json({ data: entries, count: entries.length });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+    return;
+  }
+
+  // ── Reddit proxy（解決 CORS）──
+  if (endpoint === 'reddit') {
+    const { sub = 'wallstreetbets', sort = 'hot', limit = '25' } = req.query;
+    const allowedSubs  = ['wallstreetbets', 'investing', 'stocks', 'StockMarket'];
+    const allowedSorts = ['hot', 'new', 'top'];
+    if (!allowedSubs.includes(sub) || !allowedSorts.includes(sort)) {
+      return res.status(400).json({ error: 'invalid params' });
+    }
+    try {
+      const url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${Math.min(parseInt(limit)||25, 50)}`;
+      const r = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; NewsDigestBot/1.0)',
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!r.ok) throw new Error(`Reddit HTTP ${r.status}`);
+      const data = await r.json();
+      const posts = (data?.data?.children || []).map(c => ({
+        id:      c.data.id,
+        title:   c.data.title,
+        score:   c.data.score,
+        url:     c.data.url,
+        created: c.data.created_utc,
+        num_comments: c.data.num_comments,
+      }));
+      res.status(200).json({ data: posts, count: posts.length, sub, sort });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+    return;
+  }
+
   // RSS news feeds
   const RSS_FEEDS = [
     { url: 'https://feeds.reuters.com/reuters/businessNews',                                       source: 'Reuters' },
