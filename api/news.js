@@ -306,81 +306,105 @@ export default async function handler(req, res) {
 
   // ── PTT Stock 板 RSS proxy + 內文摘要 ──
   if (endpoint === 'ptt') {
-    const mkC = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
-    const HDR = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' };
+    const mkC  = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
+    const HDR  = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' };
+    const BASE = 'https://www.ptt.cc';
+    const now24 = Date.now() - 24 * 60 * 60 * 1000;
+    const SKIP  = ['[公告]','[板規]','Fw:','Re:'];
 
-    // 平行抓 Atom RSS（標題/時間）和 HTML index（推文數）
-    const [atomRes, htmlRes] = await Promise.allSettled([
-      fetch('https://www.ptt.cc/atom/Stock.xml', {
-        headers: { ...HDR, 'Accept': 'application/xml,text/xml' },
-        signal: mkC(8000).signal,
-      }),
-      fetch('https://www.ptt.cc/bbs/Stock/index.html', {
-        headers: HDR, signal: mkC(8000).signal,
-      }),
-    ]);
-
-    // 從 HTML 建立 link → pushes 的 map
-    const pushMap = {};
-    if (htmlRes.status === 'fulfilled' && htmlRes.value.ok) {
-      const html = await htmlRes.value.text();
-      // 每個 .r-ent 包含 nrec + title
+    // 解析單頁 HTML，回傳 [{title, link, pushes, ts}]
+    const parsePage = (html) => {
+      const items = [];
       const rowRe = /<div class="r-ent">([\s\S]*?)<\/div>\s*<\/div>/gi;
       let hm;
       while ((hm = rowRe.exec(html)) !== null) {
-        const row = hm[1];
-        const linkM  = row.match(/href="([^"]+bbs\/Stock[^"]+)"/i);
-        const nrecM  = row.match(/<span[^>]*class="hl[^"]*"[^>]*>([^<]+)<\/span>|<span[^>]*>(\d+|爆|X+)<\/span>/i);
-        if (!linkM) continue;
-        const nrecRaw = nrecM ? (nrecM[1]||nrecM[2]||'0').trim() : '0';
-        const pushes = nrecRaw === '爆' ? 99
-          : /^X+$/.test(nrecRaw) ? -nrecRaw.length * 10
+        const row   = hm[1];
+        const linkM = row.match(/href="(\/bbs\/Stock\/M\.[^"]+)"/i);
+        const titM  = row.match(/<a[^>]+href="[^"]+"[^>]*>([^<]+)<\/a>/i);
+        if (!linkM || !titM) continue;
+        const title = titM[1].trim();
+        if (SKIP.some(p => title.startsWith(p))) continue;
+        // 推文數
+        const nrecM   = row.match(/<span[^>]*class="hl[^"]*"[^>]*>([^<]+)<\/span>|<div class="nrec"><span[^>]*>([^<]*)<\/span>/i);
+        const nrecRaw = (nrecM ? (nrecM[1]||nrecM[2]||'') : '').trim();
+        const pushes  = nrecRaw === '爆' ? 99
+          : /^X+$/i.test(nrecRaw) ? -nrecRaw.length * 10
           : parseInt(nrecRaw) || 0;
-        pushMap['https://www.ptt.cc' + linkM[1]] = pushes;
+        // 時間（格式 M.1774853650.A）→ Unix timestamp
+        const tsM = linkM[1].match(/M\.(\d+)\./);
+        const ts  = tsM ? parseInt(tsM[1]) * 1000 : Date.now();
+        items.push({ title, link: BASE + linkM[1], pushes, ts });
+      }
+      return items;
+    };
+
+    // 取目前最大頁碼
+    const getMaxPage = async () => {
+      try {
+        const r = await fetch(BASE + '/bbs/Stock/index.html', { headers: HDR, signal: mkC(6000).signal });
+        if (!r.ok) return null;
+        const html = await r.text();
+        const m = html.match(/href="\/bbs\/Stock\/index(\d+)\.html"[^>]*>‹ 上頁/);
+        return m ? parseInt(m[1]) + 1 : null; // 上頁是 N-1，所以最新頁是 N
+      } catch(e) { return null; }
+    };
+
+    const maxPage = await getMaxPage();
+    const entries = [];
+
+    if (maxPage) {
+      // 從最新頁往前翻，最多 5 頁（約 100 篇），直到超出 24 小時
+      for (let page = maxPage; page >= Math.max(1, maxPage - 4); page--) {
+        const url = page === maxPage
+          ? BASE + '/bbs/Stock/index.html'
+          : BASE + `/bbs/Stock/index${page}.html`;
+        try {
+          const r = await fetch(url, { headers: HDR, signal: mkC(6000).signal });
+          if (!r.ok) break;
+          const items = parsePage(await r.text());
+          // 這頁的文章按時間新→舊排列
+          let hasRecent = false;
+          for (const item of items) {
+            if (item.ts >= now24) {
+              entries.push({ ...item, updated: new Date(item.ts).toISOString(), body: '' });
+              hasRecent = true;
+            }
+          }
+          // 如果這頁全部文章都超過 24 小時，停止翻頁
+          if (!hasRecent) break;
+        } catch(e) { break; }
       }
     }
 
-    // 從 Atom 取標題 + 時間
-    let entries = [];
-    if (atomRes.status === 'fulfilled' && atomRes.value.ok) {
-      const xml = await atomRes.value.text();
-      const re = /<entry>([\s\S]*?)<\/entry>/gi;
-      let m;
-      while ((m = re.exec(xml)) !== null) {
-        const blk = m[1];
-        const getTag = (tag) => {
-          const rx = new RegExp('<' + tag + '[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/' + tag + '>', 'i');
-          return (blk.match(rx)||['',''])[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim();
-        };
-        const title   = getTag('title');
-        const updated = getTag('updated');
-        const linkM   = blk.match(/<link[^>]+href="([^"]+)"/i);
-        const link    = linkM ? linkM[1].trim() : '';
-        if (!title || ['[公告]','[板規]','Fw:'].some(p => title.startsWith(p))) continue;
-        const pushes = pushMap[link] ?? 0;
-        entries.push({ title, updated, link, pushes, body: '' });
-      }
-    }
-
-    // Atom 失敗時直接用 HTML
+    // 備案：直接用 Atom（只有最新 ~20 篇但至少有資料）
     if (entries.length === 0) {
-      for (const [link, pushes] of Object.entries(pushMap)) {
-        // 從 pushMap 無法取得 title，用 HTML 重新解析
-      }
-      if (htmlRes.status === 'fulfilled' && htmlRes.value.ok) {
-        const html = await htmlRes.value.text();
-        const rx2 = /href="(\/bbs\/Stock\/[^"]+)"[^>]*>([^<]{4,})<\/a>/gi;
-        let hm;
-        while ((hm = rx2.exec(html)) !== null) {
-          const link = 'https://www.ptt.cc' + hm[1];
-          const title = hm[2].trim();
-          if (['[公告]','[板規]','Fw:'].some(p => title.startsWith(p))) continue;
-          entries.push({ title, updated: new Date().toISOString(), link, pushes: pushMap[link]||0, body: '' });
+      try {
+        const r = await fetch(BASE + '/atom/Stock.xml', {
+          headers: { ...HDR, 'Accept': 'application/xml,text/xml' },
+          signal: mkC(8000).signal,
+        });
+        if (r.ok) {
+          const xml = await r.text();
+          const re = /<entry>([\s\S]*?)<\/entry>/gi;
+          let m;
+          while ((m = re.exec(xml)) !== null) {
+            const blk = m[1];
+            const gt = (tag) => {
+              const rx = new RegExp('<' + tag + '[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/' + tag + '>', 'i');
+              return (blk.match(rx)||['',''])[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim();
+            };
+            const title = gt('title'), updated = gt('updated');
+            const linkM = blk.match(/<link[^>]+href="([^"]+)"/i);
+            if (!title || SKIP.some(p => title.startsWith(p))) continue;
+            entries.push({ title, updated, link: linkM?.[1]||'', pushes: 0, ts: new Date(updated).getTime()||0, body: '' });
+          }
         }
-      }
+      } catch(e) {}
     }
 
-    res.status(200).json({ data: entries.slice(0, 25), count: entries.length });
+    // 依時間排序，最新在前
+    entries.sort((a,b) => b.ts - a.ts);
+    res.status(200).json({ data: entries.slice(0, 60), count: entries.length });
     return;
   }
 
@@ -433,12 +457,20 @@ export default async function handler(req, res) {
         // Extract selftext from <content> or <media:description>
         const contentRx = /<(?:content|media:description)[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:content|media:description)>/i;
         const contentM = blk.match(contentRx);
-        const body = contentM ? cleanHtml(contentM[1]).slice(0, 200) : '';
+        // 清除 HTML 標籤、Reddit 模板文字、多餘空白
+        const rawBody = contentM ? contentM[1] : '';
+        const body = rawBody
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#[0-9]+;/g,'')
+          .replace(/This post contains content not supported on old Reddit[^.]*/gi, '')
+          .replace(/Click here to view the full post/gi, '')
+          .replace(/\[link\]|\[comments\]/g, '')
+          .replace(/\s+/g,' ').trim().slice(0, 200);
         const idMatch  = idTag.match(/t3_([a-z0-9]+)/i);
         const id       = idMatch ? idMatch[1] : Math.random().toString(36).slice(2);
         const created  = updated ? Math.floor(new Date(updated).getTime() / 1000) : 0;
         if (!title || title.length < 3) continue;
-        posts.push({ id, title, body, score, url: link, created, num_comments: numComm });
+        posts.push({ id, title, body, score: 0, url: link, created, num_comments: numComm, rank: posts.length + 1 });
       }
 
       // RSS 2.0 fallback
@@ -457,7 +489,7 @@ export default async function handler(req, res) {
           const body    = getTag('description').slice(0, 200);
           const created = pubDate ? Math.floor(new Date(pubDate).getTime() / 1000) : 0;
           if (!title || title.length < 3) continue;
-          posts.push({ id: Math.random().toString(36).slice(2), title, body, score: 0, url: link, created, num_comments: 0 });
+          posts.push({ id: Math.random().toString(36).slice(2), title, body, score: 0, url: link, created, num_comments: 0, rank: posts.length + 1 });
         }
       }
 
