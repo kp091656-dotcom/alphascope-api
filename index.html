@@ -118,6 +118,9 @@
     flex-direction: column;
     gap: 0.5rem;
     box-shadow: 0 1px 8px rgba(200,82,26,0.08);
+    position: sticky;
+    top: 64px;
+    z-index: 90;
   }
 
   .api-row {
@@ -201,6 +204,9 @@
     overflow-x: auto;
     scrollbar-width: none;
     box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    position: sticky;
+    top: 64px; /* updated by JS after api-bar measures itself */
+    z-index: 80;
   }
 
   .cat-tab {
@@ -1843,19 +1849,20 @@ function sentFilterSentiment(s, el) {
 }
 
 async function sentFetchPTT() {
-  // 透過 Vercel API proxy 抓 PTT Stock RSS（解決 CORS）
+  // 透過 Vercel API proxy 抓 PTT Stock RSS
   try {
-    const res  = await fetch('/api/news?endpoint=ptt', { signal: AbortSignal.timeout(12000) });
+    const res  = await fetch('/api/news?endpoint=ptt');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
-    const now24 = Date.now() - 24 * 60 * 60 * 1000;
     return (json.data || []).map(e => {
       const ts = e.updated ? new Date(e.updated).getTime() : 0;
       return {
         title:  e.title,
+        body:   e.body || '',       // 內文摘要（由 API 提供）
+        pushes: e.pushes || 0,      // 推文數（正負）
         time:   e.updated ? new Date(e.updated).toLocaleDateString('zh-TW') : '',
-        score:  0,
+        score:  e.pushes || 0,
         source: 'ptt',
         sentiment: null,
         reason: '',
@@ -1869,14 +1876,14 @@ async function sentFetchPTT() {
 }
 
 async function sentFetchReddit(sub) {
-  // 透過 Vercel API proxy 抓 Reddit（解決 CORS）
+  // 透過 Vercel API proxy 抓 Reddit RSS（含內文摘要）
   const srcKey = sub === 'wallstreetbets' ? 'wsb' : 'inv';
   const now24  = Date.now() - 24 * 60 * 60 * 1000;
   const seen   = new Set();
   let posts    = [];
   for (const sort of ['hot', 'new']) {
     try {
-      const res  = await fetch(`/api/news?endpoint=reddit&sub=${sub}&sort=${sort}&limit=25`, { signal: AbortSignal.timeout(12000) });
+      const res  = await fetch(`/api/news?endpoint=reddit&sub=${sub}&sort=${sort}&limit=25`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json.error) throw new Error(json.error);
@@ -1885,9 +1892,11 @@ async function sentFetchReddit(sub) {
         seen.add(p.id);
         const ts = (p.created || 0) * 1000;
         posts.push({
-          title: p.title,
-          time:  ts ? new Date(ts).toLocaleDateString('zh-TW') : '',
-          score: p.score,
+          title:  p.title,
+          body:   p.body || '',       // selftext 摘要
+          time:   ts ? new Date(ts).toLocaleDateString('zh-TW') : '',
+          score:  p.score,
+          comments: p.num_comments || 0,
           source: srcKey,
           sentiment: null,
           reason: '',
@@ -1902,37 +1911,51 @@ async function sentFetchReddit(sub) {
 }
 
 async function sentAnalyzeGroq(posts) {
-  const BATCH = 10;
+  const BATCH = 8; // 含內文後 token 較多，縮小 batch
   for (let i = 0; i < posts.length; i += BATCH) {
     const batch = posts.slice(i, i+BATCH);
-    const prompt = `你是財經情緒分析師。分析以下貼文標題，輸出 JSON array，不要其他文字。
+    // 組合每篇貼文的分析素材：標題 + 內文摘要 + 互動數
+    const postLines = batch.map((p, j) => {
+      const src   = p.source.toUpperCase();
+      const inter = p.source === 'ptt'
+        ? `推文:${p.pushes||0}`
+        : `讚數:${p.score||0} 留言:${p.comments||0}`;
+      const body  = p.body ? `\n   內文摘要：${p.body.slice(0, 120)}` : '';
+      return `${j}. [${src}] 標題：${p.title}${body}\n   互動：${inter}`;
+    }).join('\n');
 
-規則：
-- sentiment: "bull"（看多/利多）、"bear"（看空/利空）、"neutral"（中性討論）
-- reason: 繁體中文，10字內
-- title_zh: 英文標題翻譯成繁體中文；中文標題原文照寫
+    const prompt = `你是專業財經情緒分析師。根據以下貼文的【標題、內文摘要、互動數】綜合判斷市場情緒。
+互動數高（推文多/讚數多）代表社群重視程度高，應給予較高權重。
 
-格式：[{"idx":0,"sentiment":"bull","reason":"AI需求強","title_zh":"繁中標題"}]
+判斷規則：
+- bull: 明確看多、利多消息、股價上漲、正面預期
+- bear: 明確看空、利空消息、股價下跌、負面警示
+- neutral: 中性討論、資訊分享、無明確方向
 
-貼文：
-${batch.map((p,j)=>`${j}. [${p.source.toUpperCase()}] ${p.title}`).join('\n')}`;
+輸出純 JSON array，不要其他文字：
+[{"idx":0,"sentiment":"bull","reason":"10字內繁中理由","title_zh":"英文翻繁中；中文原文照寫","confidence":"high/mid/low"}]
+
+貼文資料：
+${postLines}`;
+
     try {
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqApiKey}`},
-        body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.2, max_tokens:900 })
+        body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.15, max_tokens:1200 })
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error.message);
       const parsed = JSON.parse(d.choices[0].message.content.replace(/```json|```/g,'').trim());
       parsed.forEach(r => {
         if (batch[r.idx]) {
-          batch[r.idx].sentiment = r.sentiment;
-          batch[r.idx].reason = r.reason || '';
+          batch[r.idx].sentiment   = r.sentiment;
+          batch[r.idx].reason      = r.reason || '';
+          batch[r.idx].confidence  = r.confidence || 'mid';
           if (r.title_zh) batch[r.idx].title_zh = r.title_zh;
         }
       });
-    } catch(e) { batch.forEach(p=>{ p.sentiment = p.sentiment||'neutral'; }); }
-    if (i+BATCH < posts.length) await new Promise(r=>setTimeout(r,300));
+    } catch(e) { batch.forEach(p=>{ p.sentiment = p.sentiment||'neutral'; p.confidence='low'; }); }
+    if (i+BATCH < posts.length) await new Promise(r=>setTimeout(r,400));
   }
   return posts;
 }
@@ -2038,6 +2061,30 @@ function loadSavedKeys() {
   const gemk = localStorage.getItem('nd_groq_key');
   if (gemk) { groqApiKey = gemk; document.getElementById('groqKey').value = gemk; setGroqStatus('✓ 已啟用（已記住）', 'ok'); }
 }
+
+// ── Sticky offset calculator ──
+function updateStickyOffsets() {
+  const header   = document.querySelector('header');
+  const apiBar   = document.querySelector('.api-config-bar');
+  const catBar   = document.querySelector('.category-bar');
+  const autoBar  = document.getElementById('autoRefreshBar');
+  if (!header || !apiBar || !catBar) return;
+  const hH = header.offsetHeight;       // 64px
+  const aH = apiBar.offsetHeight;       // variable
+  apiBar.style.top = hH + 'px';
+  // autoRefreshBar is between apiBar and catBar; measure if visible
+  const bH = (autoBar && autoBar.style.display !== 'none') ? autoBar.offsetHeight : 0;
+  catBar.style.top = (hH + aH + bH) + 'px';
+}
+// Run on load, resize, and when autoRefreshBar toggles
+updateStickyOffsets();
+window.addEventListener('resize', updateStickyOffsets);
+// Patch toggleAutoRefresh to recalc after show/hide
+const _origToggle = window.toggleAutoRefresh;
+window.toggleAutoRefresh = function() {
+  if (_origToggle) _origToggle();
+  setTimeout(updateStickyOffsets, 50);
+};
 
 // ── Init ──
 renderTrending();
