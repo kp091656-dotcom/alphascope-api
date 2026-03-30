@@ -310,83 +310,74 @@ export default async function handler(req, res) {
     const HDR  = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' };
     const BASE = 'https://www.ptt.cc';
     const now24 = Date.now() - 24 * 60 * 60 * 1000;
-    const SKIP  = ['[公告]','[板規]','Fw:','Re:'];
+    const SKIP  = ['[公告]','[板規]','Fw:'];
 
-    // 解析單頁 HTML，回傳 [{title, link, pushes, ts}]
-    const parsePage = (html) => {
+    // 解析單頁 HTML — 用 split 代替 regex，更可靠
+    const parsePage = (html, pageRank) => {
       const items = [];
-      const rowRe = /<div class="r-ent">([\s\S]*?)<\/div>\s*<\/div>/gi;
-      let hm;
-      while ((hm = rowRe.exec(html)) !== null) {
-        const row   = hm[1];
-        const linkM = row.match(/href="(\/bbs\/Stock\/M\.[^"]+)"/i);
-        const titM  = row.match(/<a[^>]+href="[^"]+"[^>]*>([^<]+)<\/a>/i);
+      // 用 split 切出每個 r-ent 區塊
+      const blocks = html.split('<div class="r-ent">').slice(1);
+      for (const blk of blocks) {
+        const linkM = blk.match(/href="(\/bbs\/Stock\/M\.[^"]+)"/i);
+        const titM  = blk.match(/<a[^>]+href="[^"]+"[^>]*>([^<]+)<\/a>/i);
         if (!linkM || !titM) continue;
         const title = titM[1].trim();
         if (SKIP.some(p => title.startsWith(p))) continue;
-        // 推文數
-        const nrecM   = row.match(/<span[^>]*class="hl[^"]*"[^>]*>([^<]+)<\/span>|<div class="nrec"><span[^>]*>([^<]*)<\/span>/i);
-        const nrecRaw = (nrecM ? (nrecM[1]||nrecM[2]||'') : '').trim();
+        // 推文數：<span class="hl fX">爆/數字/XX</span> 或空
+        const nrecM   = blk.match(/<span[^>]*>(爆|\d+|X+)<\/span>/i);
+        const nrecRaw = (nrecM?.[1] || '').trim();
         const pushes  = nrecRaw === '爆' ? 99
           : /^X+$/i.test(nrecRaw) ? -nrecRaw.length * 10
           : parseInt(nrecRaw) || 0;
-        // 時間（格式 M.1774853650.A）→ Unix timestamp
+        // 從 URL 取 Unix timestamp（M.1774853650.A）
         const tsM = linkM[1].match(/M\.(\d+)\./);
         const ts  = tsM ? parseInt(tsM[1]) * 1000 : Date.now();
-        items.push({ title, link: BASE + linkM[1], pushes, ts });
+        items.push({
+          title,
+          link: BASE + linkM[1],
+          pushes,
+          ts,
+          rank: pageRank + items.length + 1,  // 全局排名（跨頁累計）
+        });
       }
       return items;
     };
 
     // 取目前最大頁碼
-    const getMaxPage = async () => {
-      try {
-        const r = await fetch(BASE + '/bbs/Stock/index.html', { headers: HDR, signal: mkC(6000).signal });
-        if (!r.ok) return null;
-        const html = await r.text();
-        const m = html.match(/href="\/bbs\/Stock\/index(\d+)\.html"[^>]*>‹ 上頁/);
-        return m ? parseInt(m[1]) + 1 : null; // 上頁是 N-1，所以最新頁是 N
-      } catch(e) { return null; }
+    const getIndexPage = async () => {
+      const r = await fetch(BASE + '/bbs/Stock/index.html', { headers: HDR, signal: mkC(7000).signal });
+      const html = await r.text();
+      const m = html.match(/href="\/bbs\/Stock\/index(\d+)\.html"[^>]*>[^<]*上頁/);
+      return { html, maxPage: m ? parseInt(m[1]) + 1 : null };
     };
 
-    const maxPage = await getMaxPage();
-    const entries = [];
+    const allEntries = [];
+    try {
+      const { html: firstHtml, maxPage } = await getIndexPage();
+      // 解析第一頁
+      allEntries.push(...parsePage(firstHtml, 0));
 
-    if (maxPage) {
-      // 從最新頁往前翻，最多 5 頁（約 100 篇），直到超出 24 小時
-      for (let page = maxPage; page >= Math.max(1, maxPage - 4); page--) {
-        const url = page === maxPage
-          ? BASE + '/bbs/Stock/index.html'
-          : BASE + `/bbs/Stock/index${page}.html`;
-        try {
-          const r = await fetch(url, { headers: HDR, signal: mkC(6000).signal });
+      // 往前翻頁，最多再抓 4 頁（共 5 頁 ≈ 100 篇）
+      if (maxPage) {
+        for (let page = maxPage - 1; page >= Math.max(1, maxPage - 4); page--) {
+          const r = await fetch(`${BASE}/bbs/Stock/index${page}.html`, { headers: HDR, signal: mkC(6000).signal });
           if (!r.ok) break;
-          const items = parsePage(await r.text());
-          // 這頁的文章按時間新→舊排列
-          let hasRecent = false;
-          for (const item of items) {
-            if (item.ts >= now24) {
-              entries.push({ ...item, updated: new Date(item.ts).toISOString(), body: '' });
-              hasRecent = true;
-            }
-          }
-          // 如果這頁全部文章都超過 24 小時，停止翻頁
-          if (!hasRecent) break;
-        } catch(e) { break; }
+          const items = parsePage(await r.text(), allEntries.length);
+          const hasRecent = items.some(it => it.ts >= now24);
+          allEntries.push(...items);
+          if (!hasRecent) break; // 這頁全超過 24 小時，停止
+        }
       }
-    }
-
-    // 備案：直接用 Atom（只有最新 ~20 篇但至少有資料）
-    if (entries.length === 0) {
+    } catch(e) {
+      // 備案：Atom RSS
       try {
         const r = await fetch(BASE + '/atom/Stock.xml', {
-          headers: { ...HDR, 'Accept': 'application/xml,text/xml' },
-          signal: mkC(8000).signal,
+          headers: { ...HDR, 'Accept': 'application/xml,text/xml' }, signal: mkC(8000).signal,
         });
         if (r.ok) {
           const xml = await r.text();
           const re = /<entry>([\s\S]*?)<\/entry>/gi;
-          let m;
+          let m, rank = 1;
           while ((m = re.exec(xml)) !== null) {
             const blk = m[1];
             const gt = (tag) => {
@@ -396,15 +387,26 @@ export default async function handler(req, res) {
             const title = gt('title'), updated = gt('updated');
             const linkM = blk.match(/<link[^>]+href="([^"]+)"/i);
             if (!title || SKIP.some(p => title.startsWith(p))) continue;
-            entries.push({ title, updated, link: linkM?.[1]||'', pushes: 0, ts: new Date(updated).getTime()||0, body: '' });
+            allEntries.push({ title, link: linkM?.[1]||'', pushes: 0, ts: new Date(updated).getTime()||0, rank: rank++, updated, body: '' });
           }
         }
-      } catch(e) {}
+      } catch(e2) {}
     }
 
-    // 依時間排序，最新在前
-    entries.sort((a,b) => b.ts - a.ts);
-    res.status(200).json({ data: entries.slice(0, 60), count: entries.length });
+    // 篩選 24 小時內，依時間排序，加 updated 欄位
+    const result = allEntries
+      .filter(e => e.ts >= now24)
+      .sort((a,b) => b.ts - a.ts)
+      .map((e, i) => ({
+        title:   e.title,
+        updated: e.updated || new Date(e.ts).toISOString(),
+        link:    e.link,
+        pushes:  e.pushes,
+        rank:    i + 1,   // 重新按時間排名
+        body:    e.body || '',
+      }));
+
+    res.status(200).json({ data: result.slice(0, 60), count: result.length });
     return;
   }
 
