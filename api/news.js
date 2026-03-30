@@ -306,69 +306,78 @@ export default async function handler(req, res) {
 
   // ── PTT Stock 板 RSS proxy + 內文摘要 ──
   if (endpoint === 'ptt') {
-    // PTT Stock Atom RSS — 不爬內文（Vercel 10s 限制），只抓標題+時間
-    // 推文數從 Atom summary 欄位估算（部分條目有帶）
     const mkC = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
-    const PTT_HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1', 'Accept': 'application/xml,text/xml' };
+    const HDR = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' };
 
-    const parseAtom = (xml) => {
-      const out = [];
+    // 平行抓 Atom RSS（標題/時間）和 HTML index（推文數）
+    const [atomRes, htmlRes] = await Promise.allSettled([
+      fetch('https://www.ptt.cc/atom/Stock.xml', {
+        headers: { ...HDR, 'Accept': 'application/xml,text/xml' },
+        signal: mkC(8000).signal,
+      }),
+      fetch('https://www.ptt.cc/bbs/Stock/index.html', {
+        headers: HDR, signal: mkC(8000).signal,
+      }),
+    ]);
+
+    // 從 HTML 建立 link → pushes 的 map
+    const pushMap = {};
+    if (htmlRes.status === 'fulfilled' && htmlRes.value.ok) {
+      const html = await htmlRes.value.text();
+      // 每個 .r-ent 包含 nrec + title
+      const rowRe = /<div class="r-ent">([\s\S]*?)<\/div>\s*<\/div>/gi;
+      let hm;
+      while ((hm = rowRe.exec(html)) !== null) {
+        const row = hm[1];
+        const linkM  = row.match(/href="([^"]+bbs\/Stock[^"]+)"/i);
+        const nrecM  = row.match(/<span[^>]*class="hl[^"]*"[^>]*>([^<]+)<\/span>|<span[^>]*>(\d+|爆|X+)<\/span>/i);
+        if (!linkM) continue;
+        const nrecRaw = nrecM ? (nrecM[1]||nrecM[2]||'0').trim() : '0';
+        const pushes = nrecRaw === '爆' ? 99
+          : /^X+$/.test(nrecRaw) ? -nrecRaw.length * 10
+          : parseInt(nrecRaw) || 0;
+        pushMap['https://www.ptt.cc' + linkM[1]] = pushes;
+      }
+    }
+
+    // 從 Atom 取標題 + 時間
+    let entries = [];
+    if (atomRes.status === 'fulfilled' && atomRes.value.ok) {
+      const xml = await atomRes.value.text();
       const re = /<entry>([\s\S]*?)<\/entry>/gi;
       let m;
       while ((m = re.exec(xml)) !== null) {
         const blk = m[1];
         const getTag = (tag) => {
           const rx = new RegExp('<' + tag + '[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/' + tag + '>', 'i');
-          return (blk.match(rx) || ['',''])[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim();
+          return (blk.match(rx)||['',''])[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim();
         };
         const title   = getTag('title');
         const updated = getTag('updated');
-        // PTT Atom summary 含推文數，格式如「推:12 噓:2 →:5」
-        const summary = getTag('summary');
-        const pushM   = summary.match(/推\s*[:：]\s*(\d+)/);
-        const booM    = summary.match(/噓\s*[:：]\s*(\d+)/);
-        const pushes  = (parseInt(pushM?.[1]||0)) - (parseInt(booM?.[1]||0));
         const linkM   = blk.match(/<link[^>]+href="([^"]+)"/i);
         const link    = linkM ? linkM[1].trim() : '';
         if (!title || ['[公告]','[板規]','Fw:'].some(p => title.startsWith(p))) continue;
-        out.push({ title, updated, link, pushes, body: summary.slice(0, 150) });
+        const pushes = pushMap[link] ?? 0;
+        entries.push({ title, updated, link, pushes, body: '' });
       }
-      return out;
-    };
+    }
 
-    let entries = [];
-    try {
-      const r = await fetch('https://www.ptt.cc/atom/Stock.xml', {
-        headers: PTT_HEADERS, signal: mkC(9000).signal,
-      });
-      if (r.ok) entries = parseAtom(await r.text());
-    } catch(e) {}
-
-    // HTML fallback（只取標題，推文數為 0）
+    // Atom 失敗時直接用 HTML
     if (entries.length === 0) {
-      try {
-        const r2 = await fetch('https://www.ptt.cc/bbs/Stock/index.html', {
-          headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' },
-          signal: mkC(9000).signal,
-        });
-        if (r2.ok) {
-          const html = await r2.text();
-          // 連同推文數一起解析（nrec span）
-          const rowRe = /<div class="r-ent">([\s\S]*?)<\/div>\s*<\/div>/gi;
-          let hm;
-          while ((hm = rowRe.exec(html)) !== null) {
-            const row = hm[1];
-            const titleM = row.match(/<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/i);
-            if (!titleM) continue;
-            const t = titleM[2].trim();
-            if (['[公告]','[板規]','Fw:'].some(p => t.startsWith(p))) continue;
-            const nrecM = row.match(/<span[^>]*>(\d+|爆|X+)<\/span>/i);
-            const nrecRaw = nrecM ? nrecM[1] : '0';
-            const pushes = nrecRaw === '爆' ? 99 : (nrecRaw.startsWith('X') ? -nrecRaw.length*10 : parseInt(nrecRaw)||0);
-            entries.push({ title: t, updated: new Date().toISOString(), link: 'https://www.ptt.cc' + titleM[1], pushes, body: '' });
-          }
+      for (const [link, pushes] of Object.entries(pushMap)) {
+        // 從 pushMap 無法取得 title，用 HTML 重新解析
+      }
+      if (htmlRes.status === 'fulfilled' && htmlRes.value.ok) {
+        const html = await htmlRes.value.text();
+        const rx2 = /href="(\/bbs\/Stock\/[^"]+)"[^>]*>([^<]{4,})<\/a>/gi;
+        let hm;
+        while ((hm = rx2.exec(html)) !== null) {
+          const link = 'https://www.ptt.cc' + hm[1];
+          const title = hm[2].trim();
+          if (['[公告]','[板規]','Fw:'].some(p => title.startsWith(p))) continue;
+          entries.push({ title, updated: new Date().toISOString(), link, pushes: pushMap[link]||0, body: '' });
         }
-      } catch(e) {}
+      }
     }
 
     res.status(200).json({ data: entries.slice(0, 25), count: entries.length });
@@ -414,8 +423,11 @@ export default async function handler(req, res) {
         const title    = getTag('title');
         const updated  = getTag('updated') || getTag('published');
         const idTag    = getTag('id');
-        const score    = parseInt(getTag('score')) || 0;
-        const numComm  = parseInt(getTag('comments') || getTag('slash:comments')) || 0;
+        // Reddit Atom 的 score/comments 帶命名空間，直接用原始 XML 比對
+        const scoreM = blk.match(/<[a-z]+:score[^>]*>(\d+)<\/[a-z]+:score>|<score[^>]*>(\d+)<\/score>/i);
+        const score  = parseInt(scoreM?.[1] || scoreM?.[2] || '0') || 0;
+        const commM  = blk.match(/<[a-z]+:comments[^>]*>(\d+)<\/[a-z]+:comments>|<slash:comments[^>]*>(\d+)<\/slash:comments>|<comments[^>]*>(\d+)<\/comments>/i);
+        const numComm = parseInt(commM?.[1] || commM?.[2] || commM?.[3] || '0') || 0;
         const linkM    = blk.match(/<link[^>]+href="([^"]+)"/i);
         const link     = linkM ? linkM[1] : '';
         // Extract selftext from <content> or <media:description>
