@@ -304,9 +304,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  // ── PTT Stock 板 RSS proxy ──
+  // ── PTT Stock 板 RSS proxy + 內文摘要 ──
   if (endpoint === 'ptt') {
     const mkC = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
+    const PTT_HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' };
+
     const parseAtom = (xml) => {
       const out = [];
       const re = /<entry>([\s\S]*?)<\/entry>/gi;
@@ -314,32 +316,63 @@ export default async function handler(req, res) {
       while ((m = re.exec(xml)) !== null) {
         const blk = m[1];
         const getTag = (tag) => {
-          const rx = new RegExp('<' + tag + '[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/' + tag + '>', 'i');
+          const rx = new RegExp('<' + tag + '[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/' + tag + '>', 'i');
           return (blk.match(rx) || ['',''])[1].replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim();
         };
         const title = getTag('title'), updated = getTag('updated');
         const linkM = blk.match(/<link[^>]+href="([^"]+)"/i);
         const link  = linkM ? linkM[1].trim() : '';
-        if (!title || title.startsWith('[公告]') || title.startsWith('[板規]') || title.startsWith('Fw:')) continue;
+        if (!title || ['[公告]','[板規]','Fw:'].some(p => title.startsWith(p))) continue;
         out.push({ title, updated, link });
       }
       return out;
     };
+
+    // 抓單篇文章：取內文前 200 字 + 推文統計
+    const fetchArticle = async (url) => {
+      if (!url) return { body: '', pushes: 0 };
+      try {
+        const r = await fetch(url, { headers: PTT_HEADERS, signal: mkC(6000).signal });
+        if (!r.ok) return { body: '', pushes: 0 };
+        const html = await r.text();
+        // 內文
+        const mainM = html.match(/id="main-content"[^>]*>([\s\S]*?)<\/div>/i);
+        let body = '';
+        if (mainM) {
+          body = mainM[1]
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .replace(/作者.*?看板.*?標題.*?時間/s, '')
+            .trim()
+            .slice(0, 200);
+        }
+        // 推文（正推 - 負推）
+        const pushMatches = [...html.matchAll(/class="push-tag">([^<]+)</g)];
+        let pushes = 0;
+        for (const pm of pushMatches) {
+          const tag = pm[1].trim();
+          if (tag === '推') pushes++;
+          else if (tag === '噓') pushes--;
+        }
+        return { body, pushes };
+      } catch(e) { return { body: '', pushes: 0 }; }
+    };
+
     let entries = [];
+    // 抓 RSS
     try {
-      const ctrl = mkC(9000);
       const r = await fetch('https://www.ptt.cc/atom/Stock.xml', {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1', 'Accept': 'application/xml,text/xml' },
-        signal: ctrl.signal,
+        headers: { ...PTT_HEADERS, 'Accept': 'application/xml,text/xml' },
+        signal: mkC(9000).signal,
       });
       if (r.ok) entries = parseAtom(await r.text());
-    } catch(e) { /* try HTML fallback */ }
+    } catch(e) {}
+
+    // HTML fallback
     if (entries.length === 0) {
       try {
-        const ctrl2 = mkC(9000);
         const r2 = await fetch('https://www.ptt.cc/bbs/Stock/index.html', {
-          headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' },
-          signal: ctrl2.signal,
+          headers: PTT_HEADERS, signal: mkC(9000).signal,
         });
         if (r2.ok) {
           const html = await r2.text();
@@ -347,18 +380,23 @@ export default async function handler(req, res) {
           let hm;
           while ((hm = rx2.exec(html)) !== null) {
             const t = hm[2].trim();
-            if (t.startsWith('[公告]') || t.startsWith('[板規]') || t.startsWith('Fw:')) continue;
+            if (['[公告]','[板規]','Fw:'].some(p => t.startsWith(p))) continue;
             entries.push({ title: t, updated: new Date().toISOString(), link: 'https://www.ptt.cc' + hm[1] });
           }
         }
-      } catch(e2) { /* ignore */ }
+      } catch(e) {}
     }
-    res.status(200).json({ data: entries.slice(0, 25), count: entries.length });
+
+    // 批次爬內文（最多前 15 篇，避免超時）
+    const top = entries.slice(0, 15);
+    const articles = await Promise.all(top.map(e => fetchArticle(e.link)));
+    const result = top.map((e, i) => ({ ...e, body: articles[i].body, pushes: articles[i].pushes }));
+
+    res.status(200).json({ data: result, count: result.length });
     return;
   }
 
-
-  // ── Reddit proxy（解決 CORS）──
+  // ── Reddit proxy（RSS，含內文摘要）──
   if (endpoint === 'reddit') {
     const { sub = 'wallstreetbets', sort = 'hot', limit = '25' } = req.query;
     const allowedSubs  = ['wallstreetbets', 'investing', 'stocks', 'StockMarket'];
@@ -367,13 +405,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'invalid params' });
     }
     const mkC = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
-
-    // Reddit RSS（比 JSON API 更穩定，不需授權）
     const rssUrl = `https://www.reddit.com/r/${sub}/${sort}.rss?limit=${Math.min(parseInt(limit)||25,50)}`;
     try {
       const r = await fetch(rssUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
           'Accept': 'application/rss+xml, application/xml, text/xml, */*',
         },
         signal: mkC(12000).signal,
@@ -381,7 +417,11 @@ export default async function handler(req, res) {
       if (!r.ok) throw new Error(`Reddit RSS HTTP ${r.status}`);
       const xml = await r.text();
 
-      // Parse Atom/RSS entries
+      const cleanHtml = (s) => s
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+        .replace(/&#[0-9]+;/g,'').replace(/\s+/g,' ').trim();
+
       const posts = [];
       const entryRe = /<entry>([\s\S]*?)<\/entry>/gi;
       let m;
@@ -390,23 +430,27 @@ export default async function handler(req, res) {
         const getTag = (tag) => {
           const rx = new RegExp('<' + tag + '[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/' + tag + '>', 'i');
           const found = blk.match(rx);
-          return found ? found[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#[0-9]+;/g,'').trim() : '';
+          return found ? cleanHtml(found[1]) : '';
         };
         const title    = getTag('title');
         const updated  = getTag('updated') || getTag('published');
         const idTag    = getTag('id');
         const score    = parseInt(getTag('score')) || 0;
+        const numComm  = parseInt(getTag('comments') || getTag('slash:comments')) || 0;
         const linkM    = blk.match(/<link[^>]+href="([^"]+)"/i);
         const link     = linkM ? linkM[1] : '';
-        // Reddit Atom id looks like: t3_XXXXX
+        // Extract selftext from <content> or <media:description>
+        const contentRx = /<(?:content|media:description)[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:content|media:description)>/i;
+        const contentM = blk.match(contentRx);
+        const body = contentM ? cleanHtml(contentM[1]).slice(0, 200) : '';
         const idMatch  = idTag.match(/t3_([a-z0-9]+)/i);
         const id       = idMatch ? idMatch[1] : Math.random().toString(36).slice(2);
         const created  = updated ? Math.floor(new Date(updated).getTime() / 1000) : 0;
         if (!title || title.length < 3) continue;
-        posts.push({ id, title, score, url: link, created, num_comments: 0 });
+        posts.push({ id, title, body, score, url: link, created, num_comments: numComm });
       }
 
-      // fallback: try <item> tags (RSS 2.0)
+      // RSS 2.0 fallback
       if (posts.length === 0) {
         const itemRe = /<item>([\s\S]*?)<\/item>/gi;
         while ((m = itemRe.exec(xml)) !== null) {
@@ -414,14 +458,15 @@ export default async function handler(req, res) {
           const getTag = (tag) => {
             const rx = new RegExp('<' + tag + '[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/' + tag + '>', 'i');
             const found = blk.match(rx);
-            return found ? found[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#[0-9]+;/g,'').trim() : '';
+            return found ? cleanHtml(found[1]) : '';
           };
           const title   = getTag('title');
           const pubDate = getTag('pubDate');
           const link    = getTag('link') || (blk.match(/<link>([^<]+)<\/link>/i)?.[1] || '').trim();
+          const body    = getTag('description').slice(0, 200);
           const created = pubDate ? Math.floor(new Date(pubDate).getTime() / 1000) : 0;
           if (!title || title.length < 3) continue;
-          posts.push({ id: Math.random().toString(36).slice(2), title, score: 0, url: link, created, num_comments: 0 });
+          posts.push({ id: Math.random().toString(36).slice(2), title, body, score: 0, url: link, created, num_comments: 0 });
         }
       }
 
