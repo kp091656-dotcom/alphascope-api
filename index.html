@@ -655,7 +655,7 @@
 <!-- Auto-refresh bar -->
 <div id="autoRefreshBar" style="display:none; background:linear-gradient(90deg,#f0fdf6,#e8fbf0); border-bottom:1px solid #c8f0d8; padding:0.45rem 2.5rem; align-items:center; gap:1rem; font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:#2a9d5c;">
   <span>&#x27F3; 自動更新已啟動</span>
-  <span style="color:#1a1a18; font-weight:500;">下次更新：<span id="countdownDisplay">15:00</span></span>
+  <span style="color:#1a1a18; font-weight:500;">下次更新：<span id="countdownDisplay">30:00</span></span>
   <div style="flex:1; max-width:200px; height:4px; background:#e4e2d9; border-radius:2px; overflow:hidden;">
     <div id="progressBar" style="height:100%; width:0%; background:#2a9d5c; border-radius:2px; transition:width 1s linear;"></div>
   </div>
@@ -785,7 +785,14 @@
       </div>
       <!-- per-source mini -->
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:8px;">BY SOURCE</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;">BY SOURCE</div>
+          <div style="display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:0.58rem;">
+            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;"></span>多頭</span>
+            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#b4b2a9;display:inline-block;"></span>中性</span>
+            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent3);display:inline-block;"></span>空頭</span>
+          </div>
+        </div>
         <div id="sentSrcBreakdown" style="display:flex;flex-direction:column;gap:6px;"></div>
       </div>
     </div>
@@ -1188,6 +1195,10 @@ async function fetchMarketaux() {
     const lastEl = document.getElementById('lastRefreshTime');
     if (lastEl) lastEl.textContent = '上次更新 ' + now.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
+    // 啟動自動刷新（首次載入啟動，後續刷新重置計時器）
+    startAutoRefresh();
+    setTimeout(updateStickyOffsets, 100); // autoRefreshBar 顯示後重算 sticky 高度
+
     const savedGroq = groqApiKey || localStorage.getItem('nd_groq_key') || '';
     if (savedGroq) {
       groqApiKey = savedGroq;
@@ -1452,7 +1463,7 @@ function switchLang(btn, lang) {
 }
 
 // ── Auto-refresh (15 min) ──
-const REFRESH_INTERVAL = 15 * 60;
+const REFRESH_INTERVAL = 30 * 60;
 let countdownInterval = null;
 let countdown = 0;
 
@@ -1783,19 +1794,32 @@ function sentRenderDashboard(posts) {
   document.getElementById('sentNeuCnt').textContent  = neu;
   const score = Math.min(100, Math.max(0, Math.round(50 + ((bull-bear)/total)*50)));
   sentSetGauge(score);
-  // per-source breakdown
+  // per-source breakdown — 三色分段條 + 數字
   const sb = document.getElementById('sentSrcBreakdown');
   sb.innerHTML = ['ptt','wsb','inv'].map(src => {
-    const sp  = posts.filter(p => p.source === src);
-    const sb2 = sp.filter(p => p.sentiment === 'bull').length;
-    const pct = Math.round(sb2/(sp.length||1)*100);
-    const lbl = src === 'ptt' ? 'PTT' : src === 'wsb' ? 'WSB' : 'INV';
-    return `<div style="display:flex;align-items:center;gap:8px;">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--muted);width:28px;">${lbl}</span>
-      <div style="flex:1;background:var(--surface2,#edeae3);border-radius:2px;height:9px;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width 0.8s;"></div>
+    const sp    = posts.filter(p => p.source === src);
+    const bull  = sp.filter(p => p.sentiment === 'bull').length;
+    const neu   = sp.filter(p => p.sentiment === 'neutral').length;
+    const bear  = sp.filter(p => p.sentiment === 'bear').length;
+    const total = sp.length || 1;
+    const bPct  = Math.round(bull/total*100);
+    const nPct  = Math.round(neu/total*100);
+    const ePct  = 100 - bPct - nPct;
+    const lbl   = src === 'ptt' ? 'PTT' : src === 'wsb' ? 'WSB' : 'INV';
+    const badgeBg  = src === 'ptt' ? '#fde8e8' : src === 'wsb' ? '#feeadc' : '#dde8f8';
+    const badgeClr = src === 'ptt' ? '#8b1a1a' : src === 'wsb' ? '#7c3010' : '#0c447c';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:500;padding:1px 5px;border-radius:3px;background:${badgeBg};color:${badgeClr};width:30px;text-align:center;flex-shrink:0;">${lbl}</span>
+      <div style="flex:1;height:13px;background:var(--surface2,#edeae3);border-radius:3px;overflow:hidden;display:flex;">
+        <div style="width:${bPct}%;background:var(--accent);height:100%;transition:width 0.8s;"></div>
+        <div style="width:${nPct}%;background:#b4b2a9;height:100%;transition:width 0.8s;"></div>
+        <div style="width:${ePct}%;background:var(--accent3);height:100%;transition:width 0.8s;"></div>
       </div>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--muted);width:34px;">${pct}% 多</span>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;white-space:nowrap;display:flex;gap:4px;min-width:80px;">
+        <span style="color:var(--accent);font-weight:500;">多${bull}</span>
+        <span style="color:var(--muted);">中${neu}</span>
+        <span style="color:var(--accent3);font-weight:500;">空${bear}</span>
+      </div>
     </div>`;
   }).join('');
   document.getElementById('sentimentTs').textContent =
