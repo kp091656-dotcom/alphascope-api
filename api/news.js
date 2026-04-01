@@ -305,6 +305,56 @@ export default async function handler(req, res) {
   }
 
   // ── PTT Stock 板 RSS proxy + 內文摘要 ──
+  // ── PTT 單篇文章內文 + 推文數（供前端逐篇呼叫）──
+  if (endpoint === 'ptt_article') {
+    const { url: articleUrl } = req.query;
+    if (!articleUrl || !articleUrl.includes('ptt.cc')) {
+      return res.status(400).json({ error: 'invalid url' });
+    }
+    const mkC = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
+    try {
+      const r = await fetch(articleUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' },
+        signal: mkC(8000).signal,
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const html = await r.text();
+
+      // 內文：取 #main-content 去掉 metadata 區塊
+      let body = '';
+      const mainM = html.match(/id="main-content"[^>]*>([\s\S]*?)(?:<div class="push"|<\/div>)/i);
+      if (mainM) {
+        body = mainM[1]
+          .replace(/<[^>]+>/g, '')
+          .replace(/\s*作者\s+.*\n/g, '')
+          .replace(/\s*看板\s+.*\n/g, '')
+          .replace(/\s*標題\s+.*\n/g, '')
+          .replace(/\s*時間\s+.*\n/g, '')
+          .replace(/--\s*[\s\S]*$/, '')  // 去除 -- 後的簽名檔
+          .replace(/&nbsp;/g, ' ').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
+          .replace(/\s+/g, ' ').trim()
+          .slice(0, 300);
+      }
+
+      // 推文統計
+      const pushTags = [...html.matchAll(/class="push-tag">([^<]+)</g)];
+      let pushes = 0;
+      for (const m of pushTags) {
+        const tag = m[1].trim();
+        if (tag === '推') pushes++;
+        else if (tag === '噓') pushes--;
+      }
+      const pushCount  = pushTags.filter(m => m[1].trim() === '推').length;
+      const booCount   = pushTags.filter(m => m[1].trim() === '噓').length;
+      const neutCount  = pushTags.filter(m => m[1].trim() === '→').length;
+
+      res.status(200).json({ body, pushes, pushCount, booCount, neutCount });
+    } catch(e) {
+      res.status(200).json({ body: '', pushes: 0, pushCount: 0, booCount: 0, neutCount: 0, error: e.message });
+    }
+    return;
+  }
+
   if (endpoint === 'ptt') {
     const mkC  = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c; };
     const HDR  = { 'User-Agent': 'Mozilla/5.0', 'Cookie': 'over18=1' };
