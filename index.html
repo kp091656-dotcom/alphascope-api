@@ -2114,8 +2114,11 @@ loadSavedKeys();
 loadFearGreed();
 loadCryptoFearGreed();
 loadVix();
-// 自動載入財經新聞（頁面載入時直接抓，不用點按鈕）
-fetchMarketaux();
+// 載入示範資料（手動點「載入財經新聞」取得即時新聞）
+setTimeout(() => {
+  allArticles = mockArticles;
+  renderFeed(getFiltered());
+}, 500);
 </script>
 </body>
 </html>
