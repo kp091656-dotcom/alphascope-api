@@ -552,6 +552,119 @@ export default async function handler(req, res) {
     return;
   }
 
+  // ── P/C Ratio + 三大法人籌碼 + Max Pain ──
+  if (endpoint === 'options') {
+    const TOKEN = process.env.FINMIND_TOKEN;
+    if (!TOKEN) return res.status(500).json({ error: 'FINMIND_TOKEN not configured' });
+
+    const today = new Date();
+    // 若今天是週末或非交易時間，往前找最近交易日
+    const getTradeDate = (offset = 0) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - offset);
+      const dow = d.getDay();
+      if (dow === 0) d.setDate(d.getDate() - 2);
+      if (dow === 6) d.setDate(d.getDate() - 1);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const BASE = 'https://api.finmindtrade.com/api/v4/data';
+    const fetchFM = async (params) => {
+      const url = BASE + '?' + new URLSearchParams({ token: TOKEN, ...params });
+      const r = await fetch(url, { signal: (new AbortController()).signal });
+      const d = await r.json();
+      return d.data || [];
+    };
+
+    // 嘗試最近 3 個交易日（避免當天還沒更新）
+    let optData = [], instData = [];
+    for (let i = 0; i <= 3; i++) {
+      const date = getTradeDate(i);
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const [opt, inst] = await Promise.all([
+          fetch(`${BASE}?dataset=TaiwanOptionDaily&data_id=TXO&start_date=${date}&end_date=${date}&token=${TOKEN}`, { signal: ctrl.signal }).then(r => r.json()),
+          fetch(`${BASE}?dataset=TaiwanOptionInstitutionalInvestors&data_id=TXO&start_date=${date}&end_date=${date}&token=${TOKEN}`, { signal: ctrl.signal }).then(r => r.json()),
+        ]);
+        optData  = (opt.data  || []).filter(d => d.trading_session === 'position');
+        instData = inst.data || [];
+        if (optData.length > 0) break;
+      } catch(e) { continue; }
+    }
+
+    if (!optData.length) {
+      return res.status(200).json({ error: 'no data', pcRatio: null, institution: null, maxPain: null });
+    }
+
+    // ── P/C Ratio（成交量）──
+    let callVol = 0, putVol = 0;
+    let callOI  = 0, putOI  = 0;
+    const byStrike = {}; // 用於 Max Pain
+
+    for (const row of optData) {
+      const cp  = (row.call_put || '').trim().toUpperCase();
+      const vol = parseFloat(row.volume) || 0;
+      const oi  = parseFloat(row.open_interest) || 0;
+      const sp  = parseFloat(row.strike_price) || 0;
+      if (cp === 'C' || cp === 'CALL') { callVol += vol; callOI += oi; }
+      if (cp === 'P' || cp === 'PUT')  { putVol  += vol; putOI  += oi; }
+      // 累積各履約價 OI（Max Pain 用）
+      if (sp > 0) {
+        if (!byStrike[sp]) byStrike[sp] = { call: 0, put: 0 };
+        if (cp === 'C' || cp === 'CALL') byStrike[sp].call += oi;
+        if (cp === 'P' || cp === 'PUT')  byStrike[sp].put  += oi;
+      }
+    }
+
+    const pcVolRatio = callVol > 0 ? putVol / callVol : null;
+    const pcOIRatio  = callOI  > 0 ? putOI  / callOI  : null;
+
+    // ── 三大法人籌碼解析 ──
+    const institution = { 外資: null, 自營商: null, 投信: null };
+    for (const row of instData) {
+      const name = row.institutional_investors || row.name || '';
+      const longOI  = parseInt(row.long_open_interest_balance_volume)  || 0;
+      const shortOI = parseInt(row.short_open_interest_balance_volume) || 0;
+      const net = longOI - shortOI;
+      if (name.includes('外資')) institution['外資'] = net;
+      else if (name.includes('自營')) institution['自營商'] = net;
+      else if (name.includes('投信')) institution['投信'] = net;
+    }
+
+    // ── Max Pain 計算 ──
+    // 對每個可能的結算價，計算所有 Call/Put 買方的總損失
+    let maxPain = null;
+    const strikes = Object.keys(byStrike).map(Number).sort((a,b) => a-b);
+    if (strikes.length > 0) {
+      let minLoss = Infinity;
+      for (const settle of strikes) {
+        let totalLoss = 0;
+        for (const sp of strikes) {
+          const { call, put } = byStrike[sp];
+          // Call 買方在 settle < sp 時虧損：(sp - settle) * call_oi
+          if (settle < sp) totalLoss += (sp - settle) * call;
+          // Put 買方在 settle > sp 時虧損：(settle - sp) * put_oi
+          if (settle > sp) totalLoss += (settle - sp) * put;
+        }
+        if (totalLoss < minLoss) { minLoss = totalLoss; maxPain = settle; }
+      }
+    }
+
+    const dataDate = optData[0]?.date?.slice(0, 10) || '';
+    res.status(200).json({
+      date: dataDate,
+      pcRatio: { volume: pcVolRatio ? +pcVolRatio.toFixed(3) : null,
+                 oi:     pcOIRatio  ? +pcOIRatio.toFixed(3)  : null,
+                 callVol: Math.round(callVol), putVol: Math.round(putVol),
+                 callOI:  Math.round(callOI),  putOI:  Math.round(putOI) },
+      institution,
+      maxPain,
+      strikes: strikes.slice(0, 30), // 前30個履約價供前端視覺化
+    });
+    return;
+  }
+
   // RSS news feeds
   const RSS_FEEDS = [
     { url: 'https://feeds.reuters.com/reuters/businessNews',                                       source: 'Reuters' },
