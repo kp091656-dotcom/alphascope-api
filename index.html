@@ -649,16 +649,7 @@
     <span class="api-status" id="groqStatus">未設定</span>
     <span class="api-hint">免費申請：<a href="https://console.groq.com/keys" target="_blank">console.groq.com</a> · 不需信用卡</span>
   </div>
-    <!-- 自動刷新進度條（內嵌在 GROQ KEY 列最右邊）-->
-    <div id="autoRefreshBar" style="display:none;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#2a9d5c;margin-left:auto;flex-shrink:0;white-space:nowrap;">
-      <span style="color:var(--muted);">↻</span>
-      <span style="color:var(--muted);">下次：<span id="countdownDisplay">60:00</span></span>
-      <div style="width:80px;height:4px;background:#e4e2d9;border-radius:2px;overflow:hidden;">
-        <div id="progressBar" style="height:100%;width:0%;background:#2a9d5c;border-radius:2px;transition:width 1s linear;"></div>
-      </div>
-      <button id="toggleRefreshBtn" onclick="toggleAutoRefresh()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:1px 6px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.6rem;cursor:pointer;line-height:1.4;">⏸</button>
-      <span id="lastRefreshTime" style="color:var(--muted);font-size:0.58rem;"></span>
-    </div>
+
   </div>
 </div>
 
@@ -1130,8 +1121,6 @@ function setStatus(msg, type) {
 
 // ── News fetch: TheNewsAPI via Vercel proxy ──
 async function fetchMarketaux() {
-  if (isFetching) return; // 防止重複觸發
-  isFetching = true;
   const btn = document.getElementById('fetchBtn');
   btn.disabled = true;
   btn.textContent = '載入中…';
@@ -1192,16 +1181,6 @@ async function fetchMarketaux() {
     renderTrending();
     generateBrief();
 
-    const now = new Date();
-    const lastEl = document.getElementById('lastRefreshTime');
-    if (lastEl) lastEl.textContent = '上次更新 ' + now.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-
-    // 記錄本次抓取時間，重置倒計時
-    lastFetchTime = Date.now();
-    if (!refreshPaused) {
-      if (countdownTimer) clearTimeout(countdownTimer);
-      startAutoRefresh();
-    }
 
     const savedGroq = groqApiKey || localStorage.getItem('nd_groq_key') || '';
     if (savedGroq) {
@@ -1216,7 +1195,6 @@ async function fetchMarketaux() {
     document.getElementById('newsFeed').innerHTML = `<div class="feed-state"><p>載入失敗</p><small>${e.message}</small></div>`;
     setTimeout(() => { allArticles = mockArticles; renderFeed(getFiltered()); }, 1000);
   } finally {
-    isFetching = false;
     btn.disabled = false;
     btn.textContent = '載入財經新聞';
   }
@@ -1504,72 +1482,6 @@ function switchLang(btn, lang) {
   currentLang = lang;
 }
 
-// ── Auto-refresh (15 min) ──
-const REFRESH_INTERVAL = 60 * 60; // 秒
-let refreshPaused    = false;
-let lastFetchTime    = 0;      // Unix ms，上次成功抓取的時間
-let countdownTimer   = null;   // requestAnimationFrame handle
-
-let isFetching   = false; // 防止 fetchMarketaux 重複觸發
-let isAnalyzing  = false; // 情緒分析進行中時暫停自動刷新
-
-// ── 核心：timestamp 對比，不依賴 setInterval 精度 ──
-function autoRefreshTick() {
-  if (refreshPaused) return;
-  const now     = Date.now();
-  const elapsed = (now - lastFetchTime) / 1000; // 已過秒數
-  const remain  = Math.max(0, REFRESH_INTERVAL - elapsed);
-  updateCountdownUI(remain);
-  if (remain <= 0 && lastFetchTime > 0 && !isFetching && !isAnalyzing) {
-    fetchMarketaux(); // 會在成功後更新 lastFetchTime
-  }
-  countdownTimer = setTimeout(autoRefreshTick, 1000);
-}
-
-function startAutoRefresh() {
-  if (countdownTimer) clearTimeout(countdownTimer);
-  document.getElementById('autoRefreshBar').style.display = 'flex';
-  const btn = document.getElementById('toggleRefreshBtn');
-  if (btn) { btn.textContent = '⏸'; btn.style.color = 'var(--accent)'; }
-  autoRefreshTick();
-}
-
-function stopAutoRefresh() {
-  if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
-}
-
-function toggleAutoRefresh() {
-  const btn = document.getElementById('toggleRefreshBtn');
-  refreshPaused = !refreshPaused;
-  if (refreshPaused) {
-    stopAutoRefresh();
-    if (btn) { btn.textContent = '▶'; btn.style.color = 'var(--accent3)'; }
-    document.getElementById('autoRefreshBar').style.opacity = '0.6';
-  } else {
-    document.getElementById('autoRefreshBar').style.opacity = '1';
-    if (btn) { btn.textContent = '⏸'; btn.style.color = 'var(--accent)'; }
-    autoRefreshTick();
-  }
-}
-
-function updateCountdownUI(remain) {
-  const secs = Math.round(remain);
-  const m    = String(Math.floor(secs / 60)).padStart(2, '0');
-  const s    = String(secs % 60).padStart(2, '0');
-  const el   = document.getElementById('countdownDisplay');
-  if (el) el.textContent = m + ':' + s;
-  const pct = Math.min(100, ((REFRESH_INTERVAL - secs) / REFRESH_INTERVAL) * 100);
-  const bar = document.getElementById('progressBar');
-  if (bar) bar.style.width = pct + '%';
-}
-
-// ── 分頁重新變成前景時，立即檢查是否該更新 ──
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && !refreshPaused) {
-    if (countdownTimer) clearTimeout(countdownTimer);
-    autoRefreshTick(); // 重新檢查（若已超時立即觸發 fetch）
-  }
-});
 
 
 // ── Fear & Greed: colour helper ──
@@ -2076,7 +1988,6 @@ async function sentGenerateSummary(posts) {
 
 async function startSentimentAnalysis() {
   if (!groqApiKey) { alert('請先在上方設定並儲存 Groq API Key'); return; }
-  isAnalyzing = true; // 分析期間暫停自動刷新觸發
   const btn = document.getElementById('sentimentAnalyzeBtn');
   const setMsg = (msg) => {
     document.getElementById('sentPostList').innerHTML = `<div style="text-align:center;padding:36px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.75rem;"><div class="spinner" style="margin:0 auto 12px;"></div>${msg}</div>`;
@@ -2117,7 +2028,6 @@ async function startSentimentAnalysis() {
     sentAllPosts = posts;
     sentRenderDashboard(posts);
   } catch(e) { document.getElementById('sentPostList').innerHTML=`<div style="text-align:center;padding:36px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">錯誤：${e.message}</div>`; }
-  isAnalyzing = false;
   btn.disabled=false; btn.textContent='▶ 重新分析';
 }
 
@@ -2195,16 +2105,9 @@ function updateStickyOffsets() {
   apiBar.style.top = hH + 'px';
   catBar.style.top = (hH + aH) + 'px';
 }
-// Run on load, resize, and when autoRefreshBar toggles
+// Run on load and resize
 updateStickyOffsets();
 window.addEventListener('resize', updateStickyOffsets);
-// Patch toggleAutoRefresh to recalc after show/hide
-const _origToggle = window.toggleAutoRefresh;
-window.toggleAutoRefresh = function() {
-  if (_origToggle) _origToggle();
-  setTimeout(updateStickyOffsets, 50);
-};
-
 // ── Init ──
 renderTrending();
 loadSavedKeys();
