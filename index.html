@@ -502,7 +502,7 @@
 
   #heatmapSvgWrap {
     width: 100%;
-    max-width: 560px;
+    max-width: 680px;
     background: #111110;
     border: 1px solid #333;
     border-radius: 10px;
@@ -844,7 +844,7 @@
     <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">🇹🇼 台股市場熱圖</div>
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
       <span id="heatmapTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);"></span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:4px;">面積 = 市值</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:4px;" title="面積依市值^0.55壓縮，避免台積電佔滿版面">面積 ≈ 市值</span>
       <button onclick="loadHeatmap()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--muted);">↻ 更新</button>
     </div>
   </div>
@@ -2356,9 +2356,9 @@ function renderTreemap(data) {
   const wrap = document.getElementById('heatmapSvgWrap');
   wrap.style.display = 'block';
 
-  // 直向版面：高 > 寬，比例約 4:3（portrait）
+  // 直向版面：高 > 寬，比例約 1.3:1（portrait）
   const SVG_W = wrap.clientWidth || 780;
-  const SVG_H = Math.round(SVG_W * 1.15);
+  const SVG_H = Math.round(SVG_W * 1.3);
   const GAP = 2;
 
   const svg = document.getElementById('heatmapSvg');
@@ -2394,11 +2394,14 @@ function renderTreemap(data) {
   });
 
   // 全部股票排成一個 list：產業大到小，組內市值大到小
+  // ⚠️ power scale（^0.55）壓縮台積電的絕對優勢，讓其他股票仍可見
+  //    同時保留相對大小順序（台積電還是最大）
+  const scaleMcap = v => Math.pow(v, 0.55);
   const items = [];
   sectorsSorted.forEach(sector => {
     sectorMap[sector]
       .sort((a, b) => b.mcap - a.mcap)
-      .forEach(d => items.push({ ...d, value: d.mcap }));
+      .forEach(d => items.push({ ...d, value: scaleMcap(d.mcap) }));
   });
 
   // 執行 squarified treemap
