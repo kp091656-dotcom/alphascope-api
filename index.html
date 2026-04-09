@@ -1082,6 +1082,11 @@ const PAGE_SIZE = 50;
 let currentLang = 'zh';
 let currentCat = 'general';
 
+// ── 統一 API base URL（本地開發自動用相對路徑）──
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? '/api/news'
+  : 'https://newsdigest-api.vercel.app/api/news';
+
 // ── Static data ──
 const mockArticles = [
   {title:'輝達 GTC 大會公布 Blackwell Ultra 架構，AI 算力提升 5 倍',source:'Reuters',publishedAt:new Date(Date.now()-3*60000).toISOString(),url:'#',description:'NVIDIA 執行長黃仁勳在 GTC 年度大會發表演說，宣布 Blackwell Ultra GPU 正式問世，訓練大型語言模型速度較前代提升近五倍，盤前股價大漲逾 7%。',category:'tech'},
@@ -1258,7 +1263,7 @@ async function fetchMarketaux() {
   try {
     // Fetch all+top pages concurrently via Vercel proxy
     // RSS feeds via Vercel proxy (Reuters, CNBC, Bloomberg, WSJ, MarketWatch, Yahoo Finance, FT)
-    const reqs = [fetch('https://newsdigest-api.vercel.app/api/news').then(r=>r.json()).catch(()=>null)];
+    const reqs = [fetch(API_BASE).then(r=>r.json()).catch(()=>null)];
     const results = await Promise.all(reqs);
 
     let articles = [];
@@ -1564,8 +1569,8 @@ async function generateBrief(market) {
     tw: '台股今日維持震盪整理，半導體族群表現強勁，外資動向與美股走勢為主要觀察重點，投資人持續關注供應鏈變化。'
   };
 
-  if (!groqApiKey) {
-    el.innerHTML = `<div class="brief-text">${fallbacks[market]}<br><small style="color:var(--muted);font-size:0.68rem;margin-top:0.4rem;display:block">⚠ 請設定 Groq API Key 以啟用 AI 簡報</small></div>`;
+  if (!groqApiKey || !articles.length) {
+    el.innerHTML = `<div class="brief-text">${fallbacks[market]}<br><small style="color:var(--muted);font-size:0.68rem;margin-top:0.4rem;display:block">${!groqApiKey ? '⚠ 請設定 Groq API Key 以啟用 AI 簡報' : '⚠ 請先載入財經新聞'}</small></div>`;
     return;
   }
 
@@ -1627,7 +1632,7 @@ function fgiRatingZH(score) {
 // ── CNN Fear & Greed (via CORS proxy) ──
 async function loadFearGreed() {
   try {
-    const res = await fetch('https://newsdigest-api.vercel.app/api/news?endpoint=fgi');
+    const res = await fetch(API_BASE + '?endpoint=fgi');
     const data = await res.json();
     if (!data?.fear_and_greed) throw new Error('no data');
 
@@ -1690,7 +1695,7 @@ async function loadCryptoFearGreed() {
 // ── VIX 波動率儀表板 ──
 async function loadVix() {
   try {
-    const res = await fetch('https://newsdigest-api.vercel.app/api/news?endpoint=vix');
+    const res = await fetch(API_BASE + '?endpoint=vix');
     const json = await res.json();
     if (!json.data) throw new Error('no data');
 
@@ -1781,13 +1786,9 @@ async function loadFutures() {
   document.getElementById('futuresLoading').textContent = '載入中…';
   document.getElementById('futuresContent').style.display = 'none';
   try {
-    // Fetch stooq indices + FinMind commodities concurrently
-    const [futRes, commRes] = await Promise.all([
-      fetch('https://newsdigest-api.vercel.app/api/news?endpoint=futures'),
-      fetch('https://newsdigest-api.vercel.app/api/news?endpoint=commodities'),
-    ]);
-    const [futJson, commJson] = await Promise.all([futRes.json(), commRes.json()]);
-    futuresData = [...(futJson.data || []), ...(commJson.data || [])];
+    const futRes = await fetch(API_BASE + '?endpoint=futures');
+    const futJson = await futRes.json();
+    futuresData = futJson.data || [];
     if (!futuresData.length) throw new Error('no data');
     document.getElementById('futuresTs').textContent = '每日收盤價 · ' + new Date().toLocaleDateString('zh-TW');
     document.getElementById('futuresLoading').style.display = 'none';
@@ -1812,7 +1813,7 @@ function renderFuturesChart(sortKey) {
   const container = document.getElementById('futuresChart');
   container.innerHTML = '';
 
-  const cats = ['美股指數','亞股指數','能源','金屬','農產品','外匯','債券','加密貨幣'];
+  const cats = ['波動率','美股指數','亞股指數','能源','金屬','農產品','外匯','債券','加密貨幣'];
   for (const cat of cats) {
     const items = sorted.filter(d => d.cat === cat);
     if (!items.length) continue;
@@ -1980,7 +1981,7 @@ function sentFilterSentiment(s, el) {
 async function sentFetchPTT() {
   // 透過 Vercel API proxy 抓 PTT Stock RSS
   try {
-    const res  = await fetch('/api/news?endpoint=ptt');
+    const res  = await fetch(API_BASE + '?endpoint=ptt');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
@@ -2013,7 +2014,7 @@ async function sentFetchReddit(sub) {
   let posts    = [];
   for (const sort of ['hot', 'new']) {
     try {
-      const res  = await fetch(`/api/news?endpoint=reddit&sub=${sub}&sort=${sort}&limit=25`);
+      const res  = await fetch(`${API_BASE}?endpoint=reddit&sub=${sub}&sort=${sort}&limit=25`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json.error) throw new Error(json.error);
@@ -2138,7 +2139,7 @@ async function startSentimentAnalysis() {
       setMsg(`正在讀取 PTT 文章內文（0/${pttPosts.length}）…`);
       for (let i = 0; i < pttPosts.length; i++) {
         try {
-          const r = await fetch(`/api/news?endpoint=ptt_article&url=${encodeURIComponent(pttPosts[i].link)}`);
+          const r = await fetch(API_BASE + `?endpoint=ptt_article&url=${encodeURIComponent(pttPosts[i].link)}`);
           if (r.ok) {
             const d = await r.json();
             pttPosts[i].body   = d.body   || '';
@@ -2245,7 +2246,7 @@ async function loadHeatmap() {
   document.getElementById('heatmapLoading').style.display = 'block';
   document.getElementById('heatmapSvgWrap').style.display = 'none';
   try {
-    const r = await fetch('/api/news?endpoint=twheatmap');
+    const r = await fetch(API_BASE + '?endpoint=twheatmap');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const json = await r.json();
     if (!json.data || !json.data.length) throw new Error('no data');
@@ -2682,7 +2683,7 @@ window.addEventListener('resize', updateStickyOffsets);
 // ── 台指選擇權：P/C Ratio + 三大法人 + Max Pain ──
 async function loadOptions() {
   try {
-    const res  = await fetch('/api/news?endpoint=options');
+    const res  = await fetch(API_BASE + '?endpoint=options');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error || !data.pcRatio) throw new Error(data.error || 'no data');
