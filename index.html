@@ -2355,197 +2355,226 @@ function renderTreemap(data) {
   const ns = 'http://www.w3.org/2000/svg';
   const tooltip = document.getElementById('hmTooltip');
 
-  // 清掉圖例
   document.getElementById('heatmapLegend').innerHTML = '';
 
-  // 整體黑色背景
+  // 整體背景
   const bg0 = document.createElementNS(ns, 'rect');
   bg0.setAttribute('x', 0); bg0.setAttribute('y', 0);
   bg0.setAttribute('width', SVG_W); bg0.setAttribute('height', SVG_H);
-  bg0.setAttribute('fill', '#111110');
+  bg0.setAttribute('fill', '#1a1a18');
   svg.appendChild(bg0);
 
-  // 依產業分組，組內依市值排序，各產業依總市值排序
+  // power scale：壓縮台積電優勢，保留相對大小
+  const scaleMcap = v => Math.pow(v, 0.38);
+
+  // ── 第一層：產業區塊 squarify ──
   const sectorMap = {};
   data.forEach(d => {
     if (!sectorMap[d.sector]) sectorMap[d.sector] = [];
     sectorMap[d.sector].push(d);
   });
 
-  // 依產業總市值排序，然後組內再依個股市值排序，全部攤平成一個 flat list
-  const sectorsSorted = Object.keys(sectorMap).sort((a, b) => {
-    const sa = sectorMap[a].reduce((s, d) => s + d.mcap, 0);
-    const sb = sectorMap[b].reduce((s, d) => s + d.mcap, 0);
-    return sb - sa;
-  });
+  const SECTOR_GAP = 4; // 產業區塊間距
+  const HDR_H = 18;     // 產業標籤列高（px）
 
-  // 全部股票排成一個 list：產業大到小，組內市值大到小
-  // ⚠️ power scale（^0.38）壓縮台積電的絕對優勢，讓其他股票仍可見
-  //    保留相對大小順序（台積電還是最大），台積電約佔 12% 面積
-  const scaleMcap = v => Math.pow(v, 0.38);
-  const items = [];
-  sectorsSorted.forEach(sector => {
-    sectorMap[sector]
-      .sort((a, b) => b.mcap - a.mcap)
-      .forEach(d => items.push({ ...d, value: scaleMcap(d.mcap) }));
-  });
+  const sectorItems = Object.keys(sectorMap).map(sector => {
+    const stocks = sectorMap[sector].sort((a, b) => b.mcap - a.mcap);
+    const totalMcap = stocks.reduce((s, d) => s + d.mcap, 0);
+    return { sector, stocks, value: scaleMcap(totalMcap) };
+  }).sort((a, b) => b.value - a.value);
 
-  // 執行 squarified treemap
-  const rects = squarify(items, 0, 0, SVG_W, SVG_H);
+  const sectorRects = squarify(sectorItems, 0, 0, SVG_W, SVG_H);
 
-  // ── 畫個股 tile ──
-  rects.forEach(r => {
-    const tw = r.w - GAP;
-    const th = r.h - GAP;
-    const tx = r.x + GAP / 2;
-    const ty = r.y + GAP / 2;
-    if (tw < 3 || th < 3) return;
+  // ── 畫每個產業區塊 ──
+  sectorRects.forEach(sr => {
+    const bx = sr.x + SECTOR_GAP / 2;
+    const by = sr.y + SECTOR_GAP / 2;
+    const bw = sr.w - SECTOR_GAP;
+    const bh = sr.h - SECTOR_GAP;
+    if (bw < 10 || bh < 10) return;
 
-    const tileBg = heatmapBgColor(r.chgPct);
-    const pct = r.chgPct * 100;
-    const sign = pct >= 0 ? '+' : '';
+    // 產業區塊深色背景
+    const sbg = document.createElementNS(ns, 'rect');
+    sbg.setAttribute('x', bx); sbg.setAttribute('y', by);
+    sbg.setAttribute('width', bw); sbg.setAttribute('height', bh);
+    sbg.setAttribute('fill', '#252522'); sbg.setAttribute('rx', 3);
+    svg.appendChild(sbg);
 
-    const g = document.createElementNS(ns, 'g');
-    g.style.cursor = 'pointer';
+    // 是否夠大顯示標籤列
+    const showHdr = bw > 35 && bh > HDR_H + 14;
+    const innerX = bx + 1;
+    const innerY = showHdr ? by + HDR_H : by + 1;
+    const innerW = bw - 2;
+    const innerH = showHdr ? bh - HDR_H - 1 : bh - 2;
 
-    // 底色
-    const tile = document.createElementNS(ns, 'rect');
-    tile.setAttribute('x', tx); tile.setAttribute('y', ty);
-    tile.setAttribute('width', tw); tile.setAttribute('height', th);
-    tile.setAttribute('fill', tileBg);
-    tile.setAttribute('rx', tw > 16 ? 3 : 1);
-    g.appendChild(tile);
+    if (showHdr) {
+      // 標籤列背景
+      const hbg = document.createElementNS(ns, 'rect');
+      hbg.setAttribute('x', bx); hbg.setAttribute('y', by);
+      hbg.setAttribute('width', bw); hbg.setAttribute('height', HDR_H);
+      hbg.setAttribute('fill', '#32322e'); hbg.setAttribute('rx', 3);
+      svg.appendChild(hbg);
+      // 蓋掉下半圓角
+      const hfix = document.createElementNS(ns, 'rect');
+      hfix.setAttribute('x', bx); hfix.setAttribute('y', by + HDR_H - 3);
+      hfix.setAttribute('width', bw); hfix.setAttribute('height', 3);
+      hfix.setAttribute('fill', '#32322e');
+      svg.appendChild(hfix);
 
-    // 細線邊框讓 tile 更清楚
-    const border = document.createElementNS(ns, 'rect');
-    border.setAttribute('x', tx); border.setAttribute('y', ty);
-    border.setAttribute('width', tw); border.setAttribute('height', th);
-    border.setAttribute('fill', 'none');
-    border.setAttribute('stroke', 'rgba(0,0,0,0.25)');
-    border.setAttribute('stroke-width', '0.5');
-    border.setAttribute('rx', tw > 16 ? 3 : 1);
-    g.appendChild(border);
+      // 產業名稱
+      const lSz = Math.min(11, Math.max(7, bw / 10));
+      const sLabel = document.createElementNS(ns, 'text');
+      sLabel.setAttribute('x', bx + 6);
+      sLabel.setAttribute('y', by + HDR_H / 2);
+      sLabel.setAttribute('dominant-baseline', 'middle');
+      sLabel.setAttribute('fill', '#c8c4bc');
+      sLabel.setAttribute('font-size', lSz);
+      sLabel.setAttribute('font-family', 'Noto Sans TC, sans-serif');
+      sLabel.setAttribute('font-weight', '500');
+      // 截斷產業名
+      const maxCh = Math.floor(bw / (lSz * 0.85));
+      sLabel.textContent = sr.sector.length > maxCh
+        ? sr.sector.slice(0, maxCh - 1) + '…'
+        : sr.sector + ' -';
+      svg.appendChild(sLabel);
+    }
 
-    // 文字
-    const cx = tx + tw / 2;
-    const cy = ty + th / 2;
+    if (innerW < 4 || innerH < 4) return;
 
-    if (tw > 80 && th > 60) {
-      // 超大 tile（台積電等）：大字名稱 + 代碼 + 漲跌
-      const nSz = Math.min(Math.floor(tw / 4.5), Math.floor(th / 5), 38);
-      const iSz = Math.round(nSz * 0.48);
-      const cSz = Math.round(nSz * 0.68);
-      const lineGap = nSz * 0.35;
-      const hasId = th > 90;
-      const lines = hasId ? 3 : 2;
-      const totalH = nSz + cSz + (hasId ? iSz : 0) + lineGap * (lines - 1);
-      let curY = cy - totalH / 2 + nSz / 2;
+    // ── 第二層：個股 squarify（在產業內部）──
+    const stockItems = sr.stocks.map(d => ({ ...d, value: scaleMcap(d.mcap) }));
+    const stockRects = squarify(stockItems, innerX, innerY, innerW, innerH);
 
-      const tN = document.createElementNS(ns, 'text');
-      tN.setAttribute('x', cx); tN.setAttribute('y', curY);
-      tN.setAttribute('text-anchor', 'middle'); tN.setAttribute('dominant-baseline', 'middle');
-      tN.setAttribute('fill', '#fff'); tN.setAttribute('font-size', nSz);
-      tN.setAttribute('font-family', 'Noto Sans TC, sans-serif'); tN.setAttribute('font-weight', '900');
-      tN.textContent = r.name; g.appendChild(tN);
-      curY += nSz / 2 + lineGap + iSz / 2;
+    stockRects.forEach(r => {
+      const tw = r.w - GAP;
+      const th = r.h - GAP;
+      const tx = r.x + GAP / 2;
+      const ty = r.y + GAP / 2;
+      if (tw < 3 || th < 3) return;
 
-      if (hasId) {
-        const tI = document.createElementNS(ns, 'text');
-        tI.setAttribute('x', cx); tI.setAttribute('y', curY);
-        tI.setAttribute('text-anchor', 'middle'); tI.setAttribute('dominant-baseline', 'middle');
-        tI.setAttribute('fill', 'rgba(255,255,255,0.65)'); tI.setAttribute('font-size', iSz);
-        tI.setAttribute('font-family', 'IBM Plex Mono, monospace');
-        tI.textContent = r.id; g.appendChild(tI);
-        curY += iSz / 2 + lineGap + cSz / 2;
-      }
+      const tileBg = heatmapBgColor(r.chgPct);
+      const pct = r.chgPct * 100;
+      const sign = pct >= 0 ? '+' : '';
 
-      const tC = document.createElementNS(ns, 'text');
-      tC.setAttribute('x', cx); tC.setAttribute('y', curY);
-      tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
-      tC.setAttribute('fill', '#fff'); tC.setAttribute('font-size', cSz);
-      tC.setAttribute('font-family', 'IBM Plex Mono, monospace'); tC.setAttribute('font-weight', '700');
-      tC.textContent = `${sign}${pct.toFixed(2)}%`; g.appendChild(tC);
+      const g = document.createElementNS(ns, 'g');
+      g.style.cursor = 'pointer';
 
-    } else if (tw > 44 && th > 32) {
-      // 中大 tile：名稱 + 漲跌
-      const nSz = Math.min(Math.floor(tw / 5.5), Math.floor(th / 4), 16);
-      const cSz = Math.round(nSz * 0.82);
-      const gap = nSz * 0.3;
-      const tN = document.createElementNS(ns, 'text');
-      tN.setAttribute('x', cx); tN.setAttribute('y', cy - cSz / 2 - gap / 2);
-      tN.setAttribute('text-anchor', 'middle'); tN.setAttribute('dominant-baseline', 'middle');
-      tN.setAttribute('fill', '#fff'); tN.setAttribute('font-size', nSz);
-      tN.setAttribute('font-family', 'Noto Sans TC, sans-serif'); tN.setAttribute('font-weight', '700');
-      tN.textContent = r.name; g.appendChild(tN);
-      const tC = document.createElementNS(ns, 'text');
-      tC.setAttribute('x', cx); tC.setAttribute('y', cy + nSz / 2 + gap / 2);
-      tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
-      tC.setAttribute('fill', 'rgba(255,255,255,0.92)'); tC.setAttribute('font-size', cSz);
-      tC.setAttribute('font-family', 'IBM Plex Mono, monospace'); tC.setAttribute('font-weight', '600');
-      tC.textContent = `${sign}${pct.toFixed(2)}%`; g.appendChild(tC);
+      // 個股底色
+      const tile = document.createElementNS(ns, 'rect');
+      tile.setAttribute('x', tx); tile.setAttribute('y', ty);
+      tile.setAttribute('width', tw); tile.setAttribute('height', th);
+      tile.setAttribute('fill', tileBg);
+      tile.setAttribute('rx', tw > 16 ? 2 : 0);
+      g.appendChild(tile);
 
-    } else if (tw > 24 && th > 18) {
-      // 小 tile：名稱（或漲跌）
-      const sz = Math.min(Math.floor(tw / 4), Math.floor(th / 2.5), 11);
-      const showName = th > 28 && tw > 32;
-      if (showName) {
+      // 文字
+      const cx = tx + tw / 2;
+      const cy = ty + th / 2;
+
+      if (tw > 72 && th > 52) {
+        // 大 tile：名稱 + 代碼 + 漲跌
+        const nSz = Math.min(Math.floor(tw / 4.8), Math.floor(th / 4.5), 28);
+        const iSz = Math.round(nSz * 0.5);
+        const cSz = Math.round(nSz * 0.72);
+        const hasId = th > 80;
+        const totalTextH = nSz + cSz + (hasId ? iSz + 4 : 0) + 4;
+        let curY = cy - totalTextH / 2 + nSz / 2;
+
         const tN = document.createElementNS(ns, 'text');
-        tN.setAttribute('x', cx); tN.setAttribute('y', cy - sz * 0.4);
+        tN.setAttribute('x', cx); tN.setAttribute('y', curY);
         tN.setAttribute('text-anchor', 'middle'); tN.setAttribute('dominant-baseline', 'middle');
-        tN.setAttribute('fill', '#fff'); tN.setAttribute('font-size', sz);
+        tN.setAttribute('fill', '#fff'); tN.setAttribute('font-size', nSz);
+        tN.setAttribute('font-family', 'Noto Sans TC, sans-serif'); tN.setAttribute('font-weight', '900');
+        tN.textContent = r.name; g.appendChild(tN);
+        curY += nSz / 2 + 4;
+
+        if (hasId) {
+          curY += iSz / 2;
+          const tI = document.createElementNS(ns, 'text');
+          tI.setAttribute('x', cx); tI.setAttribute('y', curY);
+          tI.setAttribute('text-anchor', 'middle'); tI.setAttribute('dominant-baseline', 'middle');
+          tI.setAttribute('fill', 'rgba(255,255,255,0.6)'); tI.setAttribute('font-size', iSz);
+          tI.setAttribute('font-family', 'IBM Plex Mono, monospace');
+          tI.textContent = r.id; g.appendChild(tI);
+          curY += iSz / 2 + 4;
+        }
+
+        curY += cSz / 2;
+        const tC = document.createElementNS(ns, 'text');
+        tC.setAttribute('x', cx); tC.setAttribute('y', curY);
+        tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
+        tC.setAttribute('fill', '#fff'); tC.setAttribute('font-size', cSz);
+        tC.setAttribute('font-family', 'IBM Plex Mono, monospace'); tC.setAttribute('font-weight', '700');
+        tC.textContent = `${sign}${pct.toFixed(2)}%`; g.appendChild(tC);
+
+      } else if (tw > 38 && th > 28) {
+        // 中 tile：名稱 + 漲跌
+        const nSz = Math.min(Math.floor(tw / 5), Math.floor(th / 3.5), 14);
+        const cSz = Math.round(nSz * 0.85);
+        const tN = document.createElementNS(ns, 'text');
+        tN.setAttribute('x', cx); tN.setAttribute('y', cy - cSz / 2 - 2);
+        tN.setAttribute('text-anchor', 'middle'); tN.setAttribute('dominant-baseline', 'middle');
+        tN.setAttribute('fill', '#fff'); tN.setAttribute('font-size', nSz);
         tN.setAttribute('font-family', 'Noto Sans TC, sans-serif'); tN.setAttribute('font-weight', '700');
         tN.textContent = r.name; g.appendChild(tN);
         const tC = document.createElementNS(ns, 'text');
-        tC.setAttribute('x', cx); tC.setAttribute('y', cy + sz * 0.75);
+        tC.setAttribute('x', cx); tC.setAttribute('y', cy + nSz / 2 + 2);
         tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
-        tC.setAttribute('fill', 'rgba(255,255,255,0.85)'); tC.setAttribute('font-size', Math.max(sz - 1, 6));
-        tC.setAttribute('font-family', 'IBM Plex Mono, monospace');
-        tC.textContent = `${sign}${pct.toFixed(1)}%`; g.appendChild(tC);
-      } else {
-        const tC = document.createElementNS(ns, 'text');
-        tC.setAttribute('x', cx); tC.setAttribute('y', cy);
-        tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
-        tC.setAttribute('fill', 'rgba(255,255,255,0.8)'); tC.setAttribute('font-size', sz);
-        tC.setAttribute('font-family', 'IBM Plex Mono, monospace');
-        tC.textContent = `${sign}${pct.toFixed(1)}%`; g.appendChild(tC);
+        tC.setAttribute('fill', 'rgba(255,255,255,0.9)'); tC.setAttribute('font-size', cSz);
+        tC.setAttribute('font-family', 'IBM Plex Mono, monospace'); tC.setAttribute('font-weight', '600');
+        tC.textContent = `${sign}${pct.toFixed(2)}%`; g.appendChild(tC);
+
+      } else if (tw > 22 && th > 16) {
+        // 小 tile
+        const sz = Math.min(Math.floor(tw / 3.5), Math.floor(th / 2.2), 10);
+        if (th > 26 && tw > 28) {
+          const tN = document.createElementNS(ns, 'text');
+          tN.setAttribute('x', cx); tN.setAttribute('y', cy - sz * 0.5);
+          tN.setAttribute('text-anchor', 'middle'); tN.setAttribute('dominant-baseline', 'middle');
+          tN.setAttribute('fill', '#fff'); tN.setAttribute('font-size', sz);
+          tN.setAttribute('font-family', 'Noto Sans TC, sans-serif'); tN.setAttribute('font-weight', '700');
+          tN.textContent = r.name; g.appendChild(tN);
+          const tC = document.createElementNS(ns, 'text');
+          tC.setAttribute('x', cx); tC.setAttribute('y', cy + sz * 0.7);
+          tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
+          tC.setAttribute('fill', 'rgba(255,255,255,0.85)'); tC.setAttribute('font-size', Math.max(sz - 1, 6));
+          tC.setAttribute('font-family', 'IBM Plex Mono, monospace');
+          tC.textContent = `${sign}${pct.toFixed(1)}%`; g.appendChild(tC);
+        } else {
+          const tC = document.createElementNS(ns, 'text');
+          tC.setAttribute('x', cx); tC.setAttribute('y', cy);
+          tC.setAttribute('text-anchor', 'middle'); tC.setAttribute('dominant-baseline', 'middle');
+          tC.setAttribute('fill', 'rgba(255,255,255,0.8)'); tC.setAttribute('font-size', sz);
+          tC.setAttribute('font-family', 'IBM Plex Mono, monospace');
+          tC.textContent = `${sign}${pct.toFixed(1)}%`; g.appendChild(tC);
+        }
       }
-    }
 
-    // hover overlay
-    const hov = document.createElementNS(ns, 'rect');
-    hov.setAttribute('x', tx); hov.setAttribute('y', ty);
-    hov.setAttribute('width', tw); hov.setAttribute('height', th);
-    hov.setAttribute('fill', 'rgba(255,255,255,0)');
-    hov.setAttribute('rx', tw > 16 ? 3 : 1);
-    g.appendChild(hov);
+      // hover overlay
+      const hov = document.createElementNS(ns, 'rect');
+      hov.setAttribute('x', tx); hov.setAttribute('y', ty);
+      hov.setAttribute('width', tw); hov.setAttribute('height', th);
+      hov.setAttribute('fill', 'rgba(255,255,255,0)');
+      hov.setAttribute('rx', tw > 16 ? 2 : 0);
+      g.appendChild(hov);
 
-    g.addEventListener('mouseenter', () => hov.setAttribute('fill', 'rgba(255,255,255,0.15)'));
-    g.addEventListener('mouseleave', () => { hov.setAttribute('fill', 'rgba(255,255,255,0)'); tooltip.style.display = 'none'; });
-    g.addEventListener('mousemove', e => {
-      const priceStr = r.price ? r.price.toLocaleString('zh-TW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
-      const prevStr  = r.prev  ? r.prev.toLocaleString('zh-TW',  {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
-      const mcapStr  = r.mcap >= 10000 ? `${(r.mcap/10000).toFixed(1)} 兆` : `${r.mcap.toLocaleString()} 億`;
-      tooltip.innerHTML = `<b style="font-size:0.82rem;">${r.name}（${r.id}）</b><br>產業：${r.sector}<br>收盤：${priceStr}　前日：${prevStr}<br>漲跌：<span style="color:${pct>=0?'#ff9a7a':'#7adaaa'};font-weight:700;">${sign}${pct.toFixed(2)}%</span><br>市值：約 ${mcapStr}`;
-      tooltip.style.display = 'block';
-      // 確保 tooltip 不超出畫面右側
-      const ttW = 200;
-      const left = e.clientX + 14 + ttW > window.innerWidth ? e.clientX - ttW - 6 : e.clientX + 14;
-      tooltip.style.left = left + 'px';
-      tooltip.style.top  = (e.clientY - 10) + 'px';
+      g.addEventListener('mouseenter', () => hov.setAttribute('fill', 'rgba(255,255,255,0.15)'));
+      g.addEventListener('mouseleave', () => { hov.setAttribute('fill', 'rgba(255,255,255,0)'); tooltip.style.display = 'none'; });
+      g.addEventListener('mousemove', e => {
+        const priceStr = r.price ? r.price.toLocaleString('zh-TW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+        const prevStr  = r.prev  ? r.prev.toLocaleString('zh-TW',  {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+        const mcapStr  = r.mcap >= 10000 ? `${(r.mcap/10000).toFixed(1)} 兆` : `${r.mcap.toLocaleString()} 億`;
+        tooltip.innerHTML = `<b style="font-size:0.82rem;">${r.name}（${r.id}）</b><br>產業：${r.sector}<br>收盤：${priceStr}　前日：${prevStr}<br>漲跌：<span style="color:${pct>=0?'#ff9a7a':'#7adaaa'};font-weight:700;">${sign}${pct.toFixed(2)}%</span><br>市值：約 ${mcapStr}`;
+        tooltip.style.display = 'block';
+        const ttW = 200;
+        const left = e.clientX + 14 + ttW > window.innerWidth ? e.clientX - ttW - 6 : e.clientX + 14;
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = (e.clientY - 10) + 'px';
+      });
+      g.addEventListener('click', () => window.open(`https://tw.tradingview.com/chart/?symbol=TWSE:${r.id}`, '_blank'));
+
+      svg.appendChild(g);
     });
-    g.addEventListener('click', () => window.open(`https://tw.tradingview.com/chart/?symbol=TWSE:${r.id}`, '_blank'));
-
-    svg.appendChild(g);
-  });
-
-  // ── 產業分隔線與標籤（輕量版，只在區塊左上角印產業名）──
-  // 找出每個產業在 treemap 中最左上角的 tile
-  const sectorCorner = {};
-  rects.forEach(r => {
-    const s = r.sector;
-    if (!sectorCorner[s] || r.x < sectorCorner[s].x || (r.x === sectorCorner[s].x && r.y < sectorCorner[s].y)) {
-      sectorCorner[s] = r;
-    }
   });
 }
 // ════════ end heatmap ════════
