@@ -492,35 +492,32 @@
   .sent-neutral { background:#e2e3e5; color:#383d41; }
 
   /* ── 台股熱圖 ── */
-  .hm-sector-tab {
-    font-family:'IBM Plex Mono',monospace; font-size:0.63rem;
-    padding:4px 10px; border-radius:20px; border:1px solid var(--border);
-    background:var(--surface); cursor:pointer; transition:all 0.15s;
+  /* filter buttons（graphify: filter by community）*/
+  .hm-filter-btn {
+    font-family:'IBM Plex Mono',monospace; font-size:0.62rem;
+    padding:4px 11px; border-radius:20px; border:none;
+    box-shadow: 0 0 0 1px var(--border-dark);
+    background:var(--surface); cursor:pointer;
+    color:var(--muted); transition:all 0.15s;
   }
-  .hm-sector-tab.active { background:var(--text); color:#fff; border-color:var(--text); }
-  .hm-sector-tab:hover:not(.active) { border-color:var(--accent); color:var(--accent); }
+  .hm-filter-btn:hover:not(.active) { box-shadow: 0 0 0 1px var(--accent); color: var(--accent); }
+  .hm-filter-btn.active { background: var(--text); color:#f5f3ee; box-shadow: 0 0 0 1px var(--text); }
 
+  /* SVG wrap：ring shadow + whisper shadow（from DESIGN.md）*/
   #heatmapSvgWrap {
     width: 100%;
     max-width: 700px;
-    background: #111110;
-    border: 1px solid #333;
-    border-radius: 10px;
+    background: #1a1a18;
+    border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 4px 24px rgba(0,0,0,0.10);
     margin: 0 auto;
   }
   #heatmapSvgWrap svg { display: block; width: 100%; }
 
   /* sector legend pills */
-  .hm-legend {
-    display: flex; flex-wrap: wrap; gap: 6px;
-    margin-bottom: 12px;
-  }
-  .hm-legend-item {
-    display: flex; align-items: center; gap: 4px;
-    font-family:'IBM Plex Mono',monospace; font-size:0.6rem; color:var(--muted);
-  }
+  .hm-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .hm-legend-item { display: flex; align-items: center; gap: 4px; font-family:'IBM Plex Mono',monospace; font-size:0.6rem; color:var(--muted); }
   .hm-legend-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
 
   .feed-state p { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; }
@@ -840,46 +837,53 @@
 
 <!-- ── 台股熱圖面板 ── -->
 <div id="heatmapPanel" style="display:none;">
+  <!-- ── 頂部控制列 ── -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
-    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">🇹🇼 台股市場熱圖</div>
+    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">🇹🇼 台股市場熱圖</div>
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
       <span id="heatmapTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);"></span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:4px;" title="面積依市值^0.55壓縮，避免台積電佔滿版面">面積 ≈ 市值</span>
-      <button onclick="loadHeatmap()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--muted);">↻ 更新</button>
+      <!-- Ring-shadow badge（from DESIGN.md） -->
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);padding:0.22rem 0.55rem;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);" title="面積依市值^0.38壓縮，台積電佔約12%，保留相對大小">面積 ≈ 市值</span>
+      <button onclick="loadHeatmap()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.28rem 0.75rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
     </div>
   </div>
 
-  <!-- 色階說明 -->
-  <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:10px;flex-wrap:wrap;">
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">漲跌幅：</span>
-    <div style="display:flex;gap:2px;align-items:center;">
-      <div style="width:22px;height:11px;border-radius:1px;background:#7b1a1a;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#a83030;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#c8521a;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#e07850;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#b0a898;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#5aad7a;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#2a9d5c;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#1a7040;"></div>
-      <div style="width:22px;height:11px;border-radius:1px;background:#0f4a28;"></div>
+  <!-- ── 色階 + 說明列 ── -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">漲跌幅</span>
+      <div style="display:flex;gap:2px;align-items:center;">
+        <div style="width:20px;height:10px;border-radius:2px;background:#7b1a1a;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#a83030;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#c8521a;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#e07850;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#8a8480;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#4a9d6a;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#2a9d5c;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#1a7040;"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#0f4a28;"></div>
+      </div>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent);font-weight:600;">▲漲</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent3);font-weight:600;">▼跌</span>
     </div>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent);">▲漲</span>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent3);">▼跌</span>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);margin-left:8px;">點擊開啟 TradingView</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">點擊開啟 TradingView · 滑鼠懸停查看詳情</span>
   </div>
 
-  <!-- 產業圖例 -->
-  <div id="heatmapLegend" class="hm-legend" style="margin-bottom:10px;"></div>
+  <!-- ── 產業篩選（graphify inspired: filter by community）── -->
+  <div id="hmSectorFilter" style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;">
+    <button class="hm-filter-btn active" data-sector="all" onclick="hmFilterSector('all',this)">全部</button>
+  </div>
 
+  <!-- Loading -->
   <div id="heatmapLoading" style="text-align:center;padding:3rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.78rem;"><div class="spinner" style="margin:0 auto 12px;"></div>載入台股資料中…</div>
 
-  <!-- SVG treemap 容器 -->
+  <!-- SVG treemap 容器（ring shadow from DESIGN.md） -->
   <div id="heatmapSvgWrap" style="display:none;">
     <svg id="heatmapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
 
-  <!-- Tooltip -->
-  <div id="hmTooltip" style="position:fixed;display:none;background:var(--text);color:#f5f3ee;padding:10px 14px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;pointer-events:none;z-index:9999;line-height:1.7;box-shadow:0 4px 20px rgba(0,0,0,0.3);"></div>
+  <!-- Tooltip（DESIGN.md warm dark palette） -->
+  <div id="hmTooltip" style="position:fixed;display:none;background:#141413;color:#b0aea5;padding:10px 14px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;pointer-events:none;z-index:9999;line-height:1.75;box-shadow:0 0 0 1px #30302e, 0 8px 28px rgba(0,0,0,0.35);max-width:220px;"></div>
 </div>
 
 <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
@@ -2229,6 +2233,14 @@ function hideHeatmap() {
   document.querySelector('.feed-header').style.display = 'flex';
 }
 
+// graphify-inspired: filter by community（產業篩選）
+function hmFilterSector(sector, btn) {
+  document.querySelectorAll('.hm-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = sector === 'all' ? heatmapData : heatmapData.filter(d => d.sector === sector);
+  renderTreemap(filtered, true);
+}
+
 async function loadHeatmap() {
   document.getElementById('heatmapLoading').style.display = 'block';
   document.getElementById('heatmapSvgWrap').style.display = 'none';
@@ -2337,7 +2349,7 @@ function squarify(items, x, y, w, h) {
   return results;
 }
 
-function renderTreemap(data) {
+function renderTreemap(data, skipFilterRebuild) {
   document.getElementById('heatmapLoading').style.display = 'none';
   const wrap = document.getElementById('heatmapSvgWrap');
   wrap.style.display = 'block';
@@ -2355,9 +2367,7 @@ function renderTreemap(data) {
   const ns = 'http://www.w3.org/2000/svg';
   const tooltip = document.getElementById('hmTooltip');
 
-  document.getElementById('heatmapLegend').innerHTML = '';
-
-  // 整體背景
+  // 整體背景（warm dark from DESIGN.md）
   const bg0 = document.createElementNS(ns, 'rect');
   bg0.setAttribute('x', 0); bg0.setAttribute('y', 0);
   bg0.setAttribute('width', SVG_W); bg0.setAttribute('height', SVG_H);
@@ -2374,14 +2384,27 @@ function renderTreemap(data) {
     sectorMap[d.sector].push(d);
   });
 
-  const SECTOR_GAP = 4; // 產業區塊間距
-  const HDR_H = 18;     // 產業標籤列高（px）
+  const SECTOR_GAP = 4;
+  const HDR_H = 18;
 
   const sectorItems = Object.keys(sectorMap).map(sector => {
     const stocks = sectorMap[sector].sort((a, b) => b.mcap - a.mcap);
     const totalMcap = stocks.reduce((s, d) => s + d.mcap, 0);
     return { sector, stocks, value: scaleMcap(totalMcap) };
   }).sort((a, b) => b.value - a.value);
+
+  // ── 建立產業篩選按鈕（graphify: filter by community）──
+  if (!skipFilterRebuild) {
+    const filterBar = document.getElementById('hmSectorFilter');
+    filterBar.innerHTML = `<button class="hm-filter-btn active" data-sector="all" onclick="hmFilterSector('all',this)">全部</button>`;
+    sectorItems.forEach(si => {
+      const sc = SECTOR_COLORS[si.sector] || DEFAULT_SECTOR_COLOR;
+      filterBar.innerHTML += `<button class="hm-filter-btn" data-sector="${si.sector}" onclick="hmFilterSector('${si.sector}',this)"
+        style="border-left: 3px solid ${sc}; padding-left:8px; border-radius:4px 20px 20px 4px;">
+        ${si.sector}
+      </button>`;
+    });
+  }
 
   const sectorRects = squarify(sectorItems, 0, 0, SVG_W, SVG_H);
 
@@ -2393,18 +2416,29 @@ function renderTreemap(data) {
     const bh = sr.h - SECTOR_GAP;
     if (bw < 10 || bh < 10) return;
 
-    // 產業區塊深色背景
+    const sc = SECTOR_COLORS[sr.sector] || DEFAULT_SECTOR_COLOR;
+
+    // 產業區塊背景
     const sbg = document.createElementNS(ns, 'rect');
     sbg.setAttribute('x', bx); sbg.setAttribute('y', by);
     sbg.setAttribute('width', bw); sbg.setAttribute('height', bh);
     sbg.setAttribute('fill', '#252522'); sbg.setAttribute('rx', 3);
     svg.appendChild(sbg);
 
+    // 產業 color accent：左側 2px 彩色條（對齊 filter btn 設計）
+    if (bh > 20) {
+      const accent = document.createElementNS(ns, 'rect');
+      accent.setAttribute('x', bx); accent.setAttribute('y', by);
+      accent.setAttribute('width', 2); accent.setAttribute('height', bh);
+      accent.setAttribute('fill', sc); accent.setAttribute('rx', 1);
+      svg.appendChild(accent);
+    }
+
     // 是否夠大顯示標籤列
     const showHdr = bw > 35 && bh > HDR_H + 14;
-    const innerX = bx + 1;
+    const innerX = bx + (bh > 20 ? 3 : 1); // 避開左側 accent bar
     const innerY = showHdr ? by + HDR_H : by + 1;
-    const innerW = bw - 2;
+    const innerW = bw - (bh > 20 ? 4 : 2);
     const innerH = showHdr ? bh - HDR_H - 1 : bh - 2;
 
     if (showHdr) {
@@ -2421,18 +2455,18 @@ function renderTreemap(data) {
       hfix.setAttribute('fill', '#32322e');
       svg.appendChild(hfix);
 
-      // 產業名稱
+      // 產業名稱（sector color from DESIGN.md accent system）
       const lSz = Math.min(11, Math.max(7, bw / 10));
       const sLabel = document.createElementNS(ns, 'text');
-      sLabel.setAttribute('x', bx + 6);
+      sLabel.setAttribute('x', bx + 8);
       sLabel.setAttribute('y', by + HDR_H / 2);
       sLabel.setAttribute('dominant-baseline', 'middle');
-      sLabel.setAttribute('fill', '#c8c4bc');
+      sLabel.setAttribute('fill', sc);  // 用產業色顯示標題
       sLabel.setAttribute('font-size', lSz);
       sLabel.setAttribute('font-family', 'Noto Sans TC, sans-serif');
-      sLabel.setAttribute('font-weight', '500');
-      // 截斷產業名
-      const maxCh = Math.floor(bw / (lSz * 0.85));
+      sLabel.setAttribute('font-weight', '600');
+      sLabel.setAttribute('letter-spacing', '0.02em');
+      const maxCh = Math.floor((bw - 10) / (lSz * 0.82));
       sLabel.textContent = sr.sector.length > maxCh
         ? sr.sector.slice(0, maxCh - 1) + '…'
         : sr.sector + ' -';
@@ -2564,7 +2598,20 @@ function renderTreemap(data) {
         const priceStr = r.price ? r.price.toLocaleString('zh-TW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
         const prevStr  = r.prev  ? r.prev.toLocaleString('zh-TW',  {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
         const mcapStr  = r.mcap >= 10000 ? `${(r.mcap/10000).toFixed(1)} 兆` : `${r.mcap.toLocaleString()} 億`;
-        tooltip.innerHTML = `<b style="font-size:0.82rem;">${r.name}（${r.id}）</b><br>產業：${r.sector}<br>收盤：${priceStr}　前日：${prevStr}<br>漲跌：<span style="color:${pct>=0?'#ff9a7a':'#7adaaa'};font-weight:700;">${sign}${pct.toFixed(2)}%</span><br>市值：約 ${mcapStr}`;
+        // DESIGN.md warm dark tooltip: #141413 bg, #b0aea5 secondary, #30302e ring
+        const sectorColor = SECTOR_COLORS[r.sector] || DEFAULT_SECTOR_COLOR;
+        tooltip.innerHTML = `
+          <div style="font-size:0.82rem;font-weight:700;color:#f5f3ee;margin-bottom:4px;">${r.name} <span style="font-weight:400;color:#87867f;font-size:0.7rem;">${r.id}</span></div>
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:1px;background:${sectorColor};flex-shrink:0;"></span>
+            <span style="color:#87867f;font-size:0.65rem;">${r.sector}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;color:#b0aea5;font-size:0.65rem;margin-bottom:5px;">
+            <span>收盤</span><span style="color:#f5f3ee;text-align:right;">${priceStr}</span>
+            <span>前日</span><span style="color:#f5f3ee;text-align:right;">${prevStr}</span>
+            <span>市值</span><span style="color:#f5f3ee;text-align:right;">${mcapStr}</span>
+          </div>
+          <div style="font-size:0.85rem;font-weight:700;color:${pct>=0?'#e07850':'#2a9d5c'};border-top:1px solid #30302e;padding-top:5px;">${sign}${pct.toFixed(2)}%</div>`;
         tooltip.style.display = 'block';
         const ttW = 200;
         const left = e.clientX + 14 + ttW > window.innerWidth ? e.clientX - ttW - 6 : e.clientX + 14;
