@@ -665,6 +665,107 @@ export default async function handler(req, res) {
     return;
   }
 
+  // ── 外資現貨買賣超（整體三大法人）──
+  if (endpoint === 'institutional') {
+    const TOKEN = process.env.FINMIND_TOKEN;
+    if (!TOKEN) return res.status(500).json({ error: 'FINMIND_TOKEN not configured' });
+    const BASE = 'https://api.finmindtrade.com/api/v4/data';
+    try {
+      // 取最近 20 個交易日
+      const endDate = new Date().toISOString().slice(0, 10);
+      const startD  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const url = `${BASE}?dataset=TaiwanStockTotalInstitutionalInvestors&start_date=${startD}&end_date=${endDate}&token=${TOKEN}`;
+      const r = await fetch(url);
+      const d = await r.json();
+      const rows = d.data || [];
+      // 依日期分組，每日加總三大法人
+      const byDate = {};
+      for (const row of rows) {
+        const dt = row.date?.slice(0, 10);
+        if (!dt) continue;
+        if (!byDate[dt]) byDate[dt] = { date: dt, buy: 0, sell: 0, net: 0, detail: {} };
+        const buy  = parseInt(row.buy)  || 0;
+        const sell = parseInt(row.sell) || 0;
+        const name = row.name || '';
+        byDate[dt].buy  += buy;
+        byDate[dt].sell += sell;
+        byDate[dt].net  += (buy - sell);
+        // 個別法人（外資/投信/自營商）
+        if (name.includes('外資')) byDate[dt].detail['外資'] = (buy - sell);
+        else if (name.includes('投信')) byDate[dt].detail['投信'] = (buy - sell);
+        else if (name.includes('自營')) byDate[dt].detail['自營商'] = (buy - sell);
+      }
+      // 排序取最近 15 天
+      const sorted = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15);
+      // 連續買超/賣超天數（以外資為主）
+      let streak = 0;
+      for (const day of sorted) {
+        const net = day.detail['外資'] ?? day.net;
+        if (streak === 0) { streak = net >= 0 ? 1 : -1; continue; }
+        if (streak > 0 && net >= 0) streak++;
+        else if (streak < 0 && net < 0) streak--;
+        else break;
+      }
+      return res.status(200).json({ data: sorted, streak, latestDate: sorted[0]?.date || null });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── 融資融券整體市場 ──
+  if (endpoint === 'margin') {
+    const TOKEN = process.env.FINMIND_TOKEN;
+    if (!TOKEN) return res.status(500).json({ error: 'FINMIND_TOKEN not configured' });
+    const BASE = 'https://api.finmindtrade.com/api/v4/data';
+    try {
+      const endDate = new Date().toISOString().slice(0, 10);
+      const startD  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const url = `${BASE}?dataset=TaiwanStockTotalMarginPurchaseShortSale&start_date=${startD}&end_date=${endDate}&token=${TOKEN}`;
+      const r = await fetch(url);
+      const d = await r.json();
+      const rows = d.data || [];
+      // 分離融資(MarginPurchase)和融券(ShortSale)
+      const byDate = {};
+      for (const row of rows) {
+        const dt = row.date?.slice(0, 10);
+        if (!dt) continue;
+        if (!byDate[dt]) byDate[dt] = { date: dt };
+        const name = row.name || '';
+        if (name.includes('Margin') || name.includes('融資')) {
+          byDate[dt].marginBalance     = parseInt(row.TodayBalance) || 0;
+          byDate[dt].marginYesBalance  = parseInt(row.YesBalance) || 0;
+          byDate[dt].marginBuy         = parseInt(row.buy) || 0;
+          byDate[dt].marginSell        = parseInt(row.sell) || 0;
+          byDate[dt].marginReturn      = parseInt(row.Return) || 0;
+        } else if (name.includes('Short') || name.includes('融券')) {
+          byDate[dt].shortBalance      = parseInt(row.TodayBalance) || 0;
+          byDate[dt].shortYesBalance   = parseInt(row.YesBalance) || 0;
+          byDate[dt].shortBuy          = parseInt(row.buy) || 0;
+          byDate[dt].shortSell         = parseInt(row.sell) || 0;
+        }
+      }
+      const sorted = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15);
+      // 計算融資餘額變化（今日 - 昨日）
+      const latest = sorted[0] || {};
+      const marginChange = latest.marginBalance && latest.marginYesBalance
+        ? latest.marginBalance - latest.marginYesBalance : null;
+      const shortChange  = latest.shortBalance && latest.shortYesBalance
+        ? latest.shortBalance - latest.shortYesBalance : null;
+      return res.status(200).json({
+        data: sorted,
+        latestDate: latest.date || null,
+        latest: {
+          marginBalance: latest.marginBalance || null,
+          marginChange,
+          shortBalance:  latest.shortBalance  || null,
+          shortChange,
+        }
+      });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // ── 台股熱圖（前50大市值股票）──
   if (endpoint === 'twheatmap') {
     const TOKEN = process.env.FINMIND_TOKEN;
