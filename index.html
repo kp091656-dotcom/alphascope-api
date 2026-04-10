@@ -2335,7 +2335,18 @@ function showHeatmap() {
   document.getElementById('sentimentPanel').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'block';
-  if (!heatmapData.length) loadHeatmap();
+  if (heatmapData.length) {
+    renderTreemap(heatmapData);
+  } else {
+    const loadingEl = document.getElementById('heatmapLoading');
+    loadingEl.style.display = 'block';
+    loadingEl.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--muted);padding:2rem 0;text-align:center;">
+      <div style="font-size:1.5rem;margin-bottom:0.6rem;">📊</div>
+      <div>按右上角 <strong style="color:var(--text);">↻ 更新</strong> 載入熱圖資料</div>
+      <div style="font-size:0.65rem;margin-top:0.5rem;opacity:0.7;">每次載入消耗 FinMind API quota，建議需要時再更新</div>
+    </div>`;
+    document.getElementById('heatmapSvgWrap').style.display = 'none';
+  }
   loadMktSignals();
 }
 
@@ -2355,19 +2366,22 @@ function hmFilterSector(sector, btn) {
 }
 
 async function loadHeatmap() {
-  document.getElementById('heatmapLoading').style.display = 'block';
+  const loadingEl = document.getElementById('heatmapLoading');
+  loadingEl.style.display = 'block';
+  loadingEl.innerHTML = `<div class="spinner" style="margin:0 auto 12px;"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);">載入台股資料中（${window._hmStockList || 86} 支）…</span>`;
   document.getElementById('heatmapSvgWrap').style.display = 'none';
   try {
-    const r = await fetch(API_BASE + '?endpoint=twheatmap');
+    const r = await fetch(API_BASE + '?endpoint=twheatmap&refresh=1');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const json = await r.json();
     if (!json.data || !json.data.length) throw new Error('no data');
     heatmapData = json.data;
     const date = heatmapData[0]?.date || '';
-    document.getElementById('heatmapTs').textContent = date ? `資料日期：${date}（盤後）` : '';
+    const cacheNote = json.cached ? ` · 快取 ${json.cacheAgeMin}m 前` : ' · 即時資料';
+    document.getElementById('heatmapTs').textContent = date ? `資料日期：${date}（盤後）${cacheNote}` : '';
     renderTreemap(heatmapData);
   } catch(e) {
-    document.getElementById('heatmapLoading').textContent = `資料載入失敗：${e.message}`;
+    loadingEl.innerHTML = `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);">資料載入失敗：${e.message}</span>`;
   }
 }
 
