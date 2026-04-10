@@ -647,6 +647,10 @@
     .sidebar { display: none; }
     .api-config-bar { padding: 0.6rem 1.25rem; }
   }
+  @media (max-width: 1100px) {
+    #heatmapPanel > div:first-child { grid-template-columns: 1fr !important; }
+    #mktSignalPanel { max-width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -835,57 +839,157 @@
   </div>
 </div>
 
-<!-- ── 台股熱圖面板 ── -->
+<!-- ── 台股熱圖面板（含右側多空儀表板）── -->
 <div id="heatmapPanel" style="display:none;">
-  <!-- ── 頂部控制列 ── -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
-    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">🇹🇼 台股市場熱圖</div>
-    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-      <span id="heatmapTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);"></span>
-      <!-- Ring-shadow badge（from DESIGN.md） -->
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);padding:0.22rem 0.55rem;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);" title="面積依市值^0.38壓縮，台積電佔約12%，保留相對大小">面積 ≈ 市值</span>
-      <button onclick="loadHeatmap()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.28rem 0.75rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
-    </div>
-  </div>
+  <!-- 左右並排容器 -->
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:1.2rem;align-items:start;">
 
-  <!-- ── 色階 + 說明列 ── -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-    <div style="display:flex;align-items:center;gap:6px;">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">漲跌幅</span>
-      <div style="display:flex;gap:2px;align-items:center;">
-        <div style="width:20px;height:10px;border-radius:2px;background:#7b1a1a;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#a83030;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#c8521a;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#e07850;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#8a8480;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#4a9d6a;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#2a9d5c;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#1a7040;"></div>
-        <div style="width:20px;height:10px;border-radius:2px;background:#0f4a28;"></div>
+    <!-- ── 左欄：熱圖 ── -->
+    <div>
+      <!-- 頂部控制列 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">🇹🇼 台股市場熱圖</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+          <span id="heatmapTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);"></span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);padding:0.22rem 0.55rem;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);" title="面積依市值^0.38壓縮，台積電佔約12%，保留相對大小">面積 ≈ 市值</span>
+          <button onclick="loadHeatmap()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.28rem 0.75rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
+        </div>
       </div>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent);font-weight:600;">▲漲</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent3);font-weight:600;">▼跌</span>
+      <!-- 色階 + 說明列 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">漲跌幅</span>
+          <div style="display:flex;gap:2px;align-items:center;">
+            <div style="width:20px;height:10px;border-radius:2px;background:#7b1a1a;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#a83030;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#c8521a;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#e07850;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#8a8480;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#4a9d6a;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#2a9d5c;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#1a7040;"></div>
+            <div style="width:20px;height:10px;border-radius:2px;background:#0f4a28;"></div>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent);font-weight:600;">▲漲</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent3);font-weight:600;">▼跌</span>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">點擊開啟 TradingView · 滑鼠懸停查看詳情</span>
+      </div>
+      <!-- 產業篩選 -->
+      <div id="hmSectorFilter" style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="hm-filter-btn active" data-sector="all" onclick="hmFilterSector('all',this)">全部</button>
+      </div>
+      <!-- Loading -->
+      <div id="heatmapLoading" style="text-align:center;padding:3rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.78rem;"><div class="spinner" style="margin:0 auto 12px;"></div>載入台股資料中…</div>
+      <!-- SVG treemap -->
+      <div id="heatmapSvgWrap" style="display:none;">
+        <svg id="heatmapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
     </div>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">點擊開啟 TradingView · 滑鼠懸停查看詳情</span>
-  </div>
 
-  <!-- ── 產業篩選（graphify inspired: filter by community）── -->
-  <div id="hmSectorFilter" style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;">
-    <button class="hm-filter-btn active" data-sector="all" onclick="hmFilterSector('all',this)">全部</button>
-  </div>
+    <!-- ── 右欄：台指多空儀表板 ── -->
+    <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:0.75rem;">
 
-  <!-- Loading -->
-  <div id="heatmapLoading" style="text-align:center;padding:3rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.78rem;"><div class="spinner" style="margin:0 auto 12px;"></div>載入台股資料中…</div>
+      <!-- 標題列 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;letter-spacing:-0.02em;">📡 多空訊號</div>
+        <button onclick="loadMktSignals()" style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;padding:0.22rem 0.65rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
+      </div>
 
-  <!-- SVG treemap 容器（ring shadow from DESIGN.md） -->
-  <div id="heatmapSvgWrap" style="display:none;">
-    <svg id="heatmapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
-  </div>
+      <!-- 綜合訊號燈 -->
+      <div id="mktSignalSummary" style="border-radius:10px;padding:0.9rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);display:flex;align-items:center;gap:0.8rem;">
+        <div id="mktSignalDot" style="width:14px;height:14px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.4s;"></div>
+        <div>
+          <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
+          <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);margin-top:2px;"></div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div id="mktSignalScore" style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:800;color:var(--muted);">—</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">多空得分</div>
+        </div>
+      </div>
+
+      <!-- ① 台指選擇權 -->
+      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">🎯 台指選擇權</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.6rem;">
+          <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">P/C Ratio（OI）</div>
+            <div id="ms_pcOI" style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:800;margin-top:1px;">—</div>
+            <div id="ms_pcOILabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;"></div>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">P/C Ratio（Vol）</div>
+            <div id="ms_pcVol" style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:800;margin-top:1px;">—</div>
+            <div id="ms_pcVolLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.3rem 0;border-top:1px solid var(--border);">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">Max Pain</span>
+          <span id="ms_maxPain" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:700;color:var(--accent2);">—</span>
+        </div>
+        <div style="margin-top:0.5rem;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.3rem;">法人選擇權淨部位（口）</div>
+          <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.22rem;"></div>
+        </div>
+        <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
+      </div>
+
+      <!-- ② 外資現貨籌碼 -->
+      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">🏢 三大法人現貨買賣超</div>
+        <div id="ms_instLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+        <div id="ms_instContent" style="display:none;">
+          <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.5rem;">
+            <div id="ms_instNet" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;">—</div>
+            <div id="ms_instNetLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">億元</div>
+          </div>
+          <div id="ms_instDetail" style="display:flex;flex-direction:column;gap:0.2rem;"></div>
+          <div id="ms_instStreak" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;margin-top:0.4rem;padding:0.25rem 0.5rem;border-radius:4px;"></div>
+          <div style="margin-top:0.55rem;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:0.25rem;">近10日三大法人合計（億）</div>
+            <div id="ms_instBars" style="display:flex;align-items:flex-end;gap:2px;height:36px;"></div>
+            <div id="ms_instDates" style="display:flex;gap:2px;margin-top:2px;"></div>
+          </div>
+          <div id="ms_instTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.35rem;"></div>
+        </div>
+      </div>
+
+      <!-- ③ 融資融券 -->
+      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">💳 融資融券</div>
+        <div id="ms_marginLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+        <div id="ms_marginContent" style="display:none;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.4rem;">
+            <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">融資餘額（億）</div>
+              <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;margin-top:1px;">—</div>
+              <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;font-weight:700;"></div>
+            </div>
+            <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">融券餘額（張）</div>
+              <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;margin-top:1px;">—</div>
+              <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;font-weight:700;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:0.25rem;">融資餘額近10日趨勢（億）</div>
+            <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:2px;height:32px;"></div>
+          </div>
+          <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
+        </div>
+      </div>
+
+      <!-- 免責聲明 -->
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.5;padding:0 0.2rem;">
+        ⚠️ 盤後資料，僅供參考，不構成投資建議
+      </div>
+    </div><!-- end 右欄 -->
+  </div><!-- end grid -->
 
   <!-- Tooltip（DESIGN.md warm dark palette） -->
   <div id="hmTooltip" style="position:fixed;display:none;background:#141413;color:#b0aea5;padding:10px 14px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;pointer-events:none;z-index:9999;line-height:1.75;box-shadow:0 0 0 1px #30302e, 0 8px 28px rgba(0,0,0,0.35);max-width:220px;"></div>
 </div>
-
 <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
   </div>
 
@@ -2226,6 +2330,7 @@ function showHeatmap() {
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'block';
   if (!heatmapData.length) loadHeatmap();
+  loadMktSignals();
 }
 
 function hideHeatmap() {
@@ -2680,6 +2785,214 @@ function updateStickyOffsets() {
 // Run on load and resize
 updateStickyOffsets();
 window.addEventListener('resize', updateStickyOffsets);
+// ════════ 台指多空訊號儀表板 ════════
+async function loadMktSignals() {
+  // 同時抓取選擇權、三大法人現貨、融資融券
+  const [optData, instData, marginData] = await Promise.allSettled([
+    fetch(API_BASE + '?endpoint=options').then(r => r.json()),
+    fetch(API_BASE + '?endpoint=institutional').then(r => r.json()),
+    fetch(API_BASE + '?endpoint=margin').then(r => r.json()),
+  ]);
+
+  let score = 0; // 多空得分：正=多、負=空
+
+  // ── ① 填入選擇權資料 ──
+  const opt = optData.status === 'fulfilled' ? optData.value : null;
+  if (opt && opt.pcRatio) {
+    const pcOI  = opt.pcRatio.oi;
+    const pcVol = opt.pcRatio.volume;
+
+    // P/C OI
+    const oiEl = document.getElementById('ms_pcOI');
+    const oiLbl = document.getElementById('ms_pcOILabel');
+    oiEl.textContent = pcOI != null ? pcOI.toFixed(2) : '—';
+    let oiColor = 'var(--muted)', oiText = '中性', oiScore = 0;
+    if (pcOI != null) {
+      if      (pcOI < 0.7)  { oiColor='var(--accent)';  oiText='偏多頭'; oiScore=2; }
+      else if (pcOI < 1.0)  { oiColor='var(--accent2)'; oiText='略偏多'; oiScore=1; }
+      else if (pcOI < 1.3)  { oiColor='var(--muted)';   oiText='中性';   oiScore=0; }
+      else if (pcOI < 1.7)  { oiColor='#e07020';        oiText='略偏空'; oiScore=-1;}
+      else                  { oiColor='var(--accent3)';  oiText='偏空頭'; oiScore=-2;}
+    }
+    oiEl.style.color  = oiColor;
+    oiLbl.textContent = oiText;
+    oiLbl.style.color = oiColor;
+    score += oiScore;
+
+    // P/C Vol
+    const volEl  = document.getElementById('ms_pcVol');
+    const volLbl = document.getElementById('ms_pcVolLabel');
+    volEl.textContent = pcVol != null ? pcVol.toFixed(2) : '—';
+    let vColor = 'var(--muted)', vText = '中性', vScore = 0;
+    if (pcVol != null) {
+      if      (pcVol < 0.8)  { vColor='var(--accent)';  vText='偏多'; vScore=1; }
+      else if (pcVol < 1.1)  { vColor='var(--muted)';   vText='中性'; vScore=0; }
+      else                   { vColor='var(--accent3)';  vText='偏空'; vScore=-1;}
+    }
+    volEl.style.color  = vColor;
+    volLbl.textContent = vText;
+    volLbl.style.color = vColor;
+    score += vScore;
+
+    // Max Pain
+    const mp = opt.maxPain;
+    document.getElementById('ms_maxPain').textContent = mp ? mp.toLocaleString() + ' 點' : '—';
+
+    // 法人選擇權部位
+    const instRows = document.getElementById('ms_instRows');
+    const inst = opt.institution || {};
+    instRows.innerHTML = ['外資','自營商','投信'].map(name => {
+      const val = inst[name];
+      if (val == null) return '';
+      const pos   = val >= 0;
+      const color = pos ? 'var(--accent)' : 'var(--accent3)';
+      const sign  = pos ? '+' : '';
+      const barW  = Math.min(100, Math.abs(val) / 5000 * 100);
+      if (name === '外資') score += pos ? 1 : -1;
+      return `<div style="display:flex;align-items:center;gap:5px;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);width:36px;flex-shrink:0;">${name}</span>
+        <div style="flex:1;height:6px;background:var(--bg);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${barW}%;background:${color};border-radius:2px;transition:width 0.6s;"></div>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:${color};font-weight:600;width:52px;text-align:right;">${sign}${val.toLocaleString()}</span>
+      </div>`;
+    }).join('');
+
+    const optDate = opt.date || '';
+    document.getElementById('ms_optTs').textContent = optDate ? `資料日期：${optDate}` : '';
+  }
+
+  // ── ② 填入三大法人現貨 ──
+  const inst = instData.status === 'fulfilled' ? instData.value : null;
+  document.getElementById('ms_instLoading').style.display = 'none';
+  document.getElementById('ms_instContent').style.display = inst ? 'block' : 'none';
+  if (inst && inst.data && inst.data.length) {
+    const latest = inst.data[0];
+    const netBil = Math.round(latest.net / 1e8 * 10) / 10; // 億元
+    const netEl  = document.getElementById('ms_instNet');
+    netEl.textContent = (netBil >= 0 ? '+' : '') + netBil.toFixed(1);
+    netEl.style.color = netBil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+    document.getElementById('ms_instNetLabel').textContent = '億元（三大法人合計）';
+    if (netBil >= 0) score += 1; else score -= 1;
+
+    // 個別法人
+    const detailEl = document.getElementById('ms_instDetail');
+    detailEl.innerHTML = ['外資','投信','自營商'].map(name => {
+      const v = latest.detail?.[name];
+      if (v == null) return '';
+      const bil = Math.round(v / 1e8 * 10) / 10;
+      const color = bil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      return `<div style="display:flex;justify-content:space-between;padding:0.18rem 0;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">${name}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;color:${color};">${bil >= 0 ? '+' : ''}${bil.toFixed(1)} 億</span>
+      </div>`;
+    }).join('');
+
+    // 連買/賣超天數
+    const streak = inst.streak || 0;
+    const streakEl = document.getElementById('ms_instStreak');
+    if (streak !== 0) {
+      const abs = Math.abs(streak);
+      const isBull = streak > 0;
+      streakEl.textContent = `外資連續${isBull ? '買超' : '賣超'} ${abs} 日`;
+      streakEl.style.background = isBull ? 'rgba(200,82,26,0.1)' : 'rgba(42,157,92,0.1)';
+      streakEl.style.color      = isBull ? 'var(--accent)' : 'var(--accent3)';
+      if (isBull) score += Math.min(2, Math.floor(abs / 3));
+      else        score -= Math.min(2, Math.floor(abs / 3));
+    } else {
+      streakEl.textContent = '';
+    }
+
+    // 近10日 mini bar chart
+    const bars10 = inst.data.slice(0, 10).reverse();
+    const maxAbs = Math.max(...bars10.map(d => Math.abs(d.net / 1e8)));
+    const barsEl  = document.getElementById('ms_instBars');
+    const datesEl = document.getElementById('ms_instDates');
+    barsEl.innerHTML = bars10.map(d => {
+      const bil = d.net / 1e8;
+      const h   = maxAbs > 0 ? Math.abs(bil / maxAbs * 34) : 4;
+      const col = bil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:36px;">
+        <div style="height:${h.toFixed(1)}px;background:${col};border-radius:2px 2px 0 0;"></div>
+      </div>`;
+    }).join('');
+    datesEl.innerHTML = bars10.map(d =>
+      `<div style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.42rem;color:var(--muted);text-align:center;overflow:hidden;">${d.date.slice(5)}</div>`
+    ).join('');
+
+    document.getElementById('ms_instTs').textContent = `資料日期：${inst.latestDate || ''}`;
+  } else if (!inst) {
+    document.getElementById('ms_instLoading').textContent = '三大法人資料載入失敗';
+    document.getElementById('ms_instLoading').style.display = 'block';
+  }
+
+  // ── ③ 填入融資融券 ──
+  const margin = marginData.status === 'fulfilled' ? marginData.value : null;
+  document.getElementById('ms_marginLoading').style.display = 'none';
+  document.getElementById('ms_marginContent').style.display = margin ? 'block' : 'none';
+  if (margin && margin.latest) {
+    const lat = margin.latest;
+
+    // 融資餘額
+    const mBal = lat.marginBalance ? Math.round(lat.marginBalance / 1e8 * 10) / 10 : null;
+    const mChg = lat.marginChange  ? Math.round(lat.marginChange  / 1e8 * 10) / 10 : null;
+    document.getElementById('ms_marginBal').textContent = mBal != null ? mBal.toFixed(1) : '—';
+    const mChgEl = document.getElementById('ms_marginChg');
+    if (mChg != null) {
+      mChgEl.textContent = (mChg >= 0 ? '▲+' : '▼') + mChg.toFixed(1) + ' 億';
+      mChgEl.style.color = mChg >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      // 融資大增=散戶追多，短線偏多但過熱警示；這裡簡單加分
+      if (mChg > 0) score += 0.5;
+    }
+
+    // 融券餘額（張）
+    const sBal = lat.shortBalance;
+    const sChg = lat.shortChange;
+    document.getElementById('ms_shortBal').textContent = sBal != null ? (sBal / 1000).toFixed(1) + 'k' : '—';
+    const sChgEl = document.getElementById('ms_shortChg');
+    if (sChg != null) {
+      sChgEl.textContent = (sChg >= 0 ? '▲+' : '▼') + Math.abs(sChg / 1000).toFixed(1) + 'k張';
+      sChgEl.style.color = sChg >= 0 ? 'var(--accent3)' : 'var(--accent)';
+    }
+
+    // 融資近10日 mini bar
+    const bars10m = (margin.data || []).slice(0, 10).reverse();
+    const maxMar  = Math.max(...bars10m.map(d => d.marginBalance || 0));
+    const minMar  = Math.min(...bars10m.map(d => d.marginBalance || 0));
+    const rangeMar = maxMar - minMar || 1;
+    document.getElementById('ms_marginBars').innerHTML = bars10m.map(d => {
+      const h = ((d.marginBalance - minMar) / rangeMar * 28 + 4).toFixed(1);
+      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:32px;">
+        <div style="height:${h}px;background:var(--accent2);border-radius:2px 2px 0 0;opacity:0.75;"></div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('ms_marginTs').textContent = `資料日期：${margin.latestDate || ''}`;
+  } else if (!margin) {
+    document.getElementById('ms_marginLoading').textContent = '融資融券資料載入失敗';
+    document.getElementById('ms_marginLoading').style.display = 'block';
+  }
+
+  // ── 計算綜合多空得分 ──
+  const totalScore = Math.round(score * 10) / 10;
+  const scoreEl = document.getElementById('mktSignalScore');
+  const dotEl   = document.getElementById('mktSignalDot');
+  const titleEl = document.getElementById('mktSignalTitle');
+  const descEl  = document.getElementById('mktSignalDesc');
+  scoreEl.textContent = (totalScore >= 0 ? '+' : '') + totalScore;
+  let signalColor, signalTitle, signalDesc;
+  if      (totalScore >= 4)  { signalColor='var(--accent)';  signalTitle='明顯偏多'; signalDesc='多數指標偏多，注意過熱風險'; }
+  else if (totalScore >= 2)  { signalColor='var(--accent)';  signalTitle='略偏多頭'; signalDesc='多空指標略偏多方'; }
+  else if (totalScore >= -1) { signalColor='var(--muted)';   signalTitle='中性觀望'; signalDesc='多空訊號分歧，方向待確認'; }
+  else if (totalScore >= -3) { signalColor='var(--accent3)'; signalTitle='略偏空頭'; signalDesc='多數指標偏空，留意下行風險'; }
+  else                       { signalColor='var(--accent3)'; signalTitle='明顯偏空'; signalDesc='空方訊號強烈，謹慎為宜'; }
+  dotEl.style.background   = signalColor;
+  titleEl.textContent       = signalTitle;
+  titleEl.style.color       = signalColor;
+  descEl.textContent        = signalDesc;
+  scoreEl.style.color       = signalColor;
+}
+
 // ── 台指選擇權：P/C Ratio + 三大法人 + Max Pain ──
 async function loadOptions() {
   try {
