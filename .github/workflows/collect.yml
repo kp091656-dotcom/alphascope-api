@@ -1,0 +1,6 @@
+newsdigest-api/
+  .github/
+    workflows/
+      collect.yml          ← collect.yml 放這裡
+    scripts/
+      collect_market_data.js  ← collect_market_data.js 放這裡
