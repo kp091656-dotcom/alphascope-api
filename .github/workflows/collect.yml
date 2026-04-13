@@ -1,6 +1,30 @@
-newsdigest-api/
-  .github/
-    workflows/
-      collect.yml          ← collect.yml 放這裡
-    scripts/
-      collect_market_data.js  ← collect_market_data.js 放這裡
+name: Daily Market Data Collector
+
+on:
+  schedule:
+    - cron: '30 12 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js node-fetch
+
+      - name: Collect and store market data
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VERCEL_API_BASE:      ${{ secrets.VERCEL_API_BASE }}
+        run: node .github/scripts/collect_market_data.js
