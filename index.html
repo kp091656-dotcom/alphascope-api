@@ -1227,7 +1227,7 @@
             <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem;">MAX PAIN 最大痛點</div>
             <div style="display:flex;align-items:baseline;gap:0.5rem;">
               <div id="maxPainVal" style="font-size:1.4rem;font-weight:800;font-family:'Playfair Display',serif;color:var(--accent2);"></div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">點（結算吸力）</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">點（賣方獲利最大）</div>
             </div>
             <div id="maxPainNote" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:0.2rem;"></div>
           </div>
@@ -3286,7 +3286,7 @@ async function loadOptions() {
     const dow   = today.getDay(); // 0=日 3=三
     const daysToSettle = dow <= 3 ? 3 - dow : 3 + (7 - dow);
     document.getElementById('maxPainNote').textContent =
-      `距本週結算 ${daysToSettle} 天 · 買方總損失最小點`;
+      `距本週結算 ${daysToSettle} 天 · 賣方（法人）獲利最大點`;
 
     document.getElementById('optTs').textContent = `資料日期：${data.date || '—'}`;
   } catch(e) {
