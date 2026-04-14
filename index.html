@@ -651,6 +651,57 @@
     #heatmapPanel > div:first-child { grid-template-columns: 1fr !important; }
     #mktSignalPanel { max-width: 100%; }
   }
+
+  /* ── 個股走勢圖 Modal ── */
+  #stockModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(0,0,0,0.55);
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  #stockModal.open { display: flex; }
+
+  #stockModalBox {
+    background: var(--bg);
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px var(--border-dark), 0 24px 60px rgba(0,0,0,0.25);
+    width: min(680px, 94vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 1.5rem 1.75rem;
+    position: relative;
+  }
+  #stockModalBox .modal-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  #stockModalBox .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  #stockModalBox .modal-close {
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: var(--muted);
+    background: none;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  #stockModalBox .modal-close:hover { color: var(--text); background: var(--surface); }
+
+  /* 滾輪修正：modal 開啟時 body 不捲動 */
+  body.modal-open { overflow: hidden; }
 </style>
 </head>
 <body>
@@ -3249,7 +3300,7 @@ async function loadOptions() {
 async function openStockModal(stock) {
   const modal = document.getElementById('stockModal');
   modal.classList.add('open');
-  document.body.style.overflow = 'hidden';
+  document.body.classList.add('modal-open');
 
   // 標題
   const sign  = stock.chgPct >= 0 ? '+' : '';
@@ -3351,7 +3402,7 @@ async function openStockModal(stock) {
 
 function closeStockModal() {
   document.getElementById('stockModal').classList.remove('open');
-  document.body.style.overflow = '';
+  document.body.classList.remove('modal-open');
 }
 
 // ESC 關閉 modal
