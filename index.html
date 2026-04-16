@@ -746,6 +746,7 @@
   <button class="cat-tab" id="futuresTab" onclick="showFutures()" style="margin-left:1rem;border-left:1px solid var(--border);padding-left:1rem;">📊 全球商品</button>
   <button class="cat-tab" id="sentimentTab" onclick="showSentiment()" style="border-left:1px solid var(--border);padding-left:1rem;">🌐 社群情緒</button>
   <button class="cat-tab" id="heatmapTab" onclick="showHeatmap()" style="border-left:1px solid var(--border);padding-left:1rem;">🇹🇼 台股熱圖</button>
+  <button class="cat-tab" id="signalTab" onclick="showSignal()" style="">📡 多空訊號</button>
 </div>
 
 <main>
@@ -892,11 +893,8 @@
 
 <!-- ── 台股熱圖面板（含右側多空儀表板）── -->
 <div id="heatmapPanel" style="display:none;">
-  <!-- 左右並排容器 -->
-  <div style="display:grid;grid-template-columns:1fr 340px;gap:1.2rem;align-items:start;">
-
-    <!-- ── 左欄：熱圖 ── -->
-    <div>
+  <!-- 左欄：熱圖（全寬） -->
+  <div>
       <!-- 頂部控制列 -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
         <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">🇹🇼 台股市場熱圖</div>
@@ -946,14 +944,26 @@
       </div>
     </div>
 
-    <!-- ── 右欄：台指多空儀表板 ── -->
-    <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:0.75rem;">
+    <!-- ── 右欄：台指多空儀表板（已移至獨立 tab）── -->
+  </div><!-- end grid -->
 
-      <!-- 標題列 -->
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;letter-spacing:-0.02em;">📡 多空訊號</div>
-        <button onclick="loadMktSignals()" style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;padding:0.22rem 0.65rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
-      </div>
+
+
+  <!-- Tooltip（DESIGN.md warm dark palette） -->
+  <div id="hmTooltip" style="position:fixed;display:none;background:#141413;color:#b0aea5;padding:10px 14px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;pointer-events:none;z-index:9999;line-height:1.75;box-shadow:0 0 0 1px #30302e, 0 8px 28px rgba(0,0,0,0.35);max-width:220px;"></div>
+</div>
+
+<!-- ── 多空訊號面板（獨立 tab）── -->
+<div id="signalPanel" style="display:none;">
+  <div style="max-width:720px;">
+
+    <!-- 標題列 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">📡 多空訊號</div>
+      <button onclick="loadMktSignals()" style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;padding:0.22rem 0.65rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
+    </div>
+
+    <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:0.75rem;">
 
       <!-- 綜合訊號燈 -->
       <div id="mktSignalSummary" style="border-radius:10px;padding:0.9rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);display:flex;align-items:center;gap:0.8rem;">
@@ -994,7 +1004,7 @@
         <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
       </div>
 
-      <!-- ② 外資現貨籌碼 -->
+      <!-- ② 三大法人現貨 -->
       <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">🏢 三大法人現貨買賣超</div>
         <div id="ms_instLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
@@ -1039,7 +1049,7 @@
         </div>
       </div>
 
-      <!-- ④ 多空訊號回測 -->
+      <!-- ④ 訊號回測 -->
       <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.5rem;">📐 訊號回測</div>
         <div id="ms_backtestSection">
@@ -1053,12 +1063,10 @@
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.5;padding:0 0.2rem;">
         ⚠️ 盤後資料，僅供參考，不構成投資建議
       </div>
-    </div><!-- end 右欄 -->
-  </div><!-- end grid -->
-
-  <!-- Tooltip（DESIGN.md warm dark palette） -->
-  <div id="hmTooltip" style="position:fixed;display:none;background:#141413;color:#b0aea5;padding:10px 14px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;pointer-events:none;z-index:9999;line-height:1.75;box-shadow:0 0 0 1px #30302e, 0 8px 28px rgba(0,0,0,0.35);max-width:220px;"></div>
+    </div>
+  </div>
 </div>
+
 <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
   </div>
 
@@ -1845,6 +1853,8 @@ document.querySelectorAll('.cat-tab[data-cat]').forEach(tab => {
     if (fp) fp.style.display = 'none';
     if (sp) sp.style.display = 'none';
     if (hp) hp.style.display = 'none';
+    const sgp = document.getElementById('signalPanel');
+    if (sgp) sgp.style.display = 'none';
     if (nf) nf.style.display = 'block';
     if (fh) fh.style.display = 'flex';
     renderFeed(getFiltered());
@@ -2104,6 +2114,7 @@ function showSentiment() {
   document.querySelector('.feed-header').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'none';
+  document.getElementById('signalPanel').style.display = 'none';
   document.getElementById('sentimentPanel').style.display = 'block';
 }
 
@@ -2490,6 +2501,7 @@ function showHeatmap() {
   document.querySelector('.feed-header').style.display = 'none';
   document.getElementById('sentimentPanel').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'none';
+  document.getElementById('signalPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'block';
   if (heatmapData.length) {
     renderTreemap(heatmapData);
@@ -2503,12 +2515,25 @@ function showHeatmap() {
     </div>`;
     document.getElementById('heatmapSvgWrap').style.display = 'none';
   }
+  loadSectorIndexBar();
+}
+
+function showSignal() {
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('signalTab').classList.add('active');
+  document.getElementById('newsFeed').style.display = 'none';
+  document.getElementById('loadMoreBtn').style.display = 'none';
+  document.querySelector('.feed-header').style.display = 'none';
+  document.getElementById('sentimentPanel').style.display = 'none';
+  document.getElementById('futuresPanel').style.display = 'none';
+  document.getElementById('heatmapPanel').style.display = 'none';
+  document.getElementById('signalPanel').style.display = 'block';
   loadMktSignals();
-  loadSectorIndexBar(); // 官方產業指數漲跌幅（Supabase sector_index_daily）
 }
 
 function hideHeatmap() {
   document.getElementById('heatmapPanel').style.display = 'none';
+  document.getElementById('signalPanel').style.display = 'none';
   document.getElementById('newsFeed').style.display = 'block';
   document.querySelector('.feed-header').style.display = 'flex';
 }
@@ -2914,7 +2939,6 @@ function renderTreemap(data, skipFilterRebuild) {
 // ── 從 Supabase sector_index_daily 載入官方產業指數漲跌幅 ──
 async function loadSectorIndexBar() {
   try {
-    // 取最新有資料的一天（往前最多找 5 天）
     const rows = await sbFetch('sector_index_daily',
       'order=date.desc&limit=500&select=date,index_name,chg_pct');
     if (!rows || !rows.length) return;
@@ -2923,25 +2947,63 @@ async function loadSectorIndexBar() {
     const latestDate = rows[0].date;
     const dayRows = rows.filter(r => r.date === latestDate);
 
-    // 只保留有對應 SECTOR_COLORS key 的指數
+    // 模糊比對：index_name 包含關鍵字 → sector key
+    // 優先精確比對 SECTOR_INDEX_MAP，次用關鍵字包含
+    const KEYWORD_MAP = [
+      { kw: '半導體',   key: '半導體' },
+      { kw: 'IC設計',   key: 'IC設計' },
+      { kw: '記憶體',   key: '記憶體' },
+      { kw: '電子製造', key: '電子製造' },
+      { kw: '電子零組件', key: '電子零件' },
+      { kw: '電子零件', key: '電子零件' },
+      { kw: '光電',     key: '光學' },
+      { kw: '通信網路', key: '網通' },
+      { kw: '網路',     key: '網通' },
+      { kw: '工業電腦', key: '工業電腦' },
+      { kw: '電腦及週邊', key: '電腦' },
+      { kw: '資訊服務', key: '電腦' },
+      { kw: '金融保險', key: '金融' },
+      { kw: '電信',     key: '電信' },
+      { kw: '化學工業', key: '石化' },
+      { kw: '石油煤炭', key: '石化' },
+      { kw: '鋼鐵',     key: '鋼鐵' },
+      { kw: '汽車',     key: '汽車' },
+      { kw: '百貨',     key: '零售' },
+      { kw: '貿易',     key: '零售' },
+      { kw: '食品',     key: '食品' },
+      { kw: '紡織',     key: '紡織' },
+      { kw: '橡膠',     key: '橡膠' },
+    ];
+
+    function matchKey(indexName) {
+      // 先精確
+      if (SECTOR_INDEX_MAP[indexName]) return SECTOR_INDEX_MAP[indexName];
+      // 再關鍵字
+      for (const { kw, key } of KEYWORD_MAP) {
+        if (indexName.includes(kw)) return key;
+      }
+      return null;
+    }
+
     const sectorData = [];
     const seen = new Set();
     for (const r of dayRows) {
-      const key = SECTOR_INDEX_MAP[r.index_name];
+      const key = matchKey(r.index_name);
       if (!key || seen.has(key)) continue;
       seen.add(key);
+      // chg_pct 在 Supabase 已是百分比（如 3.12 代表 +3.12%），直接用
+      const pct = parseFloat(r.chg_pct || 0);
       sectorData.push({
-        sector:   key,
-        chgPct:   typeof r.chg_pct === 'number' ? r.chg_pct * 100 : parseFloat(r.chg_pct || 0),
-        // chg_pct 在 Supabase 存的是小數（如 0.0235），×100 轉成百分比
-        official: true,
+        sector:    key,
+        chgPct:    pct,
+        official:  true,
         indexName: r.index_name,
-        date: latestDate,
+        date:      latestDate,
       });
     }
 
     if (!sectorData.length) return;
-    window._sectorIndexData = sectorData; // 快取
+    window._sectorIndexData = sectorData;
     renderSectorBar(null, window._hmActiveSector || 'all', sectorData);
   } catch (e) {
     console.warn('loadSectorIndexBar error:', e);
@@ -3066,6 +3128,7 @@ function showFutures() {
   document.querySelector('.feed-header').style.display = 'none';
   document.getElementById('sentimentPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'none';
+  document.getElementById('signalPanel').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'block';
   if (!futuresData.length) loadFutures();
 }
