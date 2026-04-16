@@ -2948,37 +2948,43 @@ async function loadSectorIndexBar() {
     const dayRows = rows.filter(r => r.date === latestDate);
 
     // 模糊比對：index_name 包含關鍵字 → sector key
-    // 優先精確比對 SECTOR_INDEX_MAP，次用關鍵字包含
     const KEYWORD_MAP = [
-      { kw: '半導體',   key: '半導體' },
-      { kw: 'IC設計',   key: 'IC設計' },
-      { kw: '記憶體',   key: '記憶體' },
-      { kw: '電子製造', key: '電子製造' },
+      { kw: '半導體',     key: '半導體' },
+      { kw: 'IC設計',     key: 'IC設計' },
+      { kw: '記憶體',     key: '記憶體' },
+      { kw: '電子製造服務', key: '電子製造' },
       { kw: '電子零組件', key: '電子零件' },
-      { kw: '電子零件', key: '電子零件' },
-      { kw: '光電',     key: '光學' },
-      { kw: '通信網路', key: '網通' },
-      { kw: '網路',     key: '網通' },
-      { kw: '工業電腦', key: '工業電腦' },
+      { kw: '電子零件',   key: '電子零件' },
+      { kw: '光電',       key: '光學' },
+      { kw: '通信網路',   key: '網通' },
+      { kw: '工業電腦',   key: '工業電腦' },
       { kw: '電腦及週邊', key: '電腦' },
-      { kw: '資訊服務', key: '電腦' },
-      { kw: '金融保險', key: '金融' },
-      { kw: '電信',     key: '電信' },
-      { kw: '化學工業', key: '石化' },
-      { kw: '石油煤炭', key: '石化' },
-      { kw: '鋼鐵',     key: '鋼鐵' },
-      { kw: '汽車',     key: '汽車' },
-      { kw: '百貨',     key: '零售' },
-      { kw: '貿易',     key: '零售' },
-      { kw: '食品',     key: '食品' },
-      { kw: '紡織',     key: '紡織' },
-      { kw: '橡膠',     key: '橡膠' },
+      { kw: '資訊服務',   key: '電腦' },
+      { kw: '金融保險',   key: '金融' },
+      { kw: '電信業',     key: '電信' },
+      { kw: '塑膠化工',   key: '石化' },
+      { kw: '化學生技',   key: '石化' },  // 化學生技醫療類 → 石化（較接近）
+      { kw: '化學類',     key: '石化' },
+      { kw: '石油煤炭',   key: '石化' },
+      { kw: '鋼鐵',       key: '鋼鐵' },
+      { kw: '汽車',       key: '汽車' },
+      { kw: '百貨',       key: '零售' },
+      { kw: '電子通路',   key: '零售' },  // 電子通路類 → 零售
+      { kw: '食品',       key: '食品' },
+      { kw: '紡織',       key: '紡織' },
+      { kw: '橡膠',       key: '橡膠' },
     ];
 
     function matchKey(indexName) {
-      // 先精確
+      // 排除「報酬指數」版本（避免與一般版重複）
+      if (indexName.includes('報酬指數')) return null;
+      // 排除槓桿/反向/特選/臺灣XX等複合指數
+      if (indexName.includes('兩倍') || indexName.includes('反向') ||
+          indexName.includes('特選') || indexName.includes('高息') ||
+          indexName.includes('等權重')) return null;
+      // 先精確比對
       if (SECTOR_INDEX_MAP[indexName]) return SECTOR_INDEX_MAP[indexName];
-      // 再關鍵字
+      // 再關鍵字包含
       for (const { kw, key } of KEYWORD_MAP) {
         if (indexName.includes(kw)) return key;
       }
