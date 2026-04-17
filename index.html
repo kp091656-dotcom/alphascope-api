@@ -955,115 +955,125 @@
 
 <!-- ── 多空訊號面板（獨立 tab）── -->
 <div id="signalPanel" style="display:none;">
-  <div style="max-width:720px;">
 
-    <!-- 標題列 -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-      <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">📡 多空訊號</div>
-      <button onclick="loadMktSignals()" style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;padding:0.22rem 0.65rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
+  <!-- 標題列 -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
+    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;">📡 多空訊號</div>
+    <button onclick="loadMktSignals()" style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;padding:0.22rem 0.65rem;border:none;border-radius:6px;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);cursor:pointer;color:var(--muted);transition:box-shadow 0.15s,color 0.15s;" onmouseover="this.style.boxShadow='0 0 0 1.5px var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.boxShadow='0 0 0 1px var(--border-dark)';this.style.color='var(--muted)'">↻ 更新</button>
+  </div>
+
+  <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:1rem;">
+
+    <!-- 綜合訊號燈（全寬） -->
+    <div id="mktSignalSummary" style="border-radius:12px;padding:1.1rem 1.4rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);display:flex;align-items:center;gap:1.2rem;">
+      <div id="mktSignalDot" style="width:18px;height:18px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.4s;box-shadow:0 0 0 4px var(--bg);"></div>
+      <div style="flex:1;">
+        <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.85rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
+        <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:3px;"></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div id="mktSignalScore" style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:800;color:var(--muted);line-height:1;">—</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-top:2px;">多空得分</div>
+      </div>
     </div>
 
-    <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:0.75rem;">
+    <!-- 兩欄 grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">
 
-      <!-- 綜合訊號燈 -->
-      <div id="mktSignalSummary" style="border-radius:10px;padding:0.9rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);display:flex;align-items:center;gap:0.8rem;">
-        <div id="mktSignalDot" style="width:14px;height:14px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.4s;"></div>
-        <div>
-          <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
-          <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);margin-top:2px;"></div>
+      <!-- 左欄：台指選擇權 -->
+      <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.8rem;">🎯 台指選擇權</div>
+
+        <!-- P/C Ratio 並排 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.75rem;">
+          <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:2px;">P/C Ratio OI</div>
+            <div id="ms_pcOI" style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:800;line-height:1.1;">—</div>
+            <div id="ms_pcOILabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;font-weight:700;margin-top:2px;"></div>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:2px;">P/C Ratio Vol</div>
+            <div id="ms_pcVol" style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:800;line-height:1.1;">—</div>
+            <div id="ms_pcVolLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;font-weight:700;margin-top:2px;"></div>
+          </div>
         </div>
-        <div style="margin-left:auto;text-align:right;">
-          <div id="mktSignalScore" style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:800;color:var(--muted);">—</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">多空得分</div>
+
+        <!-- Max Pain -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.6rem;background:var(--bg);border-radius:6px;margin-bottom:0.75rem;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">Max Pain</span>
+          <span id="ms_maxPain" style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;font-weight:700;color:var(--accent2);">—</span>
         </div>
+
+        <!-- 法人選擇權部位 -->
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.4rem;">法人選擇權淨部位（口）</div>
+        <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.25rem;"></div>
+        <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.6rem;"></div>
       </div>
 
-      <!-- ① 台指選擇權 -->
-      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">🎯 台指選擇權</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.6rem;">
-          <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">P/C Ratio（OI）</div>
-            <div id="ms_pcOI" style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:800;margin-top:1px;">—</div>
-            <div id="ms_pcOILabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;"></div>
-          </div>
-          <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">P/C Ratio（Vol）</div>
-            <div id="ms_pcVol" style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:800;margin-top:1px;">—</div>
-            <div id="ms_pcVolLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;"></div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.3rem 0;border-top:1px solid var(--border);">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">Max Pain</span>
-          <span id="ms_maxPain" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:700;color:var(--accent2);">—</span>
-        </div>
-        <div style="margin-top:0.5rem;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.3rem;">法人選擇權淨部位（口）</div>
-          <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.22rem;"></div>
-        </div>
-        <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
-      </div>
+      <!-- 右欄：三大法人 + 融資融券 -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
 
-      <!-- ② 三大法人現貨 -->
-      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">🏢 三大法人現貨買賣超</div>
-        <div id="ms_instLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
-        <div id="ms_instContent" style="display:none;">
-          <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.5rem;">
-            <div id="ms_instNet" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;">—</div>
-            <div id="ms_instNetLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">億元</div>
-          </div>
-          <div id="ms_instDetail" style="display:flex;flex-direction:column;gap:0.2rem;"></div>
-          <div id="ms_instStreak" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;margin-top:0.4rem;padding:0.25rem 0.5rem;border-radius:4px;"></div>
-          <div style="margin-top:0.55rem;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:0.25rem;">近10日三大法人合計（億）</div>
-            <div id="ms_instBars" style="display:flex;align-items:flex-end;gap:2px;height:36px;"></div>
-            <div id="ms_instDates" style="display:flex;gap:2px;margin-top:2px;"></div>
-          </div>
-          <div id="ms_instTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.35rem;"></div>
-        </div>
-      </div>
-
-      <!-- ③ 融資融券 -->
-      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.6rem;">💳 融資融券</div>
-        <div id="ms_marginLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
-        <div id="ms_marginContent" style="display:none;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.4rem;">
-            <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">融資餘額（億）</div>
-              <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;margin-top:1px;">—</div>
-              <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;font-weight:700;"></div>
+        <!-- 三大法人現貨 -->
+        <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.8rem;">🏢 三大法人現貨</div>
+          <div id="ms_instLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+          <div id="ms_instContent" style="display:none;">
+            <div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.5rem;">
+              <div id="ms_instNet" style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:800;line-height:1;">—</div>
+              <div id="ms_instNetLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">億元</div>
             </div>
-            <div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.6rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">融券餘額（張）</div>
-              <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;margin-top:1px;">—</div>
-              <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;font-weight:700;"></div>
+            <div id="ms_instDetail" style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.4rem;"></div>
+            <div id="ms_instStreak" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;padding:0.2rem 0.45rem;border-radius:4px;display:inline-block;"></div>
+            <div style="margin-top:0.6rem;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">近10日合計（億）</div>
+              <div id="ms_instBars" style="display:flex;align-items:flex-end;gap:2px;height:36px;"></div>
+              <div id="ms_instDates" style="display:flex;gap:2px;margin-top:2px;"></div>
             </div>
+            <div id="ms_instTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
           </div>
-          <div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:0.25rem;">融資餘額近10日趨勢（億）</div>
+        </div>
+
+        <!-- 融資融券 -->
+        <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.8rem;">💳 融資融券</div>
+          <div id="ms_marginLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+          <div id="ms_marginContent" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.6rem;">
+              <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.5rem;text-align:center;">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融資餘額（億）</div>
+                <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:800;margin-top:2px;line-height:1.1;">—</div>
+                <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:2px;"></div>
+              </div>
+              <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.5rem;text-align:center;">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融券餘額（張）</div>
+                <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:800;margin-top:2px;line-height:1.1;">—</div>
+                <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:2px;"></div>
+              </div>
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">融資近10日趨勢（億）</div>
             <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:2px;height:32px;"></div>
-          </div>
-          <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
-        </div>
-      </div>
-
-      <!-- ④ 訊號回測 -->
-      <div style="border-radius:10px;padding:0.85rem 1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.5rem;">📐 訊號回測</div>
-        <div id="ms_backtestSection">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;padding:0.75rem;">
-            資料累積中…<br><span style="font-size:0.55rem;opacity:0.7;">建議累積 5 個交易日後查看</span>
+            <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
           </div>
         </div>
-      </div>
 
-      <!-- 免責聲明 -->
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.5;padding:0 0.2rem;">
-        ⚠️ 盤後資料，僅供參考，不構成投資建議
+      </div><!-- end 右欄 -->
+    </div><!-- end 兩欄 grid -->
+
+    <!-- 訊號回測（全寬） -->
+    <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.6rem;">📐 訊號回測</div>
+      <div id="ms_backtestSection">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;padding:0.75rem;">
+          資料累積中…<br><span style="font-size:0.55rem;opacity:0.7;">建議累積 5 個交易日後查看</span>
+        </div>
       </div>
     </div>
+
+    <!-- 免責聲明 -->
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.6;padding:0 0.2rem;">
+      ⚠️ 盤後資料，僅供參考，不構成投資建議
+    </div>
+
   </div>
 </div>
 
@@ -2445,6 +2455,7 @@ let heatmapData = [];
 
 // 產業色票（用於邊框/標籤區分，不影響漲跌底色）
 const SECTOR_COLORS = {
+  // 科技族群
   '半導體':   '#3b82f6',
   'IC設計':   '#6366f1',
   '記憶體':   '#8b5cf6',
@@ -2454,15 +2465,26 @@ const SECTOR_COLORS = {
   '網通':     '#fb923c',
   '工業電腦': '#ef4444',
   '電腦':     '#f87171',
+  '數位雲端': '#60a5fa',
+  // 傳產/金融
   '金融':     '#10b981',
   '電信':     '#34d399',
   '石化':     '#6b7280',
+  '塑膠':     '#78716c',
   '鋼鐵':     '#9ca3af',
+  '機電':     '#a8a29e',
   '汽車':     '#84cc16',
+  '航運':     '#38bdf8',
+  // 民生/其他
   '零售':     '#a3e635',
   '食品':     '#facc15',
   '紡織':     '#fb7185',
   '橡膠':     '#c084fc',
+  '生技醫療': '#4ade80',
+  '建材營造': '#d97706',
+  '觀光':     '#e879f9',
+  '油電燃氣': '#94a3b8',
+  '綠能環保': '#86efac',
 };
 const DEFAULT_SECTOR_COLOR = '#94a3b8';
 
@@ -2547,23 +2569,274 @@ function hmFilterSector(sector, btn) {
   renderTreemap(filtered, true);
 }
 
+// ── 前端股票名單（各產業精選，約 250 支）──
+// 市值（mcap）為靜態基準值（億元），載入時會用 stock_valuation_daily 即時更新
+const HM_STOCK_LIST = [
+  // 半導體（15）
+  { id:'2330', name:'台積電',    sector:'半導體',   mcap:200000 },
+  { id:'2454', name:'聯發科',    sector:'半導體',   mcap:5800 },
+  { id:'3711', name:'日月光投控',sector:'半導體',   mcap:2800 },
+  { id:'2303', name:'聯電',      sector:'半導體',   mcap:2600 },
+  { id:'6488', name:'環球晶',    sector:'半導體',   mcap:1400 },
+  { id:'2344', name:'華邦電',    sector:'半導體',   mcap:800 },
+  { id:'3037', name:'欣興',      sector:'半導體',   mcap:750 },
+  { id:'6239', name:'力成',      sector:'半導體',   mcap:460 },
+  { id:'3443', name:'創意',      sector:'半導體',   mcap:440 },
+  { id:'2449', name:'京元電子',  sector:'半導體',   mcap:420 },
+  { id:'6770', name:'力積電',    sector:'半導體',   mcap:400 },
+  { id:'2351', name:'順德',      sector:'半導體',   mcap:350 },
+  { id:'8046', name:'南電',      sector:'半導體',   mcap:280 },
+  { id:'3707', name:'漢磊',      sector:'半導體',   mcap:220 },
+  { id:'6271', name:'同欣電',    sector:'半導體',   mcap:200 },
+  // IC設計（6）
+  { id:'3034', name:'聯詠',      sector:'IC設計',   mcap:1200 },
+  { id:'2379', name:'瑞昱',      sector:'IC設計',   mcap:1150 },
+  { id:'6415', name:'矽力-KY',   sector:'IC設計',   mcap:500 },
+  { id:'2385', name:'群光',      sector:'IC設計',   mcap:420 },
+  { id:'4967', name:'十銓',      sector:'IC設計',   mcap:300 },
+  { id:'3706', name:'神盾',      sector:'IC設計',   mcap:260 },
+  // 記憶體（4）
+  { id:'2408', name:'南亞科',    sector:'記憶體',   mcap:820 },
+  { id:'2337', name:'旺宏',      sector:'記憶體',   mcap:520 },
+  { id:'3260', name:'威剛',      sector:'記憶體',   mcap:280 },
+  { id:'4977', name:'眾達-KY',   sector:'記憶體',   mcap:180 },
+  // 電子製造（10）
+  { id:'2317', name:'鴻海',      sector:'電子製造', mcap:4200 },
+  { id:'2382', name:'廣達',      sector:'電子製造', mcap:2900 },
+  { id:'4938', name:'和碩',      sector:'電子製造', mcap:1000 },
+  { id:'2324', name:'仁寶',      sector:'電子製造', mcap:760 },
+  { id:'2356', name:'英業達',    sector:'電子製造', mcap:740 },
+  { id:'6669', name:'緯穎',      sector:'電子製造', mcap:580 },
+  { id:'3231', name:'緯創',      sector:'電子製造', mcap:480 },
+  { id:'2354', name:'鴻準',      sector:'電子製造', mcap:460 },
+  { id:'2368', name:'金像電',    sector:'電子製造', mcap:360 },
+  { id:'2365', name:'昆盈',      sector:'電子製造', mcap:220 },
+  // 電子零件（8）
+  { id:'2308', name:'台達電',    sector:'電子零件', mcap:3200 },
+  { id:'2327', name:'國巨',      sector:'電子零件', mcap:950 },
+  { id:'3533', name:'嘉澤',      sector:'電子零件', mcap:560 },
+  { id:'2301', name:'光寶科',    sector:'電子零件', mcap:500 },
+  { id:'2312', name:'金寶',      sector:'電子零件', mcap:320 },
+  { id:'2492', name:'華新科',    sector:'電子零件', mcap:300 },
+  { id:'6269', name:'台郡',      sector:'電子零件', mcap:250 },
+  { id:'2499', name:'東貝',      sector:'電子零件', mcap:180 },
+  // 電腦（6）
+  { id:'2357', name:'華碩',      sector:'電腦',     mcap:800 },
+  { id:'2353', name:'宏碁',      sector:'電腦',     mcap:780 },
+  { id:'2377', name:'微星',      sector:'電腦',     mcap:420 },
+  { id:'2376', name:'技嘉',      sector:'電腦',     mcap:540 },
+  { id:'3017', name:'奇鋐',      sector:'電腦',     mcap:480 },
+  { id:'2364', name:'倫飛',      sector:'電腦',     mcap:160 },
+  // 工業電腦（4）
+  { id:'2395', name:'研華',      sector:'工業電腦', mcap:1050 },
+  { id:'6414', name:'樺漢',      sector:'工業電腦', mcap:340 },
+  { id:'3615', name:'安勤',      sector:'工業電腦', mcap:200 },
+  { id:'6245', name:'立端',      sector:'工業電腦', mcap:180 },
+  // 網通（5）
+  { id:'2345', name:'智邦',      sector:'網通',     mcap:900 },
+  { id:'3702', name:'大聯大',    sector:'網通',     mcap:580 },
+  { id:'2332', name:'友訊',      sector:'網通',     mcap:280 },
+  { id:'6266', name:'普萊德',    sector:'網通',     mcap:200 },
+  { id:'4906', name:'正文',      sector:'網通',     mcap:160 },
+  // 光學（4）
+  { id:'3008', name:'大立光',    sector:'光學',     mcap:1100 },
+  { id:'2474', name:'可成',      sector:'光學',     mcap:380 },
+  { id:'3406', name:'玉晶光',    sector:'光學',     mcap:280 },
+  { id:'3491', name:'昇達科',    sector:'光學',     mcap:180 },
+  // 數位雲端（4）
+  { id:'3661', name:'世芯-KY',   sector:'數位雲端', mcap:600 },
+  { id:'2391', name:'台光電',    sector:'數位雲端', mcap:600 },
+  { id:'6451', name:'訊芯-KY',   sector:'數位雲端', mcap:300 },
+  { id:'5285', name:'界霖',      sector:'數位雲端', mcap:200 },
+  // 金融（16）
+  { id:'2881', name:'富邦金',    sector:'金融',     mcap:2500 },
+  { id:'2882', name:'國泰金',    sector:'金融',     mcap:2300 },
+  { id:'2886', name:'兆豐金',    sector:'金融',     mcap:2100 },
+  { id:'2891', name:'中信金',    sector:'金融',     mcap:2000 },
+  { id:'2884', name:'玉山金',    sector:'金融',     mcap:1550 },
+  { id:'2892', name:'第一金',    sector:'金融',     mcap:1500 },
+  { id:'5880', name:'合庫金',    sector:'金融',     mcap:1450 },
+  { id:'2885', name:'元大金',    sector:'金融',     mcap:1400 },
+  { id:'2887', name:'台新金',    sector:'金融',     mcap:1350 },
+  { id:'2890', name:'永豐金',    sector:'金融',     mcap:1300 },
+  { id:'2883', name:'開發金',    sector:'金融',     mcap:1250 },
+  { id:'2880', name:'華南金',    sector:'金融',     mcap:1200 },
+  { id:'2801', name:'彰銀',      sector:'金融',     mcap:620 },
+  { id:'5871', name:'中租-KY',   sector:'金融',     mcap:600 },
+  { id:'2888', name:'新光金',    sector:'金融',     mcap:700 },
+  { id:'2834', name:'臺企銀',    sector:'金融',     mcap:420 },
+  // 電信（3）
+  { id:'2412', name:'中華電',    sector:'電信',     mcap:2400 },
+  { id:'3045', name:'台灣大',    sector:'電信',     mcap:720 },
+  { id:'4904', name:'遠傳',      sector:'電信',     mcap:700 },
+  // 石化（6）
+  { id:'1301', name:'台塑',      sector:'石化',     mcap:1900 },
+  { id:'1303', name:'南亞',      sector:'石化',     mcap:1800 },
+  { id:'1326', name:'台化',      sector:'石化',     mcap:1700 },
+  { id:'6505', name:'台塑化',    sector:'石化',     mcap:880 },
+  { id:'1304', name:'台聚',      sector:'石化',     mcap:280 },
+  { id:'1310', name:'台苯',      sector:'石化',     mcap:200 },
+  // 塑膠（4）
+  { id:'1314', name:'中石化',    sector:'塑膠',     mcap:320 },
+  { id:'1312', name:'國喬',      sector:'塑膠',     mcap:280 },
+  { id:'1313', name:'聯成',      sector:'塑膠',     mcap:240 },
+  { id:'1316', name:'上曜',      sector:'塑膠',     mcap:150 },
+  // 鋼鐵（4）
+  { id:'2002', name:'中鋼',      sector:'鋼鐵',     mcap:1600 },
+  { id:'2049', name:'上銀',      sector:'鋼鐵',     mcap:480 },
+  { id:'2014', name:'中鴻',      sector:'鋼鐵',     mcap:260 },
+  { id:'2015', name:'豐興',      sector:'鋼鐵',     mcap:200 },
+  // 機電（4）
+  { id:'1605', name:'華新',      sector:'機電',     mcap:480 },
+  { id:'1504', name:'東元',      sector:'機電',     mcap:420 },
+  { id:'1503', name:'士電',      sector:'機電',     mcap:300 },
+  { id:'1590', name:'亞德客-KY', sector:'機電',     mcap:1100 },
+  // 汽車（4）
+  { id:'2207', name:'和泰車',    sector:'汽車',     mcap:840 },
+  { id:'2204', name:'中華',      sector:'汽車',     mcap:360 },
+  { id:'2201', name:'裕隆',      sector:'汽車',     mcap:300 },
+  { id:'2206', name:'三陽工業',  sector:'汽車',     mcap:200 },
+  // 航運（8）
+  { id:'2603', name:'長榮',      sector:'航運',     mcap:2800 },
+  { id:'2609', name:'陽明',      sector:'航運',     mcap:1200 },
+  { id:'2615', name:'萬海',      sector:'航運',     mcap:800 },
+  { id:'2610', name:'華航',      sector:'航運',     mcap:620 },
+  { id:'2618', name:'長榮航',    sector:'航運',     mcap:580 },
+  { id:'2605', name:'新興',      sector:'航運',     mcap:200 },
+  { id:'2606', name:'裕民',      sector:'航運',     mcap:180 },
+  { id:'2637', name:'慧洋-KY',   sector:'航運',     mcap:160 },
+  // 生技醫療（6）
+  { id:'6446', name:'藥華藥',    sector:'生技醫療', mcap:680 },
+  { id:'4174', name:'浩鼎',      sector:'生技醫療', mcap:280 },
+  { id:'4105', name:'台灣東洋',  sector:'生技醫療', mcap:220 },
+  { id:'1786', name:'科妍',      sector:'生技醫療', mcap:200 },
+  { id:'4726', name:'永日',      sector:'生技醫療', mcap:160 },
+  { id:'4770', name:'上智',      sector:'生技醫療', mcap:150 },
+  // 建材營造（5）
+  { id:'1101', name:'台泥',      sector:'建材營造', mcap:580 },
+  { id:'1102', name:'亞泥',      sector:'建材營造', mcap:480 },
+  { id:'2504', name:'國產',      sector:'建材營造', mcap:200 },
+  { id:'2515', name:'中工',      sector:'建材營造', mcap:180 },
+  { id:'5522', name:'遠雄',      sector:'建材營造', mcap:160 },
+  // 觀光餐旅（4）
+  { id:'2727', name:'王品',      sector:'觀光',     mcap:280 },
+  { id:'2722', name:'夏都',      sector:'觀光',     mcap:150 },
+  { id:'6704', name:'安永鑫',    sector:'觀光',     mcap:120 },
+  { id:'2701', name:'萬企',      sector:'觀光',     mcap:100 },
+  // 油電燃氣（3）
+  { id:'8926', name:'台汽電',    sector:'油電燃氣', mcap:200 },
+  { id:'9945', name:'潤泰新',    sector:'油電燃氣', mcap:280 },
+  { id:'9944', name:'新麗',      sector:'油電燃氣', mcap:160 },
+  // 綠能環保（4）
+  { id:'3576', name:'聯合再生',  sector:'綠能環保', mcap:280 },
+  { id:'6592', name:'和潤企業',  sector:'綠能環保', mcap:320 },
+  { id:'6409', name:'旭隼',      sector:'綠能環保', mcap:180 },
+  { id:'3519', name:'綠電',      sector:'綠能環保', mcap:150 },
+  // 零售（5）
+  { id:'2912', name:'統一超',    sector:'零售',     mcap:640 },
+  { id:'5904', name:'寶雅',      sector:'零售',     mcap:380 },
+  { id:'2903', name:'遠百',      sector:'零售',     mcap:320 },
+  { id:'2905', name:'漢神',      sector:'零售',     mcap:180 },
+  { id:'6488', name:'環球晶',    sector:'零售',     mcap:100 },
+  // 食品（6）
+  { id:'1216', name:'統一',      sector:'食品',     mcap:660 },
+  { id:'1210', name:'大成',      sector:'食品',     mcap:280 },
+  { id:'1229', name:'聯華',      sector:'食品',     mcap:220 },
+  { id:'1201', name:'味全',      sector:'食品',     mcap:180 },
+  { id:'1203', name:'味王',      sector:'食品',     mcap:150 },
+  { id:'1218', name:'泰山',      sector:'食品',     mcap:140 },
+  // 紡織（4）
+  { id:'1402', name:'遠東新',    sector:'紡織',     mcap:860 },
+  { id:'1434', name:'福懋',      sector:'紡織',     mcap:260 },
+  { id:'1409', name:'新纖',      sector:'紡織',     mcap:180 },
+  { id:'1416', name:'廣豐',      sector:'紡織',     mcap:120 },
+  // 橡膠（3）
+  { id:'9910', name:'豐泰',      sector:'橡膠',     mcap:680 },
+  { id:'2107', name:'厚生',      sector:'橡膠',     mcap:180 },
+  { id:'2102', name:'泰豐',      sector:'橡膠',     mcap:140 },
+];
+
 async function loadHeatmap() {
   const loadingEl = document.getElementById('heatmapLoading');
   loadingEl.style.display = 'block';
-  loadingEl.innerHTML = `<div class="spinner" style="margin:0 auto 12px;"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);">載入台股資料中（${window._hmStockList || 86} 支）…</span>`;
+  const total = HM_STOCK_LIST.length;
+  loadingEl.innerHTML = `<div class="spinner" style="margin:0 auto 12px;"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);">從 Supabase 載入台股資料中（${total} 支）…</span>`;
   document.getElementById('heatmapSvgWrap').style.display = 'none';
+
   try {
-    const r = await fetch(API_BASE + '?endpoint=twheatmap&refresh=1');
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const json = await r.json();
-    if (!json.data || !json.data.length) throw new Error('no data');
-    heatmapData = json.data;
-    const date = heatmapData[0]?.date || '';
-    const cacheNote = json.cached ? ` · 快取 ${json.cacheAgeMin}m 前` : ' · 即時資料';
-    document.getElementById('heatmapTs').textContent = date ? `資料日期：${date}（盤後）${cacheNote}` : '';
+    // 取得所有 stock_id
+    const ids = HM_STOCK_LIST.map(s => s.id);
+    const idFilter = ids.map(id => `stock_id.eq.${id}`).join(',');
+
+    // 並行讀取兩張表（最新日期）
+    const [twseRows, valRows] = await Promise.all([
+      sbFetch('stock_daily_twse',
+        `or=(${idFilter})&order=date.desc&limit=${total * 3}&select=*`),
+      sbFetch('stock_valuation_daily',
+        `or=(${idFilter})&order=date.desc&limit=${total * 3}&select=stock_id,date,pbr,listed_shares`),
+    ]);
+
+    if (!twseRows?.length) throw new Error('stock_daily_twse 無資料');
+
+    // 找最新交易日（取最常出現的日期）
+    const dateCounts = {};
+    twseRows.forEach(r => { dateCounts[r.date] = (dateCounts[r.date] || 0) + 1; });
+    const latestDate = Object.entries(dateCounts).sort((a,b) => b[1]-a[1])[0][0];
+
+    // 建立 lookup maps（只取最新日期）
+    const twseMap = {};
+    twseRows.filter(r => r.date === latestDate).forEach(r => { twseMap[r.stock_id] = r; });
+
+    // valuation：取最新有效日期（可能比 twse 晚一天）
+    const valMap = {};
+    valRows?.forEach(r => {
+      if (!valMap[r.stock_id] && r.pbr > 0 && r.listed_shares > 0) valMap[r.stock_id] = r;
+    });
+
+    // 組合資料
+    const data = [];
+    for (const s of HM_STOCK_LIST) {
+      const t = twseMap[s.id];
+      if (!t) continue; // 當日無資料（如剛上市、停牌）
+
+      const close = parseFloat(t.close) || 0;
+      const change = parseFloat(t.change) || 0;
+      // chgPct：change / (close - change)，和原 FinMind 格式一致（小數，非百分比）
+      const prevClose = close - change;
+      const chgPct = prevClose > 0 ? change / prevClose : 0;
+
+      // 市值推算：PBR × 股本(千股) × 面額10 / 億
+      // listed_shares 單位：千股；市值(億) = pbr × (listed_shares × 1000 × 10 / 1e8) × close / 10
+      // 簡化：mcap(億) ≈ pbr × listed_shares × close / 1e5
+      let mcap = s.mcap; // fallback 靜態值
+      const v = valMap[s.id];
+      if (v && v.pbr > 0 && v.listed_shares > 0) {
+        mcap = v.pbr * v.listed_shares * close / 100000;
+      }
+
+      data.push({
+        id:      s.id,
+        name:    s.name,
+        sector:  s.sector,
+        price:   close,
+        chgPct,
+        mcap,
+        date:    latestDate,
+        volume:  parseFloat(t.trading_volume) || 0,
+      });
+    }
+
+    if (!data.length) throw new Error('無有效股票資料');
+
+    heatmapData = data;
+    document.getElementById('heatmapTs').textContent = `資料日期：${latestDate}（盤後）· 即時資料`;
     renderTreemap(heatmapData);
+    // 同步更新產業 bar
+    loadSectorIndexBar();
+
   } catch(e) {
     loadingEl.innerHTML = `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);">資料載入失敗：${e.message}</span>`;
+    console.error('loadHeatmap error:', e);
   }
 }
 
@@ -2948,43 +3221,65 @@ async function loadSectorIndexBar() {
     const dayRows = rows.filter(r => r.date === latestDate);
 
     // 模糊比對：index_name 包含關鍵字 → sector key
+    // 順序重要：長關鍵字優先，避免短字誤觸
     const KEYWORD_MAP = [
-      { kw: '半導體',     key: '半導體' },
-      { kw: 'IC設計',     key: 'IC設計' },
-      { kw: '記憶體',     key: '記憶體' },
-      { kw: '電子製造服務', key: '電子製造' },
-      { kw: '電子零組件', key: '電子零件' },
-      { kw: '電子零件',   key: '電子零件' },
-      { kw: '光電',       key: '光學' },
-      { kw: '通信網路',   key: '網通' },
-      { kw: '工業電腦',   key: '工業電腦' },
-      { kw: '電腦及週邊', key: '電腦' },
-      { kw: '資訊服務',   key: '電腦' },
-      { kw: '金融保險',   key: '金融' },
-      { kw: '電信業',     key: '電信' },
-      { kw: '塑膠化工',   key: '石化' },
-      { kw: '化學生技',   key: '石化' },  // 化學生技醫療類 → 石化（較接近）
-      { kw: '化學類',     key: '石化' },
-      { kw: '石油煤炭',   key: '石化' },
-      { kw: '鋼鐵',       key: '鋼鐵' },
-      { kw: '汽車',       key: '汽車' },
-      { kw: '百貨',       key: '零售' },
-      { kw: '電子通路',   key: '零售' },  // 電子通路類 → 零售
-      { kw: '食品',       key: '食品' },
-      { kw: '紡織',       key: '紡織' },
-      { kw: '橡膠',       key: '橡膠' },
+      // 科技
+      { kw: '半導體',         key: '半導體' },
+      { kw: 'IC設計',         key: 'IC設計' },
+      { kw: '記憶體',         key: '記憶體' },
+      { kw: '電子製造服務',   key: '電子製造' },
+      { kw: '電子零組件',     key: '電子零件' },
+      { kw: '電子零件',       key: '電子零件' },
+      { kw: '光電',           key: '光學' },
+      { kw: '通信網路',       key: '網通' },
+      { kw: '工業電腦',       key: '工業電腦' },
+      { kw: '電腦及週邊',     key: '電腦' },
+      { kw: '資訊服務',       key: '電腦' },
+      { kw: '數位雲端',       key: '數位雲端' },
+      // 金融/電信
+      { kw: '金融保險',       key: '金融' },
+      { kw: '電信業',         key: '電信' },
+      // 石化/塑膠（分開處理，不互搶）
+      { kw: '塑膠化工',       key: '石化' },
+      { kw: '塑膠類',         key: '塑膠' },
+      { kw: '石油煤炭',       key: '石化' },
+      { kw: '化學工業',       key: '石化' },
+      { kw: '化學類',         key: '石化' },
+      // 機電/鋼鐵/汽車
+      { kw: '電機機械',       key: '機電' },
+      { kw: '機電',           key: '機電' },
+      { kw: '鋼鐵',           key: '鋼鐵' },
+      { kw: '汽車',           key: '汽車' },
+      // 航運
+      { kw: '航運',           key: '航運' },
+      // 生技醫療（獨立，不混石化）
+      { kw: '生技醫療',       key: '生技醫療' },
+      // 民生
+      { kw: '百貨',           key: '零售' },
+      { kw: '電子通路',       key: '零售' },
+      { kw: '食品',           key: '食品' },
+      { kw: '紡織',           key: '紡織' },
+      { kw: '橡膠',           key: '橡膠' },
+      // 建材/觀光/能源
+      { kw: '建材營造',       key: '建材營造' },
+      { kw: '觀光餐旅',       key: '觀光' },
+      { kw: '油電燃氣',       key: '油電燃氣' },
+      { kw: '綠能環保',       key: '綠能環保' },
     ];
 
     function matchKey(indexName) {
-      // 排除「報酬指數」版本（避免與一般版重複）
+      // 排除「報酬指數」版本、槓桿/反向/特選/複合指數
       if (indexName.includes('報酬指數')) return null;
-      // 排除槓桿/反向/特選/臺灣XX等複合指數
       if (indexName.includes('兩倍') || indexName.includes('反向') ||
           indexName.includes('特選') || indexName.includes('高息') ||
-          indexName.includes('等權重')) return null;
+          indexName.includes('等權重') || indexName.includes('日報酬')) return null;
+      // 排除綜合大類（非細分產業）
+      if (['臺灣資訊科技指數','未含金融指數','未含電子指數','未含金融電子指數',
+           '電子工業類指數','電子類兩倍槓桿指數','電子類反向指數',
+           '化學生技醫療類指數','其他電子類指數','其他類指數'].includes(indexName)) return null;
       // 先精確比對
       if (SECTOR_INDEX_MAP[indexName]) return SECTOR_INDEX_MAP[indexName];
-      // 再關鍵字包含
+      // 再關鍵字（長鍵優先）
       for (const { kw, key } of KEYWORD_MAP) {
         if (indexName.includes(kw)) return key;
       }
