@@ -964,110 +964,108 @@
 
   <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:1rem;">
 
-    <!-- 綜合訊號燈（全寬） -->
-    <div id="mktSignalSummary" style="border-radius:12px;padding:1.1rem 1.4rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);display:flex;align-items:center;gap:1.2rem;">
-      <div id="mktSignalDot" style="width:18px;height:18px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.4s;box-shadow:0 0 0 4px var(--bg);"></div>
-      <div style="flex:1;">
-        <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.85rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
-        <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:3px;"></div>
+    <!-- 第一列：綜合訊號（全寬橫條） -->
+    <div id="mktSignalSummary" style="border-radius:12px;padding:1.2rem 1.6rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:1.4rem;">
+      <div id="mktSignalDot" style="width:20px;height:20px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.4s;box-shadow:0 0 0 5px var(--bg);"></div>
+      <div>
+        <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.9rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
+        <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--muted);margin-top:4px;"></div>
       </div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div id="mktSignalScore" style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:800;color:var(--muted);line-height:1;">—</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-top:2px;">多空得分</div>
+      <div style="width:1px;height:36px;background:var(--border);"></div>
+      <div style="text-align:right;">
+        <div id="mktSignalScore" style="font-family:'Playfair Display',serif;font-size:2.4rem;font-weight:800;color:var(--muted);line-height:1;">—</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-top:2px;letter-spacing:0.06em;">多空得分</div>
       </div>
     </div>
 
-    <!-- 兩欄 grid -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">
+    <!-- 第二列：三欄 grid（選擇權 | 三大法人 | 融資融券） -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;align-items:start;">
 
-      <!-- 左欄：台指選擇權 -->
-      <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.8rem;">🎯 台指選擇權</div>
-
-        <!-- P/C Ratio 並排 -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.75rem;">
-          <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:2px;">P/C Ratio OI</div>
-            <div id="ms_pcOI" style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:800;line-height:1.1;">—</div>
-            <div id="ms_pcOILabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;font-weight:700;margin-top:2px;"></div>
+      <!-- 欄①：台指選擇權 -->
+      <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🎯 台指選擇權</div>
+        <!-- P/C Ratio -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.8rem;">
+          <div style="background:var(--bg);border-radius:8px;padding:0.7rem 0.6rem;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">P/C Ratio OI</div>
+            <div id="ms_pcOI" style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:800;line-height:1.1;">—</div>
+            <div id="ms_pcOILabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.56rem;font-weight:700;margin-top:3px;"></div>
           </div>
-          <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:2px;">P/C Ratio Vol</div>
-            <div id="ms_pcVol" style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:800;line-height:1.1;">—</div>
-            <div id="ms_pcVolLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;font-weight:700;margin-top:2px;"></div>
+          <div style="background:var(--bg);border-radius:8px;padding:0.7rem 0.6rem;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">P/C Ratio Vol</div>
+            <div id="ms_pcVol" style="font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:800;line-height:1.1;">—</div>
+            <div id="ms_pcVolLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.56rem;font-weight:700;margin-top:3px;"></div>
           </div>
         </div>
-
         <!-- Max Pain -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0.6rem;background:var(--bg);border-radius:6px;margin-bottom:0.75rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0.7rem;background:var(--bg);border-radius:8px;margin-bottom:0.8rem;">
           <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">Max Pain</span>
-          <span id="ms_maxPain" style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;font-weight:700;color:var(--accent2);">—</span>
+          <span id="ms_maxPain" style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;font-weight:700;color:var(--accent2);">—</span>
         </div>
-
-        <!-- 法人選擇權部位 -->
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.4rem;">法人選擇權淨部位（口）</div>
-        <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.25rem;"></div>
-        <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.6rem;"></div>
+        <!-- 法人部位 -->
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.5rem;">法人選擇權淨部位（口）</div>
+        <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.28rem;"></div>
+        <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.7rem;"></div>
       </div>
 
-      <!-- 右欄：三大法人 + 融資融券 -->
+      <!-- 欄②：三大法人現貨 -->
+      <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🏢 三大法人現貨</div>
+        <div id="ms_instLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+        <div id="ms_instContent" style="display:none;">
+          <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.6rem;">
+            <div id="ms_instNet" style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:800;line-height:1;">—</div>
+            <div id="ms_instNetLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">億元</div>
+          </div>
+          <div id="ms_instDetail" style="display:flex;flex-direction:column;gap:0.25rem;margin-bottom:0.5rem;"></div>
+          <div id="ms_instStreak" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;padding:0.22rem 0.5rem;border-radius:4px;display:inline-block;margin-bottom:0.7rem;"></div>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">近10日合計（億）</div>
+            <div id="ms_instBars" style="display:flex;align-items:flex-end;gap:3px;height:48px;"></div>
+            <div id="ms_instDates" style="display:flex;gap:3px;margin-top:3px;"></div>
+          </div>
+          <div id="ms_instTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.5rem;"></div>
+        </div>
+      </div>
+
+      <!-- 欄③：融資融券 + 回測 -->
       <div style="display:flex;flex-direction:column;gap:1rem;">
 
-        <!-- 三大法人現貨 -->
-        <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.8rem;">🏢 三大法人現貨</div>
-          <div id="ms_instLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
-          <div id="ms_instContent" style="display:none;">
-            <div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.5rem;">
-              <div id="ms_instNet" style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:800;line-height:1;">—</div>
-              <div id="ms_instNetLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">億元</div>
-            </div>
-            <div id="ms_instDetail" style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.4rem;"></div>
-            <div id="ms_instStreak" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;padding:0.2rem 0.45rem;border-radius:4px;display:inline-block;"></div>
-            <div style="margin-top:0.6rem;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">近10日合計（億）</div>
-              <div id="ms_instBars" style="display:flex;align-items:flex-end;gap:2px;height:36px;"></div>
-              <div id="ms_instDates" style="display:flex;gap:2px;margin-top:2px;"></div>
-            </div>
-            <div id="ms_instTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
-          </div>
-        </div>
-
         <!-- 融資融券 -->
-        <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.8rem;">💳 融資融券</div>
+        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">💳 融資融券</div>
           <div id="ms_marginLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
           <div id="ms_marginContent" style="display:none;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.6rem;">
-              <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.5rem;text-align:center;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.7rem;">
+              <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
                 <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融資餘額（億）</div>
-                <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:800;margin-top:2px;line-height:1.1;">—</div>
-                <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:2px;"></div>
+                <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
+                <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
               </div>
-              <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.5rem;text-align:center;">
+              <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
                 <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融券餘額（張）</div>
-                <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:800;margin-top:2px;line-height:1.1;">—</div>
-                <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:2px;"></div>
+                <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
+                <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
               </div>
             </div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">融資近10日趨勢（億）</div>
-            <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:2px;height:32px;"></div>
-            <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">融資近10日趨勢（億）</div>
+            <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:3px;height:40px;"></div>
+            <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.5rem;"></div>
           </div>
         </div>
 
-      </div><!-- end 右欄 -->
-    </div><!-- end 兩欄 grid -->
-
-    <!-- 訊號回測（全寬） -->
-    <div style="border-radius:12px;padding:1rem 1.1rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.6rem;">📐 訊號回測</div>
-      <div id="ms_backtestSection">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;padding:0.75rem;">
-          資料累積中…<br><span style="font-size:0.55rem;opacity:0.7;">建議累積 5 個交易日後查看</span>
+        <!-- 訊號回測 -->
+        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.7rem;">📐 訊號回測</div>
+          <div id="ms_backtestSection">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;padding:0.75rem;">
+              資料累積中…<br><span style="font-size:0.55rem;opacity:0.7;">建議累積 5 個交易日後查看</span>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+
+      </div><!-- end 欄③ -->
+    </div><!-- end 三欄 grid -->
 
     <!-- 免責聲明 -->
     <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.6;padding:0 0.2rem;">
@@ -1076,6 +1074,9 @@
 
   </div>
 </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">
+
 
 <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
   </div>
@@ -2764,65 +2765,69 @@ async function loadHeatmap() {
   document.getElementById('heatmapSvgWrap').style.display = 'none';
 
   try {
-    // 取得所有 stock_id
     const ids = HM_STOCK_LIST.map(s => s.id);
-    const idFilter = ids.map(id => `stock_id.eq.${id}`).join(',');
+    // PostgREST in() 語法：stock_id=in.(2330,2454,...)
+    const inList = ids.join(',');
 
-    // 並行讀取兩張表（最新日期）
-    const [twseRows, valRows] = await Promise.all([
-      sbFetch('stock_daily_twse',
-        `or=(${idFilter})&order=date.desc&limit=${total * 3}&select=*`),
-      sbFetch('stock_valuation_daily',
-        `or=(${idFilter})&order=date.desc&limit=${total * 3}&select=stock_id,date,pbr,listed_shares`),
-    ]);
+    // ① stock_daily_twse：取最新 3 天資料（確保拿到最新交易日）
+    // 欄位：id, date, stock_id, name, close, prev, chg_pct, volume, source, created_at
+    const twseRows = await sbFetch('stock_daily_twse',
+      `stock_id=in.(${inList})&order=date.desc&limit=${total * 3}&select=stock_id,date,close,prev,chg_pct,volume`);
 
     if (!twseRows?.length) throw new Error('stock_daily_twse 無資料');
 
-    // 找最新交易日（取最常出現的日期）
+    // 找最新交易日
     const dateCounts = {};
     twseRows.forEach(r => { dateCounts[r.date] = (dateCounts[r.date] || 0) + 1; });
     const latestDate = Object.entries(dateCounts).sort((a,b) => b[1]-a[1])[0][0];
 
-    // 建立 lookup maps（只取最新日期）
+    // twse lookup（最新日期）
     const twseMap = {};
     twseRows.filter(r => r.date === latestDate).forEach(r => { twseMap[r.stock_id] = r; });
 
-    // valuation：取最新有效日期（可能比 twse 晚一天）
+    // ② stock_valuation_daily：分兩批查（避免 URL 過長導致 400）
+    const half = Math.ceil(ids.length / 2);
+    const [valRows1, valRows2] = await Promise.all([
+      sbFetch('stock_valuation_daily',
+        `stock_id=in.(${ids.slice(0, half).join(',')})&order=date.desc&limit=${half * 3}&select=stock_id,date,pbr,listed_shares`),
+      sbFetch('stock_valuation_daily',
+        `stock_id=in.(${ids.slice(half).join(',')})&order=date.desc&limit=${half * 3}&select=stock_id,date,pbr,listed_shares`),
+    ]);
+    const valRows = [...(valRows1 || []), ...(valRows2 || [])];
+
+    // valuation lookup（每支取最新有 pbr 的一筆）
     const valMap = {};
-    valRows?.forEach(r => {
-      if (!valMap[r.stock_id] && r.pbr > 0 && r.listed_shares > 0) valMap[r.stock_id] = r;
+    valRows.forEach(r => {
+      if (!valMap[r.stock_id] && parseFloat(r.pbr) > 0 && parseFloat(r.listed_shares) > 0)
+        valMap[r.stock_id] = r;
     });
 
     // 組合資料
     const data = [];
     for (const s of HM_STOCK_LIST) {
       const t = twseMap[s.id];
-      if (!t) continue; // 當日無資料（如剛上市、停牌）
+      if (!t) continue;
 
-      const close = parseFloat(t.close) || 0;
-      const change = parseFloat(t.change) || 0;
-      // chgPct：change / (close - change)，和原 FinMind 格式一致（小數，非百分比）
-      const prevClose = close - change;
-      const chgPct = prevClose > 0 ? change / prevClose : 0;
+      const close   = parseFloat(t.close) || 0;
+      // chg_pct 已是小數（如 0.0122 = +1.22%），直接用
+      const chgPct  = parseFloat(t.chg_pct) || 0;
 
-      // 市值推算：PBR × 股本(千股) × 面額10 / 億
-      // listed_shares 單位：千股；市值(億) = pbr × (listed_shares × 1000 × 10 / 1e8) × close / 10
-      // 簡化：mcap(億) ≈ pbr × listed_shares × close / 1e5
-      let mcap = s.mcap; // fallback 靜態值
+      // 市值推算：PBR × 股本（千股）× 收盤價 / 100000 ≈ 億元
+      let mcap = s.mcap;
       const v = valMap[s.id];
-      if (v && v.pbr > 0 && v.listed_shares > 0) {
-        mcap = v.pbr * v.listed_shares * close / 100000;
+      if (v && parseFloat(v.pbr) > 0 && parseFloat(v.listed_shares) > 0) {
+        mcap = parseFloat(v.pbr) * parseFloat(v.listed_shares) * close / 100000;
       }
 
       data.push({
-        id:      s.id,
-        name:    s.name,
-        sector:  s.sector,
-        price:   close,
+        id:     s.id,
+        name:   s.name,
+        sector: s.sector,
+        price:  close,
         chgPct,
         mcap,
-        date:    latestDate,
-        volume:  parseFloat(t.trading_volume) || 0,
+        date:   latestDate,
+        volume: parseFloat(t.volume) || 0,
       });
     }
 
