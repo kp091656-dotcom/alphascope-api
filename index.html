@@ -774,7 +774,7 @@
       <div class="feed-state"><div class="spinner"></div><p>載入示範資料中…</p></div>
     </div>
     <!-- Futures Leaderboard Panel -->
-<div id="futuresPanel" style="display:none;">
+    <div id="futuresPanel" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
     <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">全球商品排行榜</div>
     <div style="display:flex;gap:0.5rem;align-items:center;">
@@ -792,10 +792,10 @@
     </div>
     <div id="futuresChart"></div>
   </div>
-</div>
+    </div><!-- end futuresPanel -->
 
-<!-- ── 社群情緒面板 ── -->
-<div id="sentimentPanel" style="display:none;">
+    <!-- ── 社群情緒面板 ── -->
+    <div id="sentimentPanel" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.5rem;">
     <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;">社群情緒儀表板</div>
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
@@ -890,10 +890,10 @@
       需要 Groq Key（上方已設定），點擊「▶ 分析」開始，或點「Demo」查看效果
     </div>
   </div>
-</div>
+    </div><!-- end sentimentPanel -->
 
-<!-- ── 台股熱圖面板（含右側多空儀表板）── -->
-<div id="heatmapPanel" style="display:none;">
+    <!-- ── 台股熱圖面板 ── -->
+    <div id="heatmapPanel" style="display:none;">
   <!-- 左欄：熱圖（全寬） -->
   <div>
       <!-- 頂部控制列 -->
@@ -946,16 +946,15 @@
     </div>
 
     <!-- ── 右欄：台指多空儀表板（已移至獨立 tab）── -->
-  </div><!-- end grid -->
+  </div><!-- end heatmapPanel -->
 
 
 
   <!-- Tooltip（DESIGN.md warm dark palette） -->
   <div id="hmTooltip" style="position:fixed;display:none;background:#141413;color:#b0aea5;padding:10px 14px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;pointer-events:none;z-index:9999;line-height:1.75;box-shadow:0 0 0 1px #30302e, 0 8px 28px rgba(0,0,0,0.35);max-width:220px;"></div>
-</div>
 
-<!-- ── 多空訊號面板（獨立 tab）── -->
-<div id="signalPanel" style="display:none;">
+    <!-- ── 多空訊號面板（獨立 tab）── -->
+    <div id="signalPanel" style="display:none;">
 
   <!-- 標題列 -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
@@ -1074,13 +1073,10 @@
     </div>
 
   </div>
-</div>
+    </div><!-- end signalPanel -->
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">
-
-
-<button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
-  </div>
+    <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
+  </div><!-- end left column -->
 
   <aside class="sidebar">
     
