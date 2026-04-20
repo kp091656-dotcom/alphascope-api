@@ -1,5 +1,5 @@
 # NewsDigest.AI — 專案記憶文件 (CLAUDE.md)
-> 更新日期：2026-04-15
+> 更新日期：2026-04-20
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -39,7 +39,7 @@
 
 | 表名 | 來源 | 內容 | 每日筆數 |
 |------|------|------|---------|
-| `stock_daily` | FinMind | 86支個股收盤、漲跌幅、市值 | ~86 |
+| `stock_daily` | FinMind | 86支個股收盤、漲跌幅（舊熱圖用，逐步淘汰） | ~86 |
 | `stock_daily_twse` | TWSE OpenAPI | 全上市股票收盤、成交量 | ~1227 |
 | `institutional_daily` | FinMind | 三大法人現貨買賣超 | 1 |
 | `margin_daily` | FinMind | 融資/融券餘額 | 1 |
@@ -47,6 +47,23 @@
 | `futures_daily` | stooq+FinMind | 全球商品/指數 | ~35 |
 | `sector_index_daily` | TWSE OpenAPI | 官方產業指數（76個）| 76 |
 | `stock_valuation_daily` | TWSE OpenAPI | 個股本益比/殖利率/PBR | ~1070 |
+
+### stock_daily_twse 實際欄位（已確認）
+```
+id, date, stock_id, name, close, prev, chg_pct, volume, source, created_at
+```
+- `chg_pct`：小數（0.0122 = +1.22%），前端顯示時 ×100
+- `prev`：前日收盤價
+- `volume`：成交量
+
+### stock_valuation_daily 欄位（待確認）
+- `pbr`：確認存在
+- `listed_shares`：⚠️ 可能不存在（查詢會 400），欄位名未確認
+- 目前熱圖市值用靜態 `mcap` fallback
+
+### Supabase 查詢語法注意
+- 多 ID 篩選用 `stock_id=in.(2330,2454,...)` 而非 `or=(stock_id.eq.2330,...)`
+- 155 支股票的 in() 查詢需分兩批（各 ~77 支）避免 URL 過長 → 400
 
 ### Supabase 前端查詢
 
@@ -60,10 +77,12 @@ async function sbFetch(table, params) {
   });
   return r.json();
 }
-// 例：查台積電近30天
-sbFetch('stock_daily', 'stock_id=eq.2330&order=date.desc&limit=30&select=date,close,chg_pct');
+// 例：查台積電近60天（stock_daily_twse）
+sbFetch('stock_daily_twse', 'stock_id=eq.2330&order=date.desc&limit=60&select=date,close,chg_pct,prev');
 // 例：查半導體類指數
 sbFetch('sector_index_daily', 'index_name=eq.半導體類指數&order=date.desc&limit=30');
+// 例：多股批次查詢
+sbFetch('stock_daily_twse', 'stock_id=in.(2330,2454,2317)&order=date.desc&limit=10&select=stock_id,date,close,chg_pct');
 ```
 
 ### GitHub Actions 每日收集
@@ -112,11 +131,10 @@ sbFetch('sector_index_daily', 'index_name=eq.半導體類指數&order=date.desc&
 | `?endpoint=options` | 台指選擇權籌碼 | **60 分鐘** |
 | `?endpoint=institutional` | 三大法人現貨 | **60 分鐘** |
 | `?endpoint=margin` | 融資融券 | **60 分鐘** |
-| `?endpoint=twheatmap` | 台股86支熱圖（手動載入）| **60 分鐘** |
-| `?endpoint=twheatmap&refresh=1` | 強制跳過 cache | — |
+| `?endpoint=twheatmap` | 舊熱圖（已廢棄，前端改用 Supabase）| **60 分鐘** |
 | `?endpoint=ptt` | PTT 股票版 | 無 |
 | `?endpoint=ptt_article&url=...` | PTT 文章內文 | 無 |
-| `?endpoint=reddit&sub=...` | Reddit RSS | 無 |
+| `?endpoint=reddit&sub=...` | Reddit RSS（⚠️ Vercel IP 被封，已改前端直抓）| 無 |
 
 ---
 
@@ -131,27 +149,76 @@ const SUPABASE_ANON = 'sb_publishable_BAaZB86ibYZSvTFkFGkeQA_GspDNdf0';
 
 ---
 
-## 台股熱圖
+## 台股熱圖（重大改版）
 
-- **86支股票**，19個產業，全部並行抓取
-- **手動載入**：需按「↻ 更新」（節省 FinMind quota）
-- **個股 Modal**：點股票開走勢圖，讀 Supabase `stock_daily`
-- **產業漲跌幅 bar**：`renderSectorBar()` 市值加權，點擊聯動篩選
-- **DRAM 已合併進記憶體**
+- **155支股票**，27個產業，改從 **Supabase** 讀取（不再打 FinMind）
+- **資料來源：** `stock_daily_twse`（收盤/漲跌）+ `stock_valuation_daily`（市值推算）
+- **手動載入**：需按「↻ 更新」
+- **個股 Modal**：點股票開走勢圖，讀 `stock_daily_twse`（已改，原為 `stock_daily`）
+- **產業漲跌幅 bar**：讀 `sector_index_daily` 官方指數（已改，原為市值加權）
+- **市值**：優先用 `stock_valuation_daily` PBR×股本推算，fallback 靜態值（listed_shares 欄位名未確認）
 
-### SECTOR_COLORS
+### HM_STOCK_LIST（前端內建，155支）
+存在 `index.html` 的 `const HM_STOCK_LIST = [...]`，涵蓋27個產業：
+半導體、IC設計、記憶體、電子製造、電子零件、電腦、工業電腦、網通、光學、數位雲端、金融、電信、石化、塑膠、鋼鐵、機電、汽車、航運、生技醫療、建材營造、觀光、油電燃氣、綠能環保、零售、食品、紡織、橡膠
+
+### SECTOR_COLORS（27個產業）
 ```js
 半導體:'#3b82f6', IC設計:'#6366f1', 記憶體:'#8b5cf6',
 電子製造:'#f59e0b', 電子零件:'#fbbf24', 光學:'#f97316', 網通:'#fb923c',
-工業電腦:'#ef4444', 電腦:'#f87171', 金融:'#10b981', 電信:'#34d399',
-石化:'#6b7280', 鋼鐵:'#9ca3af', 汽車:'#84cc16', 零售:'#a3e635',
-食品:'#facc15', 紡織:'#fb7185', 橡膠:'#c084fc'
+工業電腦:'#ef4444', 電腦:'#f87171', 數位雲端:'#60a5fa',
+金融:'#10b981', 電信:'#34d399', 石化:'#6b7280', 塑膠:'#78716c',
+鋼鐵:'#9ca3af', 機電:'#a8a29e', 汽車:'#84cc16', 航運:'#38bdf8',
+零售:'#a3e635', 食品:'#facc15', 紡織:'#fb7185', 橡膠:'#c084fc',
+生技醫療:'#4ade80', 建材營造:'#d97706', 觀光:'#e879f9',
+油電燃氣:'#94a3b8', 綠能環保:'#86efac'
 ```
 
-### 多空訊號儀表板（mktSignalPanel）
-- 開啟熱圖分頁自動呼叫 `loadMktSignals()`
-- 完成後非同步：`loadInstitutionalHistory()`（Supabase 30日）+ `loadSignalBacktest()`（P/C 回測）
-- Max Pain = **賣方（法人）獲利最大點**（非買方總損失最小）
+### 產業指數 bar（loadSectorIndexBar）
+- 開啟熱圖分頁自動執行，讀 `sector_index_daily` 最新日
+- 用 KEYWORD_MAP 模糊比對 TWSE 指數名 → SECTOR_COLORS key
+- `chg_pct` 在 `sector_index_daily` 已是百分比（直接用，不需 ×100）
+- 排除「報酬指數」、槓桿/反向版本
+
+### 多空訊號（獨立 tab）
+- **📡 多空訊號** 已移為獨立 tab（在台股熱圖後面）
+- 版面：全寬訊號燈 → 三欄 grid（選擇權 | 三大法人 | 融資融券+回測）
+- `loadMktSignals()` 在切換到多空訊號 tab 時才呼叫（不在熱圖載入時呼叫）
+- Max Pain = **賣方（法人）獲利最大點**
+
+---
+
+## 主版面結構（重要！）
+
+`<main>` 是兩欄 grid（`1fr 320px`）：
+- **左欄 `<div>`**：newsFeed、futuresPanel、sentimentPanel、heatmapPanel、signalPanel、loadMoreBtn
+- **右欄 `<aside class="sidebar">`**：美股簡報、台股簡報、FGI、VIX、台指選擇權、最新快訊
+
+⚠️ 所有 panel 必須在左欄 `<div>` 內，否則 sidebar 會跑到下方。
+
+Tab 切換邏輯：每個 show 函式都要隱藏其他所有 panel（含 signalPanel）。
+
+---
+
+## 社群情緒
+
+### Reddit（已改前端直抓）
+```js
+// 直接從瀏覽器抓，繞過 Vercel IP 封鎖
+fetch(`https://www.reddit.com/r/${sub}/${sort}.json?limit=25&raw_json=1`)
+// 欄位：title, selftext, score, num_comments, permalink, created_utc
+// url = 'https://www.reddit.com' + p.permalink
+```
+- **WSB** = r/wallstreetbets（散戶高風險）
+- **r/investing**（較理性的長期投資討論）
+
+### PTT
+- 透過 Vercel `?endpoint=ptt` proxy
+- 貼文有 `link` 欄位（原文網址），存入 `url`
+
+### 貼文卡片
+- 有 url → `cursor:pointer`，`onclick` 開新分頁，標題旁顯示 `↗`
+- 無 url → 不可點擊
 
 ---
 
@@ -190,19 +257,20 @@ box-shadow: 0 0 0 1px var(--border-dark);
 | VIX term structure | ✅ | |
 | 全球商品排行榜 | ✅ | |
 | K 棒圖 | ✅ | |
-| 社群情緒（PTT+Reddit）| ✅ | |
+| 社群情緒（PTT+Reddit）| ✅ | Reddit 改前端直抓 |
 | 台指選擇權籌碼 | ✅ | 60min cache |
-| 台股熱圖 | ✅ | 86支，手動載入 |
-| 產業漲跌幅 bar | ✅ | 市值加權 |
-| 多空訊號儀表板 | ✅ | 含回測 |
-| 個股走勢圖 Modal | ✅ | Supabase |
-| Supabase 歷史資料庫 | ✅ | 8張表 |
+| 台股熱圖 | ✅ | **155支**，Supabase，手動載入 |
+| 產業漲跌幅 bar | ✅ | **官方指數**（sector_index_daily） |
+| 多空訊號儀表板 | ✅ | **獨立 tab**，三欄全寬版面 |
+| 個股走勢圖 Modal | ✅ | 改讀 stock_daily_twse |
+| 貼文點擊連結 | ✅ | PTT/Reddit 貼文可點開原文 |
+| Supabase 歷史資料庫 | ✅ | 8張表，預估4~5年到達500MB上限 |
 | 官方產業指數收集 | ✅ | TWSE → sector_index_daily |
 | 全上市股票收盤 | ✅ | TWSE → stock_daily_twse |
 | 個股估值收集 | ✅ | TWSE → stock_valuation_daily |
-| **前端用官方產業指數** | 🔜 | 讀 sector_index_daily |
-| **Modal 加估值資料** | 🔜 | PER/殖利率/PBR |
+| **Modal 加估值資料** | 🔜 | PER/殖利率/PBR（需確認 listed_shares 欄位名）|
 | **月營收收集** | 🔜 | TWSE t187ap05_L |
+| **stock_valuation_daily 欄位確認** | 🔜 | 執行 `sbFetch('stock_valuation_daily','limit=1&select=*')` |
 | 台股 VIX | ❌ | 無免費來源 |
 
 ---
@@ -217,10 +285,14 @@ box-shadow: 0 0 0 1px var(--border-dark);
 | Groq 429 | 翻譯有 retry；社群分析等 20 秒 |
 | options 無資料 | 往前找 7 個交易日 |
 | 熱圖條紋 | squarify 需正方形版面 |
-| 產業漲跌幅太小 | chgPct 是小數需 ×100 |
+| Supabase 400 | 改用 `in.(...)` 語法；欄位名不存在；URL 過長要分批 |
+| Modal 走勢圖色塊 | bar 用固定 px 寬度（非 flex:1），高度用 hPx 非 hPct |
 | Modal 無法彈出 | 確認 #stockModal CSS 有 display:flex (.open) |
 | Supabase 無法寫入 | 確認用 service_role key |
 | TWSE 從 Vercel 403 | 只能從 GitHub Actions 或瀏覽器呼叫 |
+| Reddit 500 from Vercel | Reddit 封鎖 Vercel IP，改前端直抓 .json API |
+| sidebar 跑到下方 | 確認所有 panel 在左欄 `<div>` 內，`</div>` 在 loadMoreBtn 後才關閉 |
+| 產業指數 chgPct 顯示 300%+ | sector_index_daily 的 chg_pct 已是百分比，不需 ×100 |
 
 ---
 
@@ -229,11 +301,12 @@ box-shadow: 0 0 0 1px var(--border-dark);
 1. 開新對話上傳 `index.html` 和 `news.js`，Claude 複製到 `/home/claude/`
 2. 修改後輸出到 `/mnt/user-data/outputs/`
 3. 上傳 GitHub → Vercel 自動部署
-4. JS 語法驗證：`node --check news.js`
+4. JS 語法驗證：`node --check news.js`（HTML 用 `new Function()` 驗證 script 區塊）
 5. 所有 Vercel API 用 `API_BASE`
 6. Shadow：`box-shadow: 0 0 0 1px` ring shadow
 7. Supabase 讀取用 anon key，寫入用 service_role key
 8. 新增功能同步更新 CLAUDE.md
+9. HTML div 平衡驗證：`python3 -c "import re; ..."`（開頭/結尾 div 數量需相等）
 
 ---
 
