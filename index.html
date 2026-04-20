@@ -2204,10 +2204,13 @@ function sentRenderPosts() {
   document.getElementById('sentPostList').innerHTML = filtered.map(p => {
     const sc = p.sentiment==='bull' ? 'sent-bull' : p.sentiment==='bear' ? 'sent-bear' : 'sent-neutral';
     const sl = p.sentiment==='bull' ? '多頭' : p.sentiment==='bear' ? '空頭' : '中性';
-    return `<div class="sent-post-card">
+    const safeUrl = p.url ? p.url.replace(/'/g,'%27') : '';
+    const clickable = safeUrl ? `style="cursor:pointer;" onclick="window.open('${safeUrl}','_blank')" title="點擊開啟原文"` : '';
+    const linkIcon  = safeUrl ? `<span style="font-size:0.55rem;color:var(--accent2);margin-left:4px;opacity:0.8;">↗</span>` : '';
+    return `<div class="sent-post-card" ${clickable}>
       <span class="sent-s-pill ${sc}">${sl}</span>
-      <div>
-        <div style="font-size:0.83rem;line-height:1.4;margin-bottom:4px;">${p.title_zh||p.title}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.83rem;line-height:1.4;margin-bottom:4px;">${p.title_zh||p.title}${linkIcon}</div>
         ${p.title_zh && p.title_zh !== p.title ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);margin-bottom:3px;">${p.title}</div>` : ''}
         <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           ${srcBadge(p.source)}<span>${p.time}</span>${p.reason?`<span>${p.reason}</span>`:''}
@@ -2250,10 +2253,11 @@ async function sentFetchPTT() {
         title:  e.title,
         body:   e.body || '',
         pushes: e.pushes || 0,
-        rank:   e.rank  || 0,       // 時間排名（1=最新）
+        rank:   e.rank  || 0,
         time:   e.updated ? new Date(e.updated).toLocaleDateString('zh-TW') : '',
         score:  e.pushes || 0,
         source: 'ptt',
+        url:    e.link || '',
         sentiment: null,
         reason: '',
         ts,
@@ -2300,6 +2304,7 @@ async function sentFetchReddit(sub) {
           score:    p.score || 0,
           rank:     posts.length + 1,
           comments: p.num_comments || 0,
+          url:      p.url ? `https://www.reddit.com${p.permalink}` : '',
           source:   srcKey,
           sentiment: null,
           reason:   '',
