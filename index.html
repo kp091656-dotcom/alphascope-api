@@ -3805,8 +3805,9 @@ async function openStockModal(stock) {
 
   // 從 Supabase 抓歷史資料
   try {
-    const rows = await sbFetch('stock_daily',
-      `stock_id=eq.${stock.id}&order=date.desc&limit=60&select=date,close,chg_pct`);
+    // stock_daily_twse 涵蓋全市場，欄位：stock_id, date, close, chg_pct, prev, volume
+    const rows = await sbFetch('stock_daily_twse',
+      `stock_id=eq.${stock.id}&order=date.desc&limit=60&select=date,close,chg_pct,prev`);
 
     if (!rows || rows.length < 2) {
       document.getElementById('modalLoading').style.display = 'none';
