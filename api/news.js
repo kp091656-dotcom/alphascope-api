@@ -320,7 +320,19 @@ export default async function handler(req, res) {
   if (endpoint === 'gemini') {
     const GEMINI_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-    const body = req.method === 'POST' && req.body ? req.body : {};
+    // 手動 parse body（Vercel 不自動 parse JSON body）
+    let body = {};
+    if (req.method === 'POST') {
+      try {
+        const raw = await new Promise((resolve, reject) => {
+          let data = '';
+          req.on('data', chunk => { data += chunk; });
+          req.on('end', () => resolve(data));
+          req.on('error', reject);
+        });
+        body = raw ? JSON.parse(raw) : {};
+      } catch(e) { body = {}; }
+    }
     const prompt = body.prompt || req.query.prompt;
     if (!prompt) return res.status(400).json({ error: 'prompt required' });
     const maxTokens = parseInt(body.maxTokens || req.query.maxTokens || '1024');
