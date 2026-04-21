@@ -845,7 +845,7 @@
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:14px;">BREAKDOWN</div>
       <div style="display:flex;flex-direction:column;gap:12px;" id="sentBarsWrap">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--accent);width:50px;">多頭</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#dc2626;width:50px;">多頭</span>
           <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBullBar" style="height:100%;width:0%;background:#dc2626;border-radius:2px;transition:width 0.8s;"></div></div>
           <span id="sentBullCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);width:28px;text-align:right;">0</span>
         </div>
@@ -2173,7 +2173,7 @@ function sentRenderDashboard(posts) {
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:500;padding:1px 5px;border-radius:3px;background:${badgeBg};color:${badgeClr};width:30px;text-align:center;flex-shrink:0;">${lbl}</span>
       <div style="flex:1;height:13px;background:var(--surface2,#edeae3);border-radius:3px;overflow:hidden;display:flex;">
-        <div style="width:${bPct}%;background:var(--accent);height:100%;transition:width 0.8s;"></div>
+        <div style="width:${bPct}%;background:#dc2626;height:100%;transition:width 0.8s;"></div>
         <div style="width:${nPct}%;background:#b4b2a9;height:100%;transition:width 0.8s;"></div>
         <div style="width:${ePct}%;background:var(--accent3);height:100%;transition:width 0.8s;"></div>
       </div>
@@ -3618,7 +3618,7 @@ async function loadMktSignals() {
     const netBil = Math.round(latest.net / 1e8 * 10) / 10; // 億元
     const netEl  = document.getElementById('ms_instNet');
     netEl.textContent = (netBil >= 0 ? '+' : '') + netBil.toFixed(1);
-    netEl.style.color = netBil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+    netEl.style.color = netBil >= 0 ? '#dc2626' : '#16a34a';
     document.getElementById('ms_instNetLabel').textContent = '億元（三大法人合計）';
     if (netBil >= 0) score += 1; else score -= 1;
 
@@ -3628,7 +3628,7 @@ async function loadMktSignals() {
       const v = latest.detail?.[name];
       if (v == null) return '';
       const bil = Math.round(v / 1e8 * 10) / 10;
-      const color = bil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      const color = bil >= 0 ? '#dc2626' : '#16a34a';
       return `<div style="display:flex;justify-content:space-between;padding:0.18rem 0;">
         <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">${name}</span>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;color:${color};">${bil >= 0 ? '+' : ''}${bil.toFixed(1)} 億</span>
@@ -3642,8 +3642,8 @@ async function loadMktSignals() {
       const abs = Math.abs(streak);
       const isBull = streak > 0;
       streakEl.textContent = `外資連續${isBull ? '買超' : '賣超'} ${abs} 日`;
-      streakEl.style.background = isBull ? 'rgba(200,82,26,0.1)' : 'rgba(42,157,92,0.1)';
-      streakEl.style.color      = isBull ? 'var(--accent)' : 'var(--accent3)';
+      streakEl.style.background = isBull ? 'rgba(220,38,38,0.1)' : 'rgba(22,163,74,0.1)';
+      streakEl.style.color      = isBull ? '#dc2626' : '#16a34a';
       if (isBull) score += Math.min(2, Math.floor(abs / 3));
       else        score -= Math.min(2, Math.floor(abs / 3));
     } else {
@@ -3658,7 +3658,7 @@ async function loadMktSignals() {
     barsEl.innerHTML = bars10.map(d => {
       const bil = d.net / 1e8;
       const h   = maxAbs > 0 ? Math.abs(bil / maxAbs * 34) : 4;
-      const col = bil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      const col = bil >= 0 ? '#dc2626' : '#16a34a';
       return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:36px;">
         <div style="height:${h.toFixed(1)}px;background:${col};border-radius:2px 2px 0 0;"></div>
       </div>`;
@@ -3687,7 +3687,7 @@ async function loadMktSignals() {
     const mChgEl = document.getElementById('ms_marginChg');
     if (mChg != null) {
       mChgEl.textContent = (mChg >= 0 ? '▲+' : '▼') + mChg.toFixed(1) + ' 億';
-      mChgEl.style.color = mChg >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      mChgEl.style.color = mChg >= 0 ? '#dc2626' : '#16a34a';
       // 融資大增=散戶追多，短線偏多但過熱警示；這裡簡單加分
       if (mChg > 0) score += 0.5;
     }
@@ -3699,7 +3699,7 @@ async function loadMktSignals() {
     const sChgEl = document.getElementById('ms_shortChg');
     if (sChg != null) {
       sChgEl.textContent = (sChg >= 0 ? '▲+' : '▼') + Math.abs(sChg / 1000).toFixed(1) + 'k張';
-      sChgEl.style.color = sChg >= 0 ? 'var(--accent3)' : 'var(--accent)';
+      sChgEl.style.color = sChg >= 0 ? '#16a34a' : '#dc2626';
     }
 
     // 融資近10日 mini bar
@@ -3960,7 +3960,7 @@ async function loadInstitutionalHistory() {
     barsEl.innerHTML = data.map(d => {
       const bil = (d.total_net || 0) / 1e8;
       const h   = Math.abs(bil) / maxAbs * 34;
-      const col = bil >= 0 ? 'var(--accent)' : 'var(--accent3)';
+      const col = bil >= 0 ? '#dc2626' : '#16a34a';
       return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:36px;" title="${d.date}\n${bil>=0?'+':''}${bil.toFixed(1)}億">
         <div style="height:${Math.max(2,h).toFixed(1)}px;background:${col};border-radius:2px 2px 0 0;"></div>
       </div>`;
