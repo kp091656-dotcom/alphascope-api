@@ -3,29 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NewsDigest.AI | AI 驅動財經新聞</title>
+<title>AlphaScope | AI 市場情報</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f7f6f2;
+    --bg: #f4f4f8;
     --surface: #ffffff;
-    --border: #e4e2d9;
-    --border-dark: #c8c5b8;
-    --accent: #c8521a;
-    --accent2: #1a6bc8;
-    --accent3: #2a9d5c;
-    --text: #1a1a18;
-    --muted: #7a7870;
+    --border: #e0e0ea;
+    --border-dark: #c0c0d0;
+    --accent: #6366f1;
+    --accent2: #0ea5e9;
+    --accent3: #10b981;
+    --text: #18181b;
+    --muted: #71717a;
     --card-bg: #ffffff;
-    --header-bg: #1a1a18;
-    --tag-bg: #f0ede4;
+    --header-bg: #0f0f1a;
+    --tag-bg: #ededf8;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     background: var(--bg);
-    background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0);
+    background-image: radial-gradient(circle at 1px 1px, rgba(99,102,241,0.07) 1px, transparent 0);
     background-size: 24px 24px;
     color: var(--text);
     font-family: 'Noto Sans TC', sans-serif;
@@ -44,18 +44,18 @@
     top: 0;
     z-index: 100;
     box-shadow: 0 2px 20px rgba(0,0,0,0.25);
-    border-bottom: 1px solid rgba(200,82,26,0.4);
+    border-bottom: 1px solid rgba(99,102,241,0.5);
   }
 
   .logo {
-    font-family: 'Playfair Display', serif;
-    font-weight: 900;
-    font-size: 1.35rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 1.25rem;
     color: #fff;
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.04em;
   }
 
   .logo-badge {
@@ -111,13 +111,13 @@
 
   /* API Config Bar */
   .api-config-bar {
-    background: linear-gradient(135deg, #fff8f0 0%, #fff5ee 100%);
+    background: linear-gradient(135deg, #f5f5ff 0%, #f0f0fc 100%);
     border-bottom: 2px solid var(--accent);
     padding: 0.65rem 2.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    box-shadow: 0 1px 8px rgba(200,82,26,0.08);
+    box-shadow: 0 1px 8px rgba(99,102,241,0.08);
     position: sticky;
     top: 64px;
     z-index: 90;
@@ -267,7 +267,7 @@
   /* News Card */
   /* Reading mode */
   .news-card.expanded .card-read-more { display: block; }
-  .card-read-more { display: none; background: #faf9f5; border-top: 1px solid var(--border); padding: 1rem 1.3rem; font-size: 0.82rem; line-height: 1.75; color: var(--text); }
+  .card-read-more { display: none; background: #f8f8fd; border-top: 1px solid var(--border); padding: 1rem 1.3rem; font-size: 0.82rem; line-height: 1.75; color: var(--text); }
   .card-expand-btn { background: none; border: none; color: var(--accent); font-size: 0.68rem; font-family: 'IBM Plex Mono', monospace; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 0.3rem; margin-top: 0.4rem; transition: opacity 0.15s; }
   .card-expand-btn:hover { opacity: 0.7; }
   .news-card {
@@ -320,17 +320,17 @@
     font-weight: 500;
   }
 
-  .tag.technology { background: #e8f4fd; color: var(--accent2); }
-  .tag.business { background: #fdeee6; color: var(--accent); }
+  .tag.technology { background: #e0f2fe; color: var(--accent2); }
+  .tag.business { background: #ede9fe; color: var(--accent); }
   .tag.science { background: #f0eafd; color: #7c3aed; }
-  .tag.health { background: #e8fdf2; color: var(--accent3); }
+  .tag.health { background: #d1fae5; color: var(--accent3); }
   .tag.general { background: var(--tag-bg); color: var(--muted); }
   .tag.entertainment { background: #fef9e8; color: #b08000; }
   .tag.market { background: #fff0e6; color: #c07000; }
 
   .card-time { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--muted); }
   .card-source { font-size: 0.65rem; color: var(--muted); font-weight: 600; margin-left: auto; }
-  .pop-score { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--muted); background: #f5f3ee; border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-weight: 600; }
+  .pop-score { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--muted); background: #f0f0f8; border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-weight: 600; }
   .pop-bar-wrap { display: flex; align-items: center; gap: 0.4rem; margin: 0.35rem 0 0.1rem; }
   .pop-bar-track { flex: 1; height: 4px; background: #ede9e0; border-radius: 2px; overflow: hidden; }
   .pop-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
@@ -414,7 +414,7 @@
     font-weight: 500;
   }
 
-  .analyze-btn:hover { background: #daeefe; border-color: var(--accent2); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(26,107,200,0.15); }
+  .analyze-btn:hover { background: #e0f2fe; border-color: var(--accent2); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(14,165,233,0.15); }
   .analyze-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
   .card-footer {
@@ -710,7 +710,7 @@
 <!-- Header -->
 <header>
   <div style="display:flex;align-items:center;gap:1.25rem">
-    <div class="logo">NewsDigest<span style="color:var(--accent)">.</span>AI <span class="logo-badge">BETA</span></div>
+    <div class="logo">Alpha<span style="color:#818cf8">Scope</span> <span class="logo-badge">BETA</span></div>
     <div class="live-dot">LIVE</div>
   </div>
   <nav style="display:flex;align-items:center;gap:0.5rem;">
