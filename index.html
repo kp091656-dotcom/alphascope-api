@@ -472,7 +472,7 @@
     padding:4px 10px; border-radius:20px; border:1px solid var(--border);
     background:var(--surface); cursor:pointer; transition:all 0.15s;
   }
-  .sent-pill.active-bull    { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .sent-pill.active-bull    { background:#dc2626; color:#fff; border-color:#dc2626; }
   .sent-pill.active-bear    { background:#16a34a; color:#fff; border-color:#16a34a; }
   .sent-pill.active-neutral { background:var(--muted); color:#fff; border-color:var(--muted); }
   .sent-pill.active-all     { background:var(--text); color:#fff; border-color:var(--text); }
@@ -846,7 +846,7 @@
       <div style="display:flex;flex-direction:column;gap:12px;" id="sentBarsWrap">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--accent);width:50px;">多頭</span>
-          <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBullBar" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width 0.8s;"></div></div>
+          <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBullBar" style="height:100%;width:0%;background:#dc2626;border-radius:2px;transition:width 0.8s;"></div></div>
           <span id="sentBullCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);width:28px;text-align:right;">0</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -865,7 +865,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;">BY SOURCE</div>
           <div style="display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:0.58rem;">
-            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;"></span>多頭</span>
+            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>多頭</span>
             <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#b4b2a9;display:inline-block;"></span>中性</span>
             <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent3);display:inline-block;"></span>空頭</span>
           </div>
@@ -2138,7 +2138,7 @@ function sentSetGauge(score) {
   const v = document.getElementById('sentGaugeValue');
   const l = document.getElementById('sentGaugeLabel');
   v.textContent = score;
-  if (score >= 60)      { v.style.color = 'var(--accent)'; l.textContent = '偏多頭'; l.style.color = 'var(--accent)'; }
+  if (score >= 60)      { v.style.color = '#dc2626'; l.textContent = '偏多頭'; l.style.color = '#dc2626'; }
   else if (score <= 40) { v.style.color = '#16a34a'; l.textContent = '偏空頭'; l.style.color = '#16a34a'; }
   else                  { v.style.color = 'var(--muted)'; l.textContent = '中性偏觀望'; l.style.color = 'var(--muted)'; }
 }
@@ -2148,7 +2148,7 @@ function sentRenderDashboard(posts) {
   const bear = posts.filter(p => p.sentiment === 'bear').length;
   const neu  = posts.filter(p => p.sentiment === 'neutral').length;
   const total = posts.length || 1;
-  document.getElementById('sentBullBar').style.width = (bull/total*100)+'%'; document.getElementById('sentBullBar').style.background='var(--accent)';
+  document.getElementById('sentBullBar').style.width = (bull/total*100)+'%'; document.getElementById('sentBullBar').style.background='#dc2626';
   document.getElementById('sentBearBar').style.width = (bear/total*100)+'%'; document.getElementById('sentBearBar').style.background='#16a34a';
   document.getElementById('sentNeuBar').style.width  = (neu/total*100)+'%';
   document.getElementById('sentBullCnt').textContent = bull;
