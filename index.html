@@ -1610,7 +1610,7 @@ async function translateArticles() {
     for (let i = 0; i < arts.length; i += BATCH) {
       const batch = arts.slice(i, i + BATCH);
       const lines = batch.map((a, j) =>
-        `${j+1}. ${a.title.replace(/[|]/g,' ')} ||| ${(a.description||'').slice(0,80).replace(/[|]/g,' ')}`
+        `${j+1}. ${a.title.replace(/[|]/g,' ')} ||| ${(a.description||'').slice(0,40).replace(/[|]/g,' ')}`
       ).join('\n');
       const prompt = `你是財經翻譯專員。翻譯成繁體中文，格式不變，每行「編號. 標題 ||| 描述」，不要加說明。\n\n${lines}`;
 
@@ -1756,9 +1756,9 @@ async function callGemini(prompt) {
       'Authorization': `Bearer ${groqApiKey}`
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1024,
+      max_tokens: 800,
       temperature: 0.7
     })
   });
@@ -1817,7 +1817,7 @@ async function generateBrief(market) {
 
   // Filter articles by market category + take top 8
   // Use all articles — AI will summarize for the specific market context
-  const articles = allArticles.slice(0, 10);
+  const articles = allArticles.slice(0, 6);
   const headlines = articles.map(a => a.title).filter(Boolean).join('\n');
 
   const fallbacks = {
@@ -2324,7 +2324,7 @@ async function sentFetchReddit(sub) {
 }
 
 async function sentAnalyzeGroq(posts, onStatus) {
-  const BATCH = 8; // 含內文後 token 較多，縮小 batch
+  const BATCH = 10; // llama-3.1-8b-instant 較省 token，可加大 batch
   for (let i = 0; i < posts.length; i += BATCH) {
     const batch = posts.slice(i, i+BATCH);
     // 組合每篇貼文的分析素材
@@ -2333,29 +2333,11 @@ async function sentAnalyzeGroq(posts, onStatus) {
       const engStr = p.source === 'ptt'
         ? `時間排名:#${p.rank||'?'}（越小=越新），推文淨值:${p.pushes>0?'+':''}${p.pushes||0}（正=多推認同）`
         : (p.rank ? `熱度排名:#${p.rank}（Reddit演算法，數字越小越熱門）` : '熱度:未知');
-      const body = p.body ? `\n   摘要：${p.body.slice(0, 120)}` : '';
+      const body = p.body ? `\n   摘要：${p.body.slice(0, 60)}` : '';
       return `${j}. [${src}] ${p.title}${body}\n   互動→ ${engStr}`;
     }).join('\n');
 
-    const prompt = `你是專業財經情緒分析師。根據【標題、摘要、互動數】判斷市場情緒。
-
-互動數說明：
-- PTT「時間排名」=#1最新發文；推文淨值正數=社群認同，負數=質疑
-- Reddit「熱度排名」= Reddit演算法熱度位置，#1最熱；排名越前=越多人互動
-
-sentiment規則：
-- bull: 看多/利多/上漲/正面預期
-- bear: 看空/利空/下跌/風險警示
-- neutral: 中性討論/資訊分享/無明確方向
-
-confidence規則：
-- high: 標題+摘要情緒一致 且 互動數有支持
-- mid: 標題清楚但摘要模糊，或互動數=0
-- low: 語意模糊或矛盾
-
-輸出純JSON array不要其他文字：
-[{"idx":0,"sentiment":"bull","reason":"10字內繁中","title_zh":"英文翻繁中；中文原文照寫","confidence":"high"}]
-
+    const prompt = `財經情緒分析，判斷每篇bull/bear/neutral，英文標題翻繁中。bull=看多利多，bear=看空利空，neutral=中性。confidence：high=明確，mid=普通，low=模糊。輸出純JSON不要其他文字：[{"idx":0,"sentiment":"bull","reason":"8字內繁中","title_zh":"繁中標題","confidence":"high"}]
 貼文：
 ${postLines}`;
 
@@ -2364,7 +2346,7 @@ ${postLines}`;
       try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqApiKey}`},
-          body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.15, max_tokens:1200 })
+          body: JSON.stringify({ model:'llama-3.1-8b-instant', messages:[{role:'user',content:prompt}], temperature:0.15, max_tokens:900 })
         });
         const d = await res.json();
         if (d.error) {
@@ -2417,7 +2399,7 @@ async function sentGenerateSummary(posts) {
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqApiKey}`},
-      body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.5, max_tokens:500 })
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', messages:[{role:'user',content:prompt}], temperature:0.5, max_tokens:400 })
     });
     const d = await res.json();
     return d.choices?.[0]?.message?.content || null;
