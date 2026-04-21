@@ -1225,11 +1225,11 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;margin-top:0.4rem;">
               <div style="background:var(--surface);border-radius:4px;padding:0.3rem 0.5rem;text-align:center;">
                 <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">Call 未平倉</div>
-                <div id="pcCallOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:600;color:var(--accent);"></div>
+                <div id="pcCallOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:600;color:#dc2626;"></div>
               </div>
               <div style="background:var(--surface);border-radius:4px;padding:0.3rem 0.5rem;text-align:center;">
                 <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">Put 未平倉</div>
-                <div id="pcPutOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:600;color:var(--accent3);"></div>
+                <div id="pcPutOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:600;color:#16a34a;"></div>
               </div>
             </div>
           </div>
@@ -3710,7 +3710,7 @@ async function loadMktSignals() {
     document.getElementById('ms_marginBars').innerHTML = bars10m.map(d => {
       const h = ((d.marginBalance - minMar) / rangeMar * 28 + 4).toFixed(1);
       return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:32px;">
-        <div style="height:${h}px;background:var(--accent2);border-radius:2px 2px 0 0;opacity:0.75;"></div>
+        <div style="height:${h}px;background:#dc2626;border-radius:2px 2px 0 0;opacity:0.75;"></div>
       </div>`;
     }).join('');
 
@@ -4040,7 +4040,7 @@ async function loadSignalBacktest() {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem;margin-bottom:0.4rem;">
         ${[
-          { label:'偏多訊號準確率', val:`${bullAcc}%`, sub:`${bull_right}/${bullTotal}次`, color:'var(--accent)' },
+          { label:'偏多訊號準確率', val:`${bullAcc}%`, sub:`${bull_right}/${bullTotal}次`, color:'#dc2626' },
           { label:'偏空訊號準確率', val:`${bearAcc}%`, sub:`${bear_right}/${bearTotal}次`, color:'#16a34a' },
           { label:'整體準確率',     val:`${totalAcc}%`, sub:`${bull_right+bear_right}/${total}次`, color:'var(--accent2)' },
         ].map(s => `<div style="background:var(--bg);border-radius:6px;padding:0.4rem 0.5rem;text-align:center;">
