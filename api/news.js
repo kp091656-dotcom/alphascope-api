@@ -339,7 +339,7 @@ export default async function handler(req, res) {
     const temperature = parseFloat(body.temperature || req.query.temperature || '0.5');
     try {
       const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -352,6 +352,50 @@ export default async function handler(req, res) {
       const data = await r.json();
       if (data.error) return res.status(500).json({ error: data.error.message });
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      res.status(200).json({ text });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+    return;
+  }
+
+  // ── Groq AI proxy ──
+  if (endpoint === 'groq') {
+    const GROQ_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
+    let body = {};
+    if (req.method === 'POST') {
+      try {
+        const raw = await new Promise((resolve, reject) => {
+          let data = '';
+          req.on('data', chunk => { data += chunk; });
+          req.on('end', () => resolve(data));
+          req.on('error', reject);
+        });
+        body = raw ? JSON.parse(raw) : {};
+      } catch(e) { body = {}; }
+    }
+    const prompt = body.prompt || req.query.prompt;
+    if (!prompt) return res.status(400).json({ error: 'prompt required' });
+    const maxTokens = parseInt(body.maxTokens || req.query.maxTokens || '800');
+    const temperature = parseFloat(body.temperature || req.query.temperature || '0.7');
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+          temperature
+        })
+      });
+      const data = await r.json();
+      if (data.error) return res.status(500).json({ error: data.error.message });
+      const text = data.choices?.[0]?.message?.content || '';
       res.status(200).json({ text });
     } catch(e) {
       res.status(500).json({ error: e.message });
