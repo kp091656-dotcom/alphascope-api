@@ -2777,16 +2777,16 @@ async function loadHeatmap() {
     const half = Math.ceil(ids.length / 2);
     const [valRows1, valRows2] = await Promise.all([
       sbFetch('stock_valuation_daily',
-        `stock_id=in.(${ids.slice(0, half).join(',')})&order=date.desc&limit=${half * 2}&select=stock_id,date,pbr,dividend_yield,per`),
+        `stock_id=in.(${ids.slice(0, half).join(',')})&order=date.desc&limit=${half * 2}&select=*`),
       sbFetch('stock_valuation_daily',
-        `stock_id=in.(${ids.slice(half).join(',')})&order=date.desc&limit=${half * 2}&select=stock_id,date,pbr,dividend_yield,per`),
+        `stock_id=in.(${ids.slice(half).join(',')})&order=date.desc&limit=${half * 2}&select=*`),
     ]).catch(() => [[], []]);
     const valRows = [...(valRows1 || []), ...(valRows2 || [])];
 
     // valuation lookup（每支取最新有 pbr 的一筆）
     const valMap = {};
     valRows.forEach(r => {
-      if (!valMap[r.stock_id] && parseFloat(r.pbr) > 0 && parseFloat(r.listed_shares) > 0)
+      if (!valMap[r.stock_id] && parseFloat(r.pbr) > 0) // listed_shares 欄位不存在，只檢查 pbr
         valMap[r.stock_id] = r;
     });
 
@@ -3263,6 +3263,19 @@ async function loadSectorIndexBar() {
       { kw: '觀光餐旅',       key: '觀光' },
       { kw: '油電燃氣',       key: '油電燃氣' },
       { kw: '綠能環保',       key: '綠能環保' },
+      // 追加：TWSE 常見指數名，原本未命中的
+      { kw: '塑膠工業',       key: '塑膠' },      // 塑膠工業類指數
+      { kw: '電器電纜',       key: '機電' },      // 電器電纜業類指數
+      { kw: '玻璃陶瓷',       key: '建材營造' },  // 玻璃陶瓷業類指數
+      { kw: '造紙',           key: '建材營造' },  // 造紙工業類指數
+      { kw: '水泥',           key: '建材營造' },  // 水泥工業類指數
+      { kw: '觀光',           key: '觀光' },      // 觀光事業類指數（舊名）
+      { kw: '農業科技',       key: '食品' },      // 農業科技業類指數
+      { kw: '生醫',           key: '生技醫療' },  // 生醫相關指數
+      { kw: '醫療',           key: '生技醫療' },  // 醫療器材類
+      { kw: '電子通路',       key: '零售' },      // 電子通路業類指數
+      { kw: '航空',           key: '航運' },      // 航空相關（歸入航運）
+      { kw: '數位',           key: '數位雲端' },  // 數位相關
     ];
 
     function matchKey(indexName) {
