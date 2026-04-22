@@ -730,7 +730,7 @@
   <div class="api-row" style="flex-wrap:nowrap;">
     <label>◆ AI 引擎</label>
     <span class="api-status ok" id="groqStatus" style="margin-left:0;">✓ 已啟用（已記住）</span>
-    <span class="api-hint">Gemini 1.5 Flash · Google AI · 每日 1,500 次免費請求</span>
+    <span class="api-hint">翻譯：Gemini 1.5 Flash · 分析：Groq llama-3.1 · Key 安全存於伺服器</span>
   </div>
 
   </div>
@@ -1329,7 +1329,7 @@ async function sbFetch(table, params) {
 
 <script>
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const geminiReady = true; // Gemini key 存在 Vercel 環境變數
+// AI keys 存在 Vercel 環境變數，無需前端輸入
 let allArticles = [];
 let displayedCount = 0;
 const PAGE_SIZE = 50;
@@ -1569,7 +1569,7 @@ async function fetchMarketaux() {
     generateBrief();
 
 
-    translateArticles(); // Gemini API via Vercel proxy
+    translateArticles(); // 翻譯走 Gemini，分析走 Groq
 
   } catch(e) {
     setStatus(`✗ ${e.message}`, 'err');
@@ -1624,23 +1624,23 @@ async function translateArticles() {
         } catch(e) {
           const is429 = e.message?.includes('429') || e.message?.includes('Rate limit');
           if (is429 && attempt === 0) {
-            setStatus('Groq 流量限制，等待 20 秒…', 'loading');
+            setStatus('Gemini 流量限制，等待 35 秒…', 'loading');
             await new Promise(r => setTimeout(r, 20000));
           }
         }
       }
 
       const done = labelOffset + Math.min(i + BATCH, arts.length);
-      setStatus(`Groq 翻譯中… ${done}/${targets.length}`, 'loading');
+      setStatus(`Gemini 翻譯中… ${done}/${targets.length}`, 'loading');
       renderFeed(getFiltered()); // 邊翻邊顯示
-      if (i + BATCH < arts.length) await new Promise(r => setTimeout(r, 500));
+      if (i + BATCH < arts.length) await new Promise(r => setTimeout(r, 4500)); // Gemini 免費 15 RPM
     }
   };
 
   // ── 第一波：前 25 篇 ──
   const wave1 = targets.slice(0, HALF);
   const wave2 = targets.slice(HALF);
-  setStatus(`Groq 翻譯中（第 1 波，共 ${wave1.length} 篇）…`, 'loading');
+  setStatus(`Gemini 翻譯中（第 1 波，共 ${wave1.length} 篇）…`, 'loading');
   await translateBatch(wave1, 0);
 
   // 有剩下的篇數才等待第二波
@@ -1651,7 +1651,7 @@ async function translateArticles() {
       await new Promise(r => setTimeout(r, 1000));
       setStatus(`等待 TPM 重置… ${s} 秒後繼續翻譯剩餘 ${wave2.length} 篇`, 'loading');
     }
-    setStatus(`Groq 翻譯中（第 2 波，共 ${wave2.length} 篇）…`, 'loading');
+    setStatus(`Gemini 翻譯中（第 2 波，共 ${wave2.length} 篇）…`, 'loading');
     await translateBatch(wave2, wave1.length);
   }
 
@@ -1740,7 +1740,20 @@ async function toggleReadMode(btn) {
 
 // ── AI: summarize via Gemini API ──
 async function callGemini(prompt, maxTokens = 800, temperature = 0.7) {
+  // 翻譯專用：走 Vercel proxy（Gemini key 存在環境變數，不暴露）
   const res = await fetch(`${API_BASE}?endpoint=gemini`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, maxTokens, temperature })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.text || '無法生成內容。';
+}
+
+async function callGroq(prompt, maxTokens = 800, temperature = 0.7) {
+  // 情緒分析/簡報/摘要：走 Vercel proxy（Key 存在環境變數）
+  const res = await fetch(`${API_BASE}?endpoint=groq`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, maxTokens, temperature })
@@ -1756,7 +1769,7 @@ async function doSummarize(id, title, desc) {
   if (btnEl) btnEl.disabled = true;
 
   sumEl.innerHTML = `
-    <div class="ai-analysis-label" style="color:var(--accent2)">◆ Gemini 分析中…</div>
+    <div class="ai-analysis-label" style="color:var(--accent2)">◆ Groq 分析中…</div>
     <div class="skeleton"><div class="skel-line"></div><div class="skel-line"></div><div class="skel-line" style="width:70%"></div></div>
   `;
 
@@ -1766,9 +1779,9 @@ async function doSummarize(id, title, desc) {
 標題：${title}
 內容：${desc || '（無詳細內容）'}`;
 
-    const text = await callGemini(prompt);
+    const text = await callGroq(prompt);
     sumEl.innerHTML = `
-      <div class="ai-analysis-label">◆ Gemini AI 分析 <span style="color:var(--accent3);margin-left:0.3rem">✓ 已生成</span></div>
+      <div class="ai-analysis-label">◆ Groq AI 分析 <span style="color:var(--accent3);margin-left:0.3rem">✓ 已生成</span></div>
       <div class="ai-analysis-text">${text}</div>
     `;
   } catch(e) {
@@ -1809,7 +1822,7 @@ async function generateBrief(market) {
   };
 
   if (!articles.length) {
-    el.innerHTML = `<div class="brief-text">${fallbacks[market]}<br><small style="color:var(--muted);font-size:0.68rem;margin-top:0.4rem;display:block">'⚠ 請先載入財經新聞'</small></div>`;
+    el.innerHTML = `<div class="brief-text">${fallbacks[market]}<br><small style="color:var(--muted);font-size:0.68rem;margin-top:0.4rem;display:block">${!groqApiKey ? '⚠ 請設定 Groq API Key 以啟用 AI 簡報' : '⚠ 請先載入財經新聞'}</small></div>`;
     return;
   }
 
@@ -1818,7 +1831,7 @@ async function generateBrief(market) {
 
 ${headlines || '（今日暫無相關新聞）'}`;
     const text = await Promise.race([
-      callGemini(prompt),
+      callGroq(prompt),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
     ]);
     el.innerHTML = `<div class="brief-text">${text || fallbacks[market]}</div>`;
@@ -2327,7 +2340,7 @@ ${postLines}`;
     let analyzed = false;
     for (let attempt = 0; attempt < 3 && !analyzed; attempt++) {
       try {
-        const rawText = await callGemini(prompt, 900, 0.15);
+        const rawText = await callGroq(prompt, 900, 0.15);
         const parsed = JSON.parse(rawText.replace(/```json|```/g,'').trim());
         parsed.forEach(r => {
           if (batch[r.idx]) {
@@ -2341,7 +2354,7 @@ ${postLines}`;
       } catch(e) {
         const is429 = e.message?.includes('429') || e.message?.includes('rate_limit');
         if (is429 && attempt < 2) {
-          const waitSec = attempt === 0 ? 20 : 40;
+          const waitSec = attempt === 0 ? 35 : 65;
           console.warn(`Gemini 429，等 ${waitSec} 秒後重試`); if(onStatus) onStatus(`AI 速率限制，等待 ${waitSec} 秒後重試…`);
           await new Promise(r => setTimeout(r, waitSec * 1000));
         } else {
@@ -2351,7 +2364,7 @@ ${postLines}`;
         }
       }
     }
-    if (i+BATCH < posts.length) await new Promise(r=>setTimeout(r,800));
+    if (i+BATCH < posts.length) await new Promise(r=>setTimeout(r,4500)); // Gemini 免費 15 RPM
   }
   return posts;
 }
@@ -2366,12 +2379,12 @@ async function sentGenerateSummary(posts) {
 
 請分析：1)整體情緒傾向 2)各來源差異 3)主要關注議題 4)短期市場風險提示`;
   try {
-    return await callGemini(prompt, 400, 0.5);
+    return await callGroq(prompt, 400, 0.5);
   } catch(e) { return null; }
 }
 
 async function startSentimentAnalysis() {
-  // Gemini ready
+  // Groq ready via Vercel proxy
   const btn = document.getElementById('sentimentAnalyzeBtn');
   const setMsg = (msg) => {
     document.getElementById('sentPostList').innerHTML = `<div style="text-align:center;padding:36px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.75rem;"><div class="spinner" style="margin:0 auto 12px;"></div>${msg}</div>`;
@@ -3454,13 +3467,12 @@ function setGroqStatus(msg, type) {
 function saveGroqKey() {
   const key = document.getElementById('groqKey').value.trim();
   if (!key) { setGroqStatus('請輸入 Key', 'err'); return; }
-  localStorage.setItem('nd_groq_key', key); // legacy
+  // key 存在 Vercel，無需前端儲存
   setGroqStatus('✓ 已啟用（已記住）', 'ok');
 }
 
 function loadSavedKeys() {
-  const gemk = localStorage.getItem('nd_groq_key');
-  // Gemini ready - no key needed in frontend
+  // Groq key 存在 Vercel 環境變數
 
 }
 
