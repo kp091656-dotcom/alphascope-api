@@ -1586,57 +1586,43 @@ async function fetchMarketaux() {
 async function translateArticles() {
   if (!allArticles.length) return;
 
-  // 只翻英文文章（跳過已是中文的 PTT 文章）
-  const targets = allArticles.filter(a => !/[\u4e00-\u9fff]/.test(a.title));
+  // 只翻英文 且 熱門以上（popularityScore >= 80）的文章
+  const targets = allArticles.filter(a =>
+    !/[一-鿿]/.test(a.title) && (a.popularityScore || 0) >= 80
+  );
+
   if (!targets.length) {
     setStatus(`✓ 翻譯完成，共 ${allArticles.length} 則`, 'ok');
     renderFeed(getFiltered()); renderTrending(); generateBrief();
     return;
   }
 
-  // ── 逐篇翻譯（每篇獨立請求，避免 Vercel 30s timeout）──
-  // 每篇間隔 4.5 秒，符合 Gemini 免費 15 RPM 限制
-  const DELAY_MS = 4500;
-  const MAX_ARTICLES = 30; // 最多翻 30 篇（約 2.5 分鐘）
-  const toTranslate = targets.slice(0, MAX_ARTICLES);
+  setStatus(`Groq 翻譯中（熱門 ${targets.length} 篇）…`, 'loading');
 
-  for (let i = 0; i < toTranslate.length; i++) {
-    const art = toTranslate[i];
-    const prompt = `翻譯成繁體中文，只輸出「標題 ||| 描述」一行，不要其他說明。\n標題：${art.title.replace(/[|]/g,' ')}\n描述：${(art.description||'').slice(0,60).replace(/[|]/g,' ')}`;
+  // 一次性全部合併成一個 prompt
+  const lines = targets.map((a, j) =>
+    `${j+1}. ${a.title.replace(/[|]/g,' ')} ||| ${(a.description||'').slice(0,60).replace(/[|]/g,' ')}`
+  ).join('\n');
+  const prompt = `你是財經翻譯專員。翻譯成繁體中文，格式不變，每行「編號. 標題 ||| 描述」，不要加說明。\n\n${lines}`;
 
-    let retryCount = 0;
-    while (retryCount < 2) {
-      try {
-        const raw = await callGemini(prompt, 200, 0.3);
-        const parts = raw.trim().split('|||');
-        if (parts[0]?.trim()) art.title       = parts[0].trim();
-        if (parts[1]?.trim()) art.description = parts[1].trim();
-        break;
-      } catch(e) {
-        const is429 = e.message?.includes('429') || e.message?.includes('quota') || e.message?.includes('RESOURCE_EXHAUSTED');
-        if (is429 && retryCount === 0) {
-          // 解析 retry 時間，最少等 15 秒
-          const retryMatch = e.message?.match(/retry in ([\d.]+)s/i);
-          const waitSec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) + 3 : 15;
-          setStatus(`Gemini 流量限制，等待 ${waitSec} 秒… (${i+1}/${toTranslate.length})`, 'loading');
-          await new Promise(r => setTimeout(r, waitSec * 1000));
-          retryCount++;
-        } else {
-          break; // 非 429 或已重試，跳過這篇
-        }
-      }
-    }
-
-    setStatus(`Gemini 翻譯中… ${i+1}/${toTranslate.length}`, 'loading');
-    renderFeed(getFiltered()); // 邊翻邊顯示
-
-    // 最後一篇不需等待
-    if (i < toTranslate.length - 1) {
-      await new Promise(r => setTimeout(r, DELAY_MS));
-    }
+  try {
+    const raw = await callGroq(prompt, 1200, 0.3);
+    raw.trim().split('\n').filter(l => l.match(/^\d+\./)).forEach(line => {
+      const nm = line.match(/^(\d+)\.\s*/);
+      if (!nm) return;
+      const idx = parseInt(nm[1]) - 1;
+      const rest = line.replace(/^\d+\.\s*/, '');
+      const parts = rest.split('|||');
+      const art = targets[idx];
+      if (!art) return;
+      if (parts[0]?.trim()) art.title       = parts[0].trim();
+      if (parts[1]?.trim()) art.description = parts[1].trim();
+    });
+  } catch(e) {
+    console.warn('Groq 翻譯失敗:', e.message);
   }
 
-  setStatus(`✓ 翻譯完成，共 ${allArticles.length} 則`, 'ok');
+  setStatus(`✓ 翻譯完成（熱門 ${targets.length} 篇），共 ${allArticles.length} 則`, 'ok');
   renderFeed(getFiltered());
   renderTrending();
   generateBrief();
