@@ -730,7 +730,7 @@
   <div class="api-row" style="flex-wrap:nowrap;">
     <label>◆ AI 引擎</label>
     <span class="api-status ok" id="groqStatus" style="margin-left:0;">✓ 已啟用（已記住）</span>
-    <span class="api-hint">翻譯：Gemini 1.5 Flash · 分析：Groq llama-3.1 · Key 安全存於伺服器</span>
+    <span class="api-hint">AI 引擎：Groq llama-3.1-8b · Key 安全存於伺服器</span>
   </div>
 
   </div>
@@ -1721,15 +1721,8 @@ async function toggleReadMode(btn) {
 
 // ── AI: summarize via Gemini API ──
 async function callGemini(prompt, maxTokens = 800, temperature = 0.7) {
-  // 翻譯專用：走 Vercel proxy（Gemini key 存在環境變數，不暴露）
-  const res = await fetch(`${API_BASE}?endpoint=gemini`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, maxTokens, temperature })
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.text || '無法生成內容。';
+  // 全部走 Groq proxy
+  return await callGroq(prompt, maxTokens, temperature);
 }
 
 async function callGroq(prompt, maxTokens = 800, temperature = 0.7) {
