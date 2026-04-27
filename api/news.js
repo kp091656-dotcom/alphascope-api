@@ -415,7 +415,10 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model: 'llama-3.1-8b-instant',
-          messages: [{ role: 'user', content: prompt }],
+          messages: [
+            { role: 'system', content: '你是專業財經助理。請務必使用繁體中文（Traditional Chinese）回答，嚴禁使用簡體中文。所有輸出皆以繁體中文呈現。' },
+            { role: 'user', content: prompt }
+          ],
           max_tokens: maxTokens,
           temperature
         })
