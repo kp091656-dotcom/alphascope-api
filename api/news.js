@@ -735,8 +735,8 @@ export default async function handler(req, res) {
       setTimeout(() => ctrl.abort(), 8000);
       try {
         const [opt, inst] = await Promise.all([
-          fetch(`${BASE}?dataset=TaiwanOptionDaily&data_id=TXO&start_date=${date}&end_date=${date}`, { signal: ctrl.signal, headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()),
-          fetch(`${BASE}?dataset=TaiwanOptionInstitutionalInvestors&data_id=TXO&start_date=${date}&end_date=${date}`, { signal: ctrl.signal, headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()),
+          fetch(`${BASE}?dataset=TaiwanOptionDaily&data_id=TXO&start_date=${date}&end_date=${date}`, { signal: ctrl.signal }).then(r => r.json()),
+          fetch(`${BASE}?dataset=TaiwanOptionInstitutionalInvestors&data_id=TXO&start_date=${date}&end_date=${date}`, { signal: ctrl.signal }).then(r => r.json()),
         ]);
         optData  = (opt.data  || []).filter(d => d.trading_session === 'position');
         instData = inst.data || [];
