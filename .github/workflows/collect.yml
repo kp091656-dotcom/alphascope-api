@@ -2,10 +2,10 @@ name: Daily Market Data Collector
 
 on:
   schedule:
-    # ① 台灣 15:00（UTC 07:00）— TWSE 盤後立即可取
-    - cron: '0 7 * * 1-5'
-    # ② 台灣 16:30（UTC 08:30）— FinMind 法人/選擇權/融資券更新完畢
-    - cron: '30 8 * * 1-5'
+    # ① 台灣 16:00（UTC 08:00）— TWSE 盤後確保更新完畢（收盤後約 2.5 小時）
+    - cron: '0 8 * * 1-5'
+    # ② 台灣 17:00（UTC 09:00）— FinMind 法人/選擇權/融資券更新完畢
+    - cron: '0 9 * * 1-5'
   workflow_dispatch:  # 允許手動觸發（不帶 mode 則全收）
 
 jobs:
@@ -30,6 +30,5 @@ jobs:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           VERCEL_API_BASE:      ${{ secrets.VERCEL_API_BASE }}
-          # 依觸發時間自動判斷模式（腳本內讀取）
-          COLLECT_MODE: ${{ github.event.schedule == '0 7 * * 1-5' && 'twse' || github.event.schedule == '30 8 * * 1-5' && 'finmind' || 'all' }}
+          COLLECT_MODE: ${{ github.event.schedule == '0 8 * * 1-5' && 'twse' || github.event.schedule == '0 9 * * 1-5' && 'finmind' || 'all' }}
         run: node .github/scripts/collect_market_data.js
