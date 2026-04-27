@@ -279,9 +279,9 @@ async function main() {
   console.log(`  模式：${MODE}`);
   console.log('═══════════════════════════════════════');
 
-  // twse  → 台灣時間 15:00，TWSE 盤後立即可取
-  // finmind → 台灣時間 16:30，FinMind 法人/選擇權/融資券更新完畢
-  // all   → 手動觸發時全收（向下相容）
+  // twse    → 台灣時間 16:00，TWSE 盤後確保更新完畢
+  // finmind → 台灣時間 17:00，FinMind 法人/選擇權/融資券更新完畢
+  // all     → 手動觸發時全收
   const tasks = [];
   const names = [];
 
