@@ -164,17 +164,46 @@ async function collectSectorIndex() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const raw = await res.json();
 
+    // Debug：印出前兩筆欄位名，確認 API 回傳格式
+    if (raw.length > 0) {
+      console.log(`  🔍 MI_INDEX 欄位：${Object.keys(raw[0]).join(', ')}`);
+      console.log(`  🔍 第一筆：${JSON.stringify(raw[0])}`);
+    }
+
     const tradeDate = lastTradingDay();
+
+    // TWSE MI_INDEX 實際欄位（可能是中文 key）：
+    // 嘗試多種可能的欄位名稱
     const rows = raw
-      .filter(r => r.Index && r.ChangePercent !== undefined)
-      .map(r => ({
-        date:       tradeDate,
-        index_name: r.Index,
-        chg_pct:    parseFloat(r.ChangePercent?.replace(/[%+,]/g, '')) || 0,
-        close:      parseFloat(r.ClosingIndex?.replace(/,/g, '')) || 0,
-        source:     'twse',
-      }))
-      .filter(r => r.close > 0);
+      .filter(r => {
+        // 排除報酬指數、槓桿反向版本（與 index.html 邏輯一致）
+        const name = r.Index || r.指數名稱 || r.IndexName || r.NAME || '';
+        return name && !name.includes('報酬') && !name.includes('槓桿') && !name.includes('反向');
+      })
+      .map(r => {
+        // 嘗試各種可能欄位名
+        const indexName = r.Index || r.指數名稱 || r.IndexName || r.NAME || '';
+        const closingStr = r.ClosingIndex || r.收盤指數 || r.CloseIndex || r.CLOSE || '';
+        const changeStr  = r.ChangePercent || r.漲跌百分比 || r.CHG_P || r.CHANGE_PERCENT || '0';
+        const prevStr    = r.PreviousClosingIndex || r.昨收指數 || r.PrevClose || '';
+        const close  = parseFloat(String(closingStr).replace(/[%+,]/g, '')) || 0;
+        const prev   = parseFloat(String(prevStr).replace(/,/g, ''))   || 0;
+        const chgPct = parseFloat(String(changeStr).replace(/[%+,]/g, '')) || 0;
+        return {
+          date:       tradeDate,
+          index_name: indexName,
+          chg_pct:    chgPct,   // ⚠️ sector_index_daily 已是百分比，直接存
+          close,
+          prev,
+          source:     'twse',
+        };
+      })
+      .filter(r => r.close > 0 && r.index_name);
+
+    if (!rows.length && raw.length > 0) {
+      // 格式完全不符時，印出更多資訊幫助偵錯
+      console.error(`  ⚠️ 過濾後 0 筆（原始 ${raw.length} 筆），請查看上方欄位 debug`);
+    }
 
     await sbUpsert('sector_index_daily', rows, 'date,index_name');
     return { ok: true, count: rows.length };
@@ -388,7 +417,7 @@ async function collectFutures() {
     const past = new Date(today - 30 * 86_400_000);
     const d1 = past.toISOString().slice(0, 10).replace(/-/g, '');
 
-    // stooq symbols
+    // ── stooq symbols ──
     const STOOQ = [
       { symbol: '%5Edax',   name: '德國DAX',      cat: '美股指數' },
       { symbol: '%5Esox',   name: '費城半導體',   cat: '美股指數' },
@@ -415,10 +444,15 @@ async function collectFutures() {
       { symbol: 'FETH.US',  name: '以太幣ETF',    cat: '加密貨幣' },
     ];
 
-    const stooqRows = await Promise.all(STOOQ.map(async s => {
+    // stooq 在 GitHub Actions 可能因 IP 被擋；逐筆嘗試，失敗靜默略過
+    const stooqRows = (await Promise.all(STOOQ.map(async s => {
       try {
         const url = `https://stooq.com/q/d/l/?s=${s.symbol}&d1=${d1}&d2=${d2}&i=d`;
-        const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const r = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(8000), // 8 秒逾時
+        });
+        if (!r.ok) return null;
         const csv = await r.text();
         if (!csv || csv.includes('No data') || csv.length < 20) return null;
         const lines = csv.trim().split('\n').filter(l => l && !l.startsWith('Date'));
@@ -429,7 +463,7 @@ async function collectFutures() {
         const prev  = parseFloat(pParts[4]);
         const hi    = parseFloat(lParts[2]);
         const lo    = parseFloat(lParts[3]);
-        const date  = lParts[0]; // YYYY-MM-DD
+        const date  = lParts[0];
         if (!close || isNaN(close)) return null;
         return {
           date, symbol: s.symbol, name: s.name, cat: s.cat,
@@ -438,9 +472,11 @@ async function collectFutures() {
           source: 'stooq',
         };
       } catch { return null; }
-    }));
+    }))).filter(Boolean);
 
-    // FinMind US indices
+    console.log(`  stooq: ${stooqRows.length}/${STOOQ.length} 筆成功`);
+
+    // ── FinMind US indices（需要 token）──
     const US_SYMBOLS = [
       { symbol: '^GSPC', name: 'S&P500',     cat: '美股指數' },
       { symbol: '^IXIC', name: '那斯達克',   cat: '美股指數' },
@@ -449,7 +485,7 @@ async function collectFutures() {
       { symbol: '^SOX',  name: '費城半導體', cat: '美股指數' },
     ];
 
-    const fmRows = FM_TOKEN ? await Promise.all(US_SYMBOLS.map(async s => {
+    const fmRows = FM_TOKEN ? (await Promise.all(US_SYMBOLS.map(async s => {
       try {
         const start = daysAgo(7);
         const rows  = await fmFetch('USStockPrice', { data_id: s.symbol, start_date: start });
@@ -464,18 +500,18 @@ async function collectFutures() {
           source: 'finmind',
         };
       } catch { return null; }
-    })) : [];
+    }))).filter(Boolean) : [];
 
-    const allRows = [
-      ...fmRows.filter(Boolean),
-      ...stooqRows.filter(Boolean),
-    ];
+    const allRows = [...fmRows, ...stooqRows];
+    console.log(`  FinMind: ${fmRows.length} 筆，stooq: ${stooqRows.length} 筆，合計: ${allRows.length} 筆`);
 
-    if (!allRows.length) throw new Error('全部商品資料取得失敗');
+    // 兩邊都拿不到才算失敗
+    if (!allRows.length) throw new Error('stooq 與 FinMind 均無法取得資料（可能被 IP 封鎖）');
+
     await sbUpsert('futures_daily', allRows, 'date,symbol');
     return { ok: true, count: allRows.length };
   } catch (e) {
-    console.error(`  ❌ 全球商品(FM) 失敗：${e.message}`);
+    console.error(`  ❌ 全球商品 失敗：${e.message}`);
     return { ok: false, error: e.message };
   }
 }
