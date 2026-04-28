@@ -1311,6 +1311,7 @@
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
           <span id="heatmapTs" class="ts-label"></span>
           <span class="info-badge" title="面積依市值^0.38壓縮，台積電佔約12%，保留相對大小">面積 ≈ 市值</span>
+          <button class="icon-btn" onclick="debugHeatmapDates()" title="查看 Supabase 各日期資料覆蓋率" style="font-size:0.58rem;opacity:0.7;">🔍 除錯</button>
           <button class="icon-btn" onclick="loadHeatmap()">↻ 更新</button>
         </div>
       </div>
@@ -3165,17 +3166,30 @@ async function loadHeatmap() {
     // PostgREST in() 語法：stock_id=in.(2330,2454,...)
     const inList = ids.join(',');
 
-    // ① stock_daily_twse：取最新 3 天資料（確保拿到最新交易日）
+    // ① stock_daily_twse：取最新 5 天資料（避免部分更新誤判）
     // 欄位：id, date, stock_id, name, close, prev, chg_pct, volume, source, created_at
     const twseRows = await sbFetch('stock_daily_twse',
-      `stock_id=in.(${inList})&order=date.desc&limit=${total * 3}&select=stock_id,date,close,prev,chg_pct,volume`);
+      `stock_id=in.(${inList})&order=date.desc&limit=${total * 5}&select=stock_id,date,close,prev,chg_pct,volume`);
 
     if (!twseRows?.length) throw new Error('stock_daily_twse 無資料');
 
-    // 找最新交易日
+    // 找最新交易日：取「最近的日期」，而非「出現次數最多的日期」
+    // 避免：新一天資料只更新部分股票時，被舊的完整資料蓋過
     const dateCounts = {};
     twseRows.forEach(r => { dateCounts[r.date] = (dateCounts[r.date] || 0) + 1; });
-    const latestDate = Object.entries(dateCounts).sort((a,b) => b[1]-a[1])[0][0];
+
+    // 依日期排序（新→舊），取第一個覆蓋率 ≥ 20% 的日期
+    const sortedDates = Object.entries(dateCounts).sort((a, b) => b[0].localeCompare(a[0]));
+    const minCoverage = Math.max(1, Math.floor(total * 0.2)); // 至少 20% 股票有資料才算有效日期
+    const latestEntry = sortedDates.find(([, cnt]) => cnt >= minCoverage) || sortedDates[0];
+    const latestDate  = latestEntry[0];
+    const latestCount = latestEntry[1];
+
+    // Debug log：幫助追蹤資料覆蓋狀況
+    console.group(`[Heatmap] Supabase 日期分布（${sortedDates.length} 個交易日）`);
+    sortedDates.slice(0, 5).forEach(([d, c]) =>
+      console.log(`  ${d}：${c}/${total} 支（${(c/total*100).toFixed(0)}%）${d === latestDate ? ' ← 採用' : ''}`));
+    console.groupEnd();
 
     // twse lookup（最新日期）
     const twseMap = {};
@@ -3238,7 +3252,12 @@ async function loadHeatmap() {
     const d = new Date(latestDate + 'T00:00:00+08:00');
     const weekdays = ['日','一','二','三','四','五','六'];
     const wd = weekdays[d.getDay()];
-    document.getElementById('heatmapTs').textContent = `資料日期：${latestDate}（週${wd} 收盤後）`;
+    const coveragePct = Math.round(latestCount / total * 100);
+    const coverageWarn = coveragePct < 80
+      ? ` ⚠ 資料僅 ${coveragePct}%（Supabase 尚未完整更新）`
+      : '';
+    document.getElementById('heatmapTs').textContent =
+      `資料日期：${latestDate}（週${wd} 收盤後）${coverageWarn}`;
     renderTreemap(heatmapData);
 
   } catch(e) {
@@ -4423,6 +4442,59 @@ async function loadSignalBacktest() {
   } catch(e) {
     console.warn('loadSignalBacktest error:', e);
     section.innerHTML = '';
+  }
+}
+
+// ── Heatmap 日期除錯工具 ──
+async function debugHeatmapDates() {
+  const ids = HM_STOCK_LIST.map(s => s.id);
+  const total = ids.length;
+  const inList = ids.join(',');
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;`;
+  const box = document.createElement('div');
+  box.style.cssText = `background:#fff;border-radius:12px;padding:1.5rem 1.8rem;max-width:540px;width:92%;max-height:80vh;overflow-y:auto;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;box-shadow:0 20px 60px rgba(0,0,0,0.25);`;
+  box.innerHTML = `<div style="font-size:0.9rem;font-weight:700;margin-bottom:1rem;color:#16161a;">&#128269; Supabase 資料覆蓋率診斷</div><div id="dbgBody" style="color:#6e6e7e;">查詢中…</div><button onclick="this.closest('[style*=fixed]').remove()" style="margin-top:1rem;padding:0.35rem 1rem;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;">關閉</button>`;
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  const dbgBody = box.querySelector('#dbgBody');
+  try {
+    const rows = await sbFetch('stock_daily_twse',
+      `stock_id=in.(${inList})&order=date.desc&limit=${total * 10}&select=stock_id,date`);
+
+    if (!rows?.length) { dbgBody.innerHTML = '&#10060; 無資料'; return; }
+
+    const dateCounts = {};
+    rows.forEach(r => { dateCounts[r.date] = (dateCounts[r.date] || 0) + 1; });
+    const sorted = Object.entries(dateCounts).sort((a, b) => b[0].localeCompare(a[0]));
+
+    let html = `<div style="margin-bottom:0.6rem;color:#16161a;">共查到 <b>${rows.length}</b> 筆 / 追蹤 <b>${total}</b> 支 / <b>${sorted.length}</b> 個交易日</div>`;
+    html += `<table style="width:100%;border-collapse:collapse;"><tr style="color:#6e6e7e;font-size:0.6rem;border-bottom:1px solid #eee;"><th style="text-align:left;padding:3px 6px;">日期</th><th style="text-align:left;padding:3px 6px;">星期</th><th style="text-align:right;padding:3px 6px;">筆數</th><th style="text-align:right;padding:3px 6px;">覆蓋率</th><th style="text-align:left;padding:3px 6px;">狀態</th></tr>`;
+    const wds = ['日','一','二','三','四','五','六'];
+    sorted.slice(0, 15).forEach(([date, cnt], i) => {
+      const d = new Date(date + 'T00:00:00+08:00');
+      const wd = wds[d.getDay()];
+      const pct = (cnt / total * 100).toFixed(0);
+      const warn = cnt < total * 0.5 ? '&#9888; 不完整' : cnt < total * 0.9 ? '&#9651; 部分' : '&#10003; 完整';
+      const warnColor = cnt < total * 0.5 ? '#dc2626' : cnt < total * 0.9 ? '#d97706' : '#16a34a';
+      html += `<tr style="border-bottom:1px solid #f0f0f5;${i===0?'background:#f0f4ff;':''}"><td style="padding:4px 6px;font-weight:${i===0?700:400};color:#16161a;">${date}</td><td style="padding:4px 6px;color:#6e6e7e;">週${wd}</td><td style="padding:4px 6px;text-align:right;">${cnt}</td><td style="padding:4px 6px;text-align:right;font-weight:600;">${pct}%</td><td style="padding:4px 6px;color:${warnColor};">${warn}${i===0?' &#8592; 最新':''}</td></tr>`;
+    });
+    html += '</table>';
+    const newest = sorted[0];
+    const newestPct = newest[1] / total * 100;
+    html += `<div style="margin-top:0.8rem;padding:0.6rem 0.75rem;border-radius:6px;background:${newestPct<80?'#fff7ed':'#f0fdf4'};border:1px solid ${newestPct<80?'#fed7aa':'#bbf7d0'};"><div style="font-weight:700;color:${newestPct<80?'#92400e':'#14532d'};margin-bottom:0.3rem;">診斷結論</div>`;
+    if (newestPct < 80) {
+      html += `<div style="color:#92400e;line-height:1.7;">最新日期 <b>${newest[0]}</b> 覆蓋率僅 <b>${newestPct.toFixed(0)}%</b><br>→ <b>Supabase Pipeline 未完整更新</b><br><br>可能原因：<br>① ETL 排程當日未執行<br>② 部分股票代碼在來源無資料<br>③ Supabase ingestion 中途失敗</div>`;
+    } else {
+      html += `<div style="color:#14532d;">最新日期 <b>${newest[0]}</b> 覆蓋率 <b>${newestPct.toFixed(0)}%</b>，資料狀態正常。</div>`;
+    }
+    html += '</div>';
+    dbgBody.innerHTML = html;
+  } catch(e) {
+    dbgBody.innerHTML = `&#10060; 查詢失敗：${e.message}`;
   }
 }
 
