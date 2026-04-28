@@ -2,33 +2,56 @@ name: Daily Market Data Collector
 
 on:
   schedule:
-    # ① 台灣 16:00（UTC 08:00）— TWSE 盤後確保更新完畢（收盤後約 2.5 小時）
+    # UTC 08:00 = 台灣 16:00（TWSE 收盤後 ~2小時，資料已更新）
     - cron: '0 8 * * 1-5'
-    # ② 台灣 17:00（UTC 09:00）— FinMind 法人/選擇權/融資券更新完畢
+    # UTC 09:00 = 台灣 17:00（FinMind 資料延遲，稍晚跑）
     - cron: '0 9 * * 1-5'
-  workflow_dispatch:  # 允許手動觸發（不帶 mode 則全收）
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '收集模式（twse / finmind / all）'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - twse
+          - finmind
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      - name: Install dependencies
-        run: npm install @supabase/supabase-js node-fetch
+      # 決定 COLLECT_MODE：
+      # - 手動觸發 → 用 inputs.mode
+      # - cron 08:00 → twse
+      # - cron 09:00 → finmind
+      - name: Set COLLECT_MODE
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "$(date -u +%H)" = "08" ]; then
+            echo "mode=twse" >> $GITHUB_OUTPUT
+          else
+            echo "mode=finmind" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Collect and store market data
+      - name: Run collect_market_data.js
         env:
+          # ✅ 從 GitHub Secrets 注入 — 必須在 repo Settings > Secrets > Actions 設定
+          FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          VERCEL_API_BASE:      ${{ secrets.VERCEL_API_BASE }}
-          COLLECT_MODE: ${{ github.event.schedule == '0 8 * * 1-5' && 'twse' || github.event.schedule == '0 9 * * 1-5' && 'finmind' || 'all' }}
+          COLLECT_MODE:         ${{ steps.mode.outputs.mode }}
         run: node .github/scripts/collect_market_data.js
