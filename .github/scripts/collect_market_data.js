@@ -30,7 +30,7 @@ async function fmFetch(dataset, params = {}) {
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${FM_TOKEN}` },
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(45_000), // 45 秒
   });
   if (!res.ok) throw new Error(`FinMind HTTP ${res.status} — ${dataset}`);
   const json = await res.json();
@@ -112,10 +112,12 @@ async function collectSectorIndex() {
         const indexName = r['指數']       || '';
         const close     = parseFloat((r['收盤指數'] || '').replace(/,/g, '')) || 0;
         const sign      = (r['漲跌']      || '').trim();
+        const chgPts    = parseFloat((r['漲跌點數'] || '').replace(/,/g, '')) || 0;
         const rawPct    = parseFloat((r['漲跌百分比'] || '').replace(/,/g, '')) || 0;
         const chgPct    = sign === '-' ? -rawPct : rawPct;
-        // sector_index_daily 實際欄位：date, index_name, close, chg_pct, source（無 prev）
-        return { date: tradeDate, index_name: indexName, close, chg_pct: chgPct, source: 'twse' };
+        const change    = sign === '-' ? -chgPts : chgPts;
+        // sector_index_daily 實際欄位（Supabase截圖確認）：date, index_name, close, change, chg_pct
+        return { date: tradeDate, index_name: indexName, close, change, chg_pct: chgPct };
       })
       .filter(r => r.close > 0 && r.index_name);
     if (!rows.length) {
@@ -328,13 +330,16 @@ async function collectFutures() {
     // ── FinMind（美股指數 + 商品）──
     // dataset 名稱已從 FinMind 文件確認
     const FM_ITEMS = [
-      { ds: 'USStockPrice',          id: '^GSPC',  name: 'S&P500',    cat: '美股指數', ck: 'Close' },
-      { ds: 'USStockPrice',          id: '^IXIC',  name: '那斯達克',  cat: '美股指數', ck: 'Close' },
-      { ds: 'USStockPrice',          id: '^DJI',   name: '道瓊',      cat: '美股指數', ck: 'Close' },
-      { ds: 'USStockPrice',          id: '^VIX',   name: 'VIX',       cat: '波動率',   ck: 'Close' },
-      { ds: 'GoldFuturesDailyPrice', id: '',       name: '黃金現貨',  cat: '金屬',     ck: 'price' },
-      { ds: 'CrudeOilPrices',        id: 'WTI',    name: 'WTI原油',   cat: '能源',     ck: 'price' },
-      { ds: 'CrudeOilPrices',        id: 'Brent',  name: 'Brent原油', cat: '能源',     ck: 'price' },
+      // 美股指數：USStockPrice 支援 ^GSPC, ^IXIC, ^DJI, ^VIX
+      { ds: 'USStockPrice',       id: '^GSPC',  name: 'S&P500',    cat: '美股指數', ck: 'Close' },
+      { ds: 'USStockPrice',       id: '^IXIC',  name: '那斯達克',  cat: '美股指數', ck: 'Close' },
+      { ds: 'USStockPrice',       id: '^DJI',   name: '道瓊',      cat: '美股指數', ck: 'Close' },
+      { ds: 'USStockPrice',       id: '^VIX',   name: 'VIX',       cat: '波動率',   ck: 'Close' },
+      // 黃金：正確 dataset 為 GoldPrice（GoldFuturesDailyPrice 為 422）
+      { ds: 'GoldPrice',          id: '',       name: '黃金現貨',  cat: '金屬',     ck: 'price' },
+      // 原油：data_id 應為 'WTI'/'Brent'，需確認大小寫
+      { ds: 'CrudeOilPrices',     id: 'WTI',    name: 'WTI原油',   cat: '能源',     ck: 'price' },
+      { ds: 'CrudeOilPrices',     id: 'Brent',  name: 'Brent原油', cat: '能源',     ck: 'price' },
     ];
 
     const fmRows = FM_TOKEN ? (await Promise.all(FM_ITEMS.map(async s => {
