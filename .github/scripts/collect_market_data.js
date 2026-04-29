@@ -116,7 +116,7 @@ async function collectSectorIndex() {
         // 漲跌百分比 直接是百分比數字（如 "1.54"），sector_index_daily 直接存
         const rawPct    = parseFloat((r['漲跌百分比'] || '').replace(/,/g, '')) || 0;
         const chgPct    = sign === '-' ? -rawPct : rawPct;
-        const prev      = close > 0 && chgPcts !== 0
+        const prev      = close > 0 && chgPct !== 0
           ? parseFloat((close / (1 + chgPct / 100)).toFixed(4)) : 0;
         return { date: tradeDate, index_name: indexName, close, prev, chg_pct: chgPct, source: 'twse' };
       })
@@ -189,6 +189,8 @@ async function collectMargin() {
     const data = await fmFetch('TaiwanStockTotalMarginPurchaseShortSale',
       { start_date: daysAgo(5), end_date: todayTW() });
     if (!data.length) throw new Error('無資料');
+    const names = [...new Set(data.map(r => r.name))];
+    console.log(`  🔍 FinMind name 值：${names.join(' | ')}`);
     const byDate = {};
     for (const r of data) {
       const dt = r.date?.slice(0, 10);
@@ -197,10 +199,11 @@ async function collectMargin() {
       const today = parseInt(r.TodayBalance) || 0;
       const yes   = parseInt(r.YesBalance)   || 0;
       const name  = r.name || '';
-      if (name.includes('融資')) {
+      // FinMind 實際 name 值可能是：「融資（含自償部分）」「融券」「借券賣出」等
+      if (name.includes('融資') && !name.includes('融券')) {
         byDate[dt].margin_balance = today;
         byDate[dt].margin_chg    = today - yes;
-      } else if (name.includes('融券')) {
+      } else if (name.includes('融券') || name.includes('借券')) {
         byDate[dt].short_balance = today;
         byDate[dt].short_chg    = today - yes;
       }
@@ -277,13 +280,9 @@ async function collectOptions() {
       date:            tradeDate,
       pc_ratio_vol:    callVol > 0 ? parseFloat((putVol  / callVol).toFixed(4)) : null,
       pc_ratio_oi:     callOI  > 0 ? parseFloat((putOI   / callOI).toFixed(4))  : null,
-      call_vol:        Math.round(callVol),
-      put_vol:         Math.round(putVol),
-      call_oi:         Math.round(callOI),
-      put_oi:          Math.round(putOI),
-      max_pain:        maxPain,
       foreign_opt_net: foreignLong - foreignShort,  // ← 前端用 foreign_opt_net
     };
+    // ⚠️ 只寫入 Supabase 已確認存在的欄位（call_vol/put_vol/call_oi/put_oi/max_pain 需先建欄位）
     await sbUpsert('options_daily', [row], 'date');
     return { ok: true, count: 1, date: tradeDate };
   } catch (e) { console.error(`  ❌ 選擇權 失敗：${e.message}`); return { ok: false, error: e.message }; }
