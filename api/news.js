@@ -389,6 +389,21 @@ export default async function handler(req, res) {
   if (endpoint === 'groq') {
     const GROQ_KEY = process.env.GROQ_API_KEY;
     if (!GROQ_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
+
+    // ── Owner Token 驗證（A+B 方案 — B 層：API 端）──
+    // Vercel 環境變數 OWNER_TOKEN_HASH = SHA-256(你的密碼)
+    // 前端在 header x-owner-token 傳明文密碼，後端 hash 後比對
+    const OWNER_HASH = process.env.OWNER_TOKEN_HASH;
+    if (OWNER_HASH) {
+      const crypto = require('crypto');
+      const incoming = req.headers['x-owner-token'] || '';
+      const incomingHash = crypto.createHash('sha256').update(incoming).digest('hex');
+      if (incomingHash !== OWNER_HASH) {
+        console.warn('[Groq] Unauthorized — missing or wrong owner token');
+        return res.status(403).json({ error: 'unauthorized', message: '需要 Owner 密碼才能使用 AI 功能' });
+      }
+    }
+
     let body = {};
     if (req.method === 'POST') {
       try {
