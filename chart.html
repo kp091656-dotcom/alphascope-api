@@ -460,11 +460,17 @@
       <div class="chart-title">
         <span id="chartStockName">— 請輸入股票代碼 —</span>
         <span class="stock-badge" id="chartStockId" style="display:none;"></span>
+        <a id="tvDirectLink" href="#" target="_blank" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--accent2);text-decoration:none;border:1px solid var(--accent2);padding:0.15rem 0.45rem;border-radius:4px;white-space:nowrap;" title="在 TradingView 網站直接開啟（不受 Widget 限制）">↗ TV 開啟</a>
       </div>
-      <div class="interval-btns">
-        <button class="interval-btn active" onclick="setInterval('D',this)">日</button>
-        <button class="interval-btn" onclick="setInterval('W',this)">週</button>
-        <button class="interval-btn" onclick="setInterval('M',this)">月</button>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <div id="twseNotice" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:#d97706;background:#fef3c7;border:1px solid #fde68a;border-radius:4px;padding:0.2rem 0.5rem;">
+          ⚠ 台股 Widget 需訂閱，可點 ↗ TV 開啟
+        </div>
+        <div class="interval-btns">
+          <button class="interval-btn active" onclick="setInterval('D',this)">日</button>
+          <button class="interval-btn" onclick="setInterval('W',this)">週</button>
+          <button class="interval-btn" onclick="setInterval('M',this)">月</button>
+        </div>
       </div>
     </div>
     <div id="tvContainer">
@@ -527,28 +533,28 @@
 
   // TradingView symbol mapping（各市場格式不同）
   const TV_SYMBOL_MAP = {
-    // 台灣加權指數
+    // 台灣加權指數（免費可用）
     'TAIEX':       'TWSE:TAIEX',
     'TWSE:IX0001': 'TWSE:IX0001',
     'TWSE:IX0010': 'TWSE:IX0010',
-    // 全球指數（TVC 為 TradingView 自有資料源，免費可用）
+    // 全球指數（TVC 免費可用）
     'SPX':   'SP:SPX',    'IXIC': 'NASDAQ:IXIC', 'DJI':  'DJ:DJI',
     'NI225': 'TVC:NI225', 'HSI':  'TVC:HSI',     'DAX':  'XETR:DAX',
     'VIX':   'TVC:VIX',  'SOX':  'NASDAQ:SOX',
     // 美元指數
     'DXY':   'TVC:DXY',
-    // 台指期（TradingView 正確格式：TWSE 交易所下的期貨）
-    'TXFR1': 'TWSE:TX1!',   // 台指期連續近月
-    'TXFR2': 'TWSE:TX2!',   // 台指期次月
-    // 美股期貨（連續合約用 1! 格式）
-    'ESFR1': 'CME_MINI:ES1!',   // S&P500 期貨
-    'NQFR1': 'CME_MINI:NQ1!',   // 那斯達克期貨
-    'YMER1': 'CBOT_MINI:YM1!',  // 道瓊期貨
+    // 台指期（TAIFEX 是正確交易所代碼，1! = 連續近月合約）
+    'TXFR1': 'TAIFEX:TX1!',    // 台指期近月
+    'TXFR2': 'TAIFEX:TX2!',    // 台指期次月
+    // 美股期貨連續合約（1! 格式）
+    'ESFR1': 'CME_MINI:ES1!',
+    'NQFR1': 'CME_MINI:NQ1!',
+    'YMER1': 'CBOT_MINI:YM1!',
     // 商品期貨
-    'CLR1!': 'NYMEX:CL1!',   // WTI 原油
-    'GCR1!': 'COMEX:GC1!',   // 黃金
-    'SIR1!': 'COMEX:SI1!',   // 白銀
-    'NGR1!': 'NYMEX:NG1!',   // 天然氣
+    'CLR1!': 'NYMEX:CL1!',
+    'GCR1!': 'COMEX:GC1!',
+    'SIR1!': 'COMEX:SI1!',
+    'NGR1!': 'NYMEX:NG1!',
     // 加密貨幣
     'BTCUSDT': 'BINANCE:BTCUSDT', 'ETHUSDT': 'BINANCE:ETHUSDT',
     // 外匯
@@ -601,10 +607,27 @@
 
     renderTVChart();
 
-    // Supabase 資料只有台股個股
+    // 台股/台指期：Widget 免費版有授權限制，顯示提示 + 直連 TV 連結
+    const tvLink = document.getElementById('tvDirectLink');
+    const twseNotice = document.getElementById('twseNotice');
     if (market === 'TWSE' || market === 'TW') {
+      const tvSym = getTVSymbol(raw, market);
+      tvLink.href = `https://www.tradingview.com/chart/?symbol=${tvSym}`;
+      tvLink.style.display = 'inline';
+      twseNotice.style.display = 'inline';
       loadSupabaseData(raw);
+    } else if (market === 'FUT' && (raw === 'TXFR1' || raw === 'TXFR2')) {
+      const tvSym = getTVSymbol(raw, market);
+      tvLink.href = `https://www.tradingview.com/chart/?symbol=${tvSym}`;
+      tvLink.style.display = 'inline';
+      twseNotice.style.display = 'inline';
+      document.getElementById('histCard').style.display = 'none';
+      document.getElementById('valCard').style.display  = 'none';
+      document.getElementById('priceBody').innerHTML =
+        `<div class="no-data" style="font-size:0.62rem;color:var(--muted);">即時報價請直接看 TradingView 圖表</div>`;
     } else {
+      tvLink.style.display = 'none';
+      twseNotice.style.display = 'none';
       document.getElementById('histCard').style.display = 'none';
       document.getElementById('valCard').style.display  = 'none';
       document.getElementById('priceBody').innerHTML =
