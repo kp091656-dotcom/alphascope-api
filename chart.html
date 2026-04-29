@@ -531,17 +531,24 @@
     'TAIEX':       'TWSE:TAIEX',
     'TWSE:IX0001': 'TWSE:IX0001',
     'TWSE:IX0010': 'TWSE:IX0010',
-    // 全球指數
-    'SPX':   'SP:SPX',  'IXIC': 'NASDAQ:IXIC', 'DJI':   'DJ:DJI',
-    'NI225': 'TVC:NI225','HSI':  'TVC:HSI',     'DAX':   'XETR:DAX',
-    'VIX':   'TVC:VIX', 'SOX':  'PHLX:SOX',
+    // 全球指數（TVC 為 TradingView 自有資料源，免費可用）
+    'SPX':   'SP:SPX',    'IXIC': 'NASDAQ:IXIC', 'DJI':  'DJ:DJI',
+    'NI225': 'TVC:NI225', 'HSI':  'TVC:HSI',     'DAX':  'XETR:DAX',
+    'VIX':   'TVC:VIX',  'SOX':  'NASDAQ:SOX',
     // 美元指數
     'DXY':   'TVC:DXY',
-    // 期貨（CME/TAIFEX）
-    'TXFR1': 'TAIFEX:TXFR1', 'TXFR2': 'TAIFEX:TXFR2',
-    'ESFR1': 'CME_MINI:ESR1!', 'NQFR1': 'CME_MINI:NQR1!', 'YMER1': 'CBOT_MINI:YMR1!',
-    'CLR1!': 'NYMEX:CLR1!',   'GCR1!': 'COMEX:GCR1!',
-    'SIR1!': 'COMEX:SIR1!',   'NGR1!': 'NYMEX:NGR1!',
+    // 台指期（TradingView 正確格式：TWSE 交易所下的期貨）
+    'TXFR1': 'TWSE:TX1!',   // 台指期連續近月
+    'TXFR2': 'TWSE:TX2!',   // 台指期次月
+    // 美股期貨（連續合約用 1! 格式）
+    'ESFR1': 'CME_MINI:ES1!',   // S&P500 期貨
+    'NQFR1': 'CME_MINI:NQ1!',   // 那斯達克期貨
+    'YMER1': 'CBOT_MINI:YM1!',  // 道瓊期貨
+    // 商品期貨
+    'CLR1!': 'NYMEX:CL1!',   // WTI 原油
+    'GCR1!': 'COMEX:GC1!',   // 黃金
+    'SIR1!': 'COMEX:SI1!',   // 白銀
+    'NGR1!': 'NYMEX:NG1!',   // 天然氣
     // 加密貨幣
     'BTCUSDT': 'BINANCE:BTCUSDT', 'ETHUSDT': 'BINANCE:ETHUSDT',
     // 外匯
@@ -608,8 +615,8 @@
   function getTVSymbol(id, market) {
     // 優先查 mapping table
     if (TV_SYMBOL_MAP[id]) return TV_SYMBOL_MAP[id];
-    // 台股
-    if (market === 'TWSE' || market === 'TW' || /^\d{4,5}$/.test(id)) return `TWSE:${id}`;
+    // 台股個股：TSE: 前綴（免費版可用，TWSE: 在免費版會提示需訂閱）
+    if (market === 'TWSE' || market === 'TW' || /^\d{4,5}$/.test(id)) return `TSE:${id}`;
     // 外匯
     if (market === 'FX') return `FX:${id}`;
     // 期貨
