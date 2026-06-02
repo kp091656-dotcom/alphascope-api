@@ -236,64 +236,208 @@ async function collectMargin() {
 }
 
 async function collectOptions() {
-  console.log('🎯 台指選擇權（FinMind）...');
+  console.log('🎯 台指選擇權（FinMind TaiwanOptionDaily）...');
   try {
-    let optData = [], tradeDate = '';
+    // ── 1. 找最近有效交易日，取全部 TXO 資料（含所有 contract_date）──
+    let allOptData = [], tradeDate = '';
     for (let i = 0; i <= 7; i++) {
       const d = new Date(Date.now() - i * 86_400_000);
       if (d.getDay() === 0 || d.getDay() === 6) continue;
       const ds = d.toISOString().slice(0, 10);
       const rows = await fmFetch('TaiwanOptionDaily', { data_id: 'TXO', start_date: ds, end_date: ds });
-      if ((rows || []).length > 0) { optData = rows; tradeDate = ds; break; }
+      if ((rows || []).length > 0) { allOptData = rows; tradeDate = ds; break; }
     }
-    if (!optData.length) throw new Error('找不到選擇權資料（近 7 個交易日）');
-    console.log(`  📅 日期：${tradeDate}，${optData.length} 筆`);
+    if (!allOptData.length) throw new Error('找不到選擇權資料（近 7 個交易日）');
 
-    let callVol = 0, putVol = 0, callOI = 0, putOI = 0;
-    const byStrike = {};
-    for (const r of optData) {
-      const cp  = (r.call_put || '').trim().toUpperCase();
-      const vol = parseFloat(r.volume)        || 0;
-      const oi  = parseFloat(r.open_interest) || 0;
-      const sp  = parseFloat(r.strike_price)  || 0;
-      if (cp === 'C' || cp === 'CALL') { callVol += vol; callOI += oi; }
-      if (cp === 'P' || cp === 'PUT')  { putVol  += vol; putOI  += oi; }
-      if (sp > 0) {
-        if (!byStrike[sp]) byStrike[sp] = { call: 0, put: 0 };
-        if (cp === 'C' || cp === 'CALL') byStrike[sp].call += oi;
-        if (cp === 'P' || cp === 'PUT')  byStrike[sp].put  += oi;
+    // ── 2. 只取日盤（position session），排除夜盤 ──
+    const optData = allOptData.filter(r => {
+      const sess = (r.trading_session || r.session || '').toLowerCase();
+      // FinMind trading_session: 'position'=日盤, 'after_market'=夜盤
+      return sess === 'position' || sess === '';  // 空字串表示未區分，保留
+    });
+    console.log(`  📅 日期：${tradeDate}，原始 ${allOptData.length} 筆，日盤 ${optData.length} 筆`);
+
+    // Debug：印出 contract_date 種類，確認週五合約格式
+    const contractDates = [...new Set(optData.map(r => r.contract_date || ''))].sort();
+    console.log(`  🔍 contract_date 種類（前10）：${contractDates.slice(0, 10).join(', ')}`);
+
+    // ── 3. 依合約類型分類 ──
+    // FinMind contract_date 格式：
+    //   月選擇權（TXO）：YYYY-MM（近月）
+    //   週三選擇權（TX1/TX2/TX4/TX5）：W1/W2/W4/W5 格式 → 但 FinMind 在 TXO data_id 下統一回傳
+    //   週五選擇權（TXU/TXV...）：F1/F2/F3/F4/F5 格式（已確認）
+    const isMonthly = (cd) => /^\d{4}-\d{2}$/.test(cd);     // YYYY-MM
+    const isWed     = (cd) => /^W[1245]$/.test(cd);          // W1/W2/W4/W5（週三到期）
+    const isFri     = (cd) => /^F[1-5]$/.test(cd);           // F1/F2/F3/F4/F5（週五到期）
+
+    // 找近月合約（日期最近的 YYYY-MM）
+    const monthlyCDs = contractDates.filter(isMonthly).sort();
+    const nearMonthCD = monthlyCDs[0] || null;  // 最近的月份
+    console.log(`  📌 近月合約：${nearMonthCD}，週三合約：${contractDates.filter(isWed).join('/')}，週五合約：${contractDates.filter(isFri).join('/')}`);
+
+    // 聚合函式：給定篩選條件，計算 callOI/putOI/callVol/putVol
+    const aggregate = (filter) => {
+      let callOI = 0, putOI = 0, callVol = 0, putVol = 0;
+      const byStrike = {};
+      for (const r of optData) {
+        if (!filter(r.contract_date || '')) continue;
+        const cp  = (r.call_put || '').trim().toUpperCase();
+        const oi  = parseFloat(r.open_interest) || 0;
+        const vol = parseFloat(r.volume)        || 0;
+        const sp  = parseFloat(r.strike_price)  || 0;
+        if (cp === 'C') { callOI += oi; callVol += vol; }
+        if (cp === 'P') { putOI  += oi; putVol  += vol; }
+        if (sp > 0 && oi > 0) {
+          if (!byStrike[sp]) byStrike[sp] = { call: 0, put: 0 };
+          if (cp === 'C') byStrike[sp].call += oi;
+          if (cp === 'P') byStrike[sp].put  += oi;
+        }
+      }
+      return { callOI, putOI, callVol, putVol, byStrike };
+    };
+
+    // 全部合約
+    const all      = aggregate(() => true);
+    // 近月合約
+    const monthly  = nearMonthCD ? aggregate(cd => cd === nearMonthCD) : { callOI: 0, putOI: 0, callVol: 0, putVol: 0, byStrike: {} };
+    // 近週三合約（取第一個 W 合約）
+    const wedCDs   = contractDates.filter(isWed);
+    const nearWedCD = wedCDs[0] || null;
+    const wed      = nearWedCD ? aggregate(cd => cd === nearWedCD) : { callOI: 0, putOI: 0, byStrike: {} };
+    // 近週五合約（取第一個 F 合約）
+    const friCDs   = contractDates.filter(isFri);
+    const nearFriCD = friCDs[0] || null;
+    const fri      = nearFriCD ? aggregate(cd => cd === nearFriCD) : { callOI: 0, putOI: 0, byStrike: {} };
+
+    console.log(`  📊 全部：Call OI=${all.callOI} Put OI=${all.putOI}`);
+    console.log(`  📊 近月（${nearMonthCD}）：Call OI=${monthly.callOI} Put OI=${monthly.putOI}`);
+    if (nearWedCD) console.log(`  📊 近週三（${nearWedCD}）：Call OI=${wed.callOI} Put OI=${wed.putOI}`);
+    if (nearFriCD) console.log(`  📊 近週五（${nearFriCD}）：Call OI=${fri.callOI} Put OI=${fri.putOI}`);
+
+    // ── 4. Max Pain：取距今最近到期的合約計算（月/週三/週五，誰最快到期用誰）──
+    // 推算各合約的到期日：
+    //   月選（YYYY-MM）→ 該月第三個週三
+    //   近週三（W1）   → 從 tradeDate 起算，最近一個週三（含當天）
+    //   近週五（F1）   → 從 tradeDate 起算，最近一個週五（含當天）
+    const tradeDateObj = new Date(tradeDate + 'T00:00:00Z');
+
+    const getMonthlyExpiry = (cd) => {
+      // cd = "YYYY-MM"，找該月第三個週三
+      const [y, m] = cd.split('-').map(Number);
+      let count = 0;
+      for (let day = 1; day <= 31; day++) {
+        const d = new Date(Date.UTC(y, m - 1, day));
+        if (d.getMonth() !== m - 1) break;
+        if (d.getDay() === 3) { count++; if (count === 3) return d; }
+      }
+      return null;
+    };
+
+    const getNextWeekday = (targetDay) => {
+      // 從 tradeDate 起，找最近（含當天）的 targetDay（3=週三, 5=週五）
+      const d = new Date(tradeDateObj);
+      for (let i = 0; i < 7; i++) {
+        if (d.getDay() === targetDay) return d;
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+      return null;
+    };
+
+    // 各合約候選（label, byStrike, expiry）
+    const mpCandidates = [];
+    if (nearMonthCD) {
+      const exp = getMonthlyExpiry(nearMonthCD);
+      if (exp) mpCandidates.push({ label: `近月 ${nearMonthCD}`, byStrike: monthly.byStrike, expiry: exp });
+    }
+    if (nearWedCD) {
+      const exp = getNextWeekday(3);
+      if (exp) mpCandidates.push({ label: `近週三 ${nearWedCD}`, byStrike: wed.byStrike, expiry: exp });
+    }
+    if (nearFriCD) {
+      const exp = getNextWeekday(5);
+      if (exp) mpCandidates.push({ label: `近週五 ${nearFriCD}`, byStrike: fri.byStrike, expiry: exp });
+    }
+
+    // 取到期日最近（>= tradeDate）的那個；若全部已過期 fallback 到近月
+    const validCandidates = mpCandidates.filter(c => c.expiry >= tradeDateObj);
+    validCandidates.sort((a, b) => a.expiry - b.expiry);
+    const mpCandidate = validCandidates[0] || mpCandidates[0] || null;
+
+    let maxPain = null;
+    if (mpCandidate) {
+      const mpStrikes = Object.keys(mpCandidate.byStrike).map(Number).sort((a, b) => a - b);
+      if (mpStrikes.length > 0) {
+        let minLoss = Infinity;
+        for (const settle of mpStrikes) {
+          let loss = 0;
+          for (const sp of mpStrikes) {
+            if (settle < sp) loss += (sp - settle) * mpCandidate.byStrike[sp].call;
+            if (settle > sp) loss += (settle - sp) * mpCandidate.byStrike[sp].put;
+          }
+          if (loss < minLoss) { minLoss = loss; maxPain = settle; }
+        }
+        console.log(`  🎯 Max Pain（${mpCandidate.label}，到期 ${mpCandidate.expiry.toISOString().slice(0,10)}）：${maxPain}`);
       }
     }
 
-    const strikes = Object.keys(byStrike).map(Number).sort((a, b) => a - b);
-    let maxPain = null, minLoss = Infinity;
-    for (const settle of strikes) {
-      let loss = 0;
-      for (const sp of strikes) {
-        if (settle < sp) loss += (sp - settle) * byStrike[sp].call;
-        if (settle > sp) loss += (settle - sp) * byStrike[sp].put;
-      }
-      if (loss < minLoss) { minLoss = loss; maxPain = settle; }
-    }
-
-    let foreignLong = 0, foreignShort = 0;
+    // ── 5. 三大法人選擇權淨部位（外資/投信/自營商 × CALL/PUT）──
+    let callForeignNet = null, callTrustNet = null, callDealerNet = null;
+    let putForeignNet  = null, putTrustNet  = null, putDealerNet  = null;
     try {
       const inst = await fmFetch('TaiwanOptionInstitutionalInvestors',
         { data_id: 'TXO', start_date: tradeDate, end_date: tradeDate });
+      console.log(`  🔍 法人選擇權資料：${inst.length} 筆`);
+      if (inst.length > 0) console.log(`  🔍 第一筆欄位：${Object.keys(inst[0]).join(', ')}`);
+
       for (const r of (inst || [])) {
-        const inv = r.institutional_investors || r.name || '';
-        if (inv.includes('外資')) {
-          foreignLong  += parseInt(r.long_open_interest_balance_volume)  || 0;
-          foreignShort += parseInt(r.short_open_interest_balance_volume) || 0;
+        const inv  = (r.institutional_investors || r.name || '').trim();
+        const cp   = (r.call_put || '').trim().toUpperCase();
+        const lBal = parseInt(r.long_open_interest_balance_volume)  || 0;
+        const sBal = parseInt(r.short_open_interest_balance_volume) || 0;
+        const net  = lBal - sBal;
+
+        if (cp === 'C') {
+          if (inv.includes('外資') && !inv.includes('自營商')) callForeignNet = (callForeignNet || 0) + net;
+          else if (inv.includes('投信'))  callTrustNet  = (callTrustNet  || 0) + net;
+          else if (inv.includes('自營商')) callDealerNet = (callDealerNet || 0) + net;
+        } else if (cp === 'P') {
+          if (inv.includes('外資') && !inv.includes('自營商')) putForeignNet = (putForeignNet || 0) + net;
+          else if (inv.includes('投信'))  putTrustNet  = (putTrustNet  || 0) + net;
+          else if (inv.includes('自營商')) putDealerNet = (putDealerNet || 0) + net;
         }
       }
+      console.log(`  ✅ CALL 法人淨口：外資 ${callForeignNet} 投信 ${callTrustNet} 自營 ${callDealerNet}`);
+      console.log(`  ✅ PUT  法人淨口：外資 ${putForeignNet}  投信 ${putTrustNet}  自營 ${putDealerNet}`);
     } catch (e) { console.warn(`  ⚠️ 法人選擇權資料失敗：${e.message}`); }
 
+    // ── 6. 組合寫入 ──
     const row = {
-      date:            tradeDate,
-      pc_ratio_vol:    callVol > 0 ? parseFloat((putVol  / callVol).toFixed(4)) : null,
-      pc_ratio_oi:     callOI  > 0 ? parseFloat((putOI   / callOI).toFixed(4))  : null,
-      foreign_opt_net: foreignLong - foreignShort,
+      date:                   tradeDate,
+      // 全部合約
+      pc_ratio_oi:            all.callOI > 0 ? parseFloat((all.putOI / all.callOI).toFixed(4)) : null,
+      call_oi:                all.callOI || null,
+      put_oi:                 all.putOI  || null,
+      // 近月合約
+      pc_ratio_oi_monthly:    monthly.callOI > 0 ? parseFloat((monthly.putOI / monthly.callOI).toFixed(4)) : null,
+      call_oi_monthly:        monthly.callOI || null,
+      put_oi_monthly:         monthly.putOI  || null,
+      // 近週三合約
+      pc_ratio_oi_wed:        wed.callOI > 0 ? parseFloat((wed.putOI / wed.callOI).toFixed(4)) : null,
+      call_oi_wed:            wed.callOI || null,
+      put_oi_wed:             wed.putOI  || null,
+      // 近週五合約（F1）
+      pc_ratio_oi_fri:        fri.callOI > 0 ? parseFloat((fri.putOI / fri.callOI).toFixed(4)) : null,
+      call_oi_fri:            fri.callOI || null,
+      put_oi_fri:             fri.putOI  || null,
+      // Max Pain（最近到期合約）
+      max_pain:               maxPain || null,
+      // 法人淨口
+      call_foreign_net:       callForeignNet,
+      call_trust_net:         callTrustNet,
+      call_dealer_net:        callDealerNet,
+      put_foreign_net:        putForeignNet,
+      put_trust_net:          putTrustNet,
+      put_dealer_net:         putDealerNet,
     };
     await sbUpsert('options_daily', [row], 'date');
     return { ok: true, count: 1, date: tradeDate };
@@ -1082,16 +1226,20 @@ async function collectAlphaReport() {
     let optBlock = '【選擇權市場】（資料暫無）';
     try {
       const opt = (await fetch(
-        `${SUPABASE_URL}/rest/v1/options_daily?order=date.desc&limit=1&select=date,pc_ratio_vol,pc_ratio_oi,max_pain,call_oi,put_oi`,
+        `${SUPABASE_URL}/rest/v1/options_daily?order=date.desc&limit=1&select=date,pc_ratio_oi,pc_ratio_oi_monthly,pc_ratio_oi_wed,pc_ratio_oi_fri,max_pain,call_oi,put_oi,call_foreign_net,put_foreign_net`,
         { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
       ).then(r => r.json()))?.[0] || null;
       if (opt) {
-        const pcOI  = opt.pc_ratio_oi  != null ? opt.pc_ratio_oi.toFixed(3)  : 'N/A';
-        const pcVol = opt.pc_ratio_vol != null ? opt.pc_ratio_vol.toFixed(3) : 'N/A';
+        const pcAll = opt.pc_ratio_oi         != null ? opt.pc_ratio_oi.toFixed(3)         : 'N/A';
+        const pcMon = opt.pc_ratio_oi_monthly != null ? opt.pc_ratio_oi_monthly.toFixed(3) : 'N/A';
+        const pcWed = opt.pc_ratio_oi_wed     != null ? opt.pc_ratio_oi_wed.toFixed(3)     : 'N/A';
+        const pcFri = opt.pc_ratio_oi_fri     != null ? opt.pc_ratio_oi_fri.toFixed(3)     : 'N/A';
+        const fNet  = n => n != null ? (n > 0 ? `+${n}` : `${n}`) : 'N/A';
         optBlock = `【選擇權市場（${opt.date}）】
-P/C OI比值：${pcOI}（>1偏空，<1偏多）　P/C 量比值：${pcVol}
-Max Pain：${opt.max_pain ?? 'N/A'}　Call OI：${opt.call_oi ?? 'N/A'}　Put OI：${opt.put_oi ?? 'N/A'}`;
-        console.log(`  ✅ 選擇權：P/C OI=${pcOI}，Max Pain=${opt.max_pain}`);
+P/C OI 全部：${pcAll}　近月：${pcMon}（>1偏空，<1偏多）　週三：${pcWed}　週五：${pcFri}
+Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi ?? 'N/A'}　Put OI：${opt.put_oi ?? 'N/A'}
+外資 CALL 淨口：${fNet(opt.call_foreign_net)}　PUT 淨口：${fNet(opt.put_foreign_net)}`;
+        console.log(`  ✅ 選擇權：P/C OI全部=${pcAll} 近月=${pcMon}，Max Pain=${opt.max_pain}`);
       }
     } catch(e) { console.warn('  ⚠️  options_daily：' + e.message); }
 
