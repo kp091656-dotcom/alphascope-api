@@ -249,15 +249,21 @@ async function collectOptions() {
     }
     if (!allOptData.length) throw new Error('找不到選擇權資料（近 7 個交易日）');
 
-    // ── 2. 只取日盤（position session），排除夜盤 ──
+    // ── 2. Debug：先印出 trading_session 實際值，再決定過濾方式 ──
+    const sessions = [...new Set(allOptData.map(r => r.trading_session ?? r.session ?? '(null)'))];
+    console.log(`  🔍 trading_session 實際值：${sessions.join(' | ')}`);
+    const allContractDates = [...new Set(allOptData.map(r => r.contract_date || ''))].sort();
+    console.log(`  🔍 contract_date 種類（前10，未過濾）：${allContractDates.slice(0, 10).join(', ')}`);
+
+    // 只取日盤，排除夜盤
+    // FinMind 實際值待確認（可能是 'position'/'after_market' 或其他）
     const optData = allOptData.filter(r => {
-      const sess = (r.trading_session || r.session || '').toLowerCase();
-      // FinMind trading_session: 'position'=日盤, 'after_market'=夜盤
-      return sess === 'position' || sess === '';  // 空字串表示未區分，保留
+      const sess = (r.trading_session ?? r.session ?? '').toLowerCase();
+      // 排除明確是夜盤的；若欄位不存在（null/空）則保留
+      return sess !== 'after_market' && sess !== 'night' && sess !== 'aftermarket';
     });
     console.log(`  📅 日期：${tradeDate}，原始 ${allOptData.length} 筆，日盤 ${optData.length} 筆`);
 
-    // Debug：印出 contract_date 種類，確認週五合約格式
     const contractDates = [...new Set(optData.map(r => r.contract_date || ''))].sort();
     console.log(`  🔍 contract_date 種類（前10）：${contractDates.slice(0, 10).join(', ')}`);
 
