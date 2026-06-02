@@ -238,47 +238,42 @@ async function collectMargin() {
 async function collectOptions() {
   console.log('🎯 台指選擇權（FinMind TaiwanOptionDaily）...');
   try {
-    // ── 1. 找最近有效交易日，取全部 TXO 資料（含所有 contract_date）──
+    // ── 1. 找最近有「日盤」資料的交易日 ──
+    // FinMind trading_session: 'after_market'=夜盤；日盤資料收盤後才有，當天早上只有夜盤
     let allOptData = [], tradeDate = '';
     for (let i = 0; i <= 7; i++) {
       const d = new Date(Date.now() - i * 86_400_000);
       if (d.getDay() === 0 || d.getDay() === 6) continue;
       const ds = d.toISOString().slice(0, 10);
       const rows = await fmFetch('TaiwanOptionDaily', { data_id: 'TXO', start_date: ds, end_date: ds });
-      if ((rows || []).length > 0) { allOptData = rows; tradeDate = ds; break; }
+      if (!(rows || []).length) continue;
+      const dayRows = rows.filter(r => {
+        const sess = (r.trading_session ?? r.session ?? '').toLowerCase();
+        return sess !== 'after_market' && sess !== 'night' && sess !== 'aftermarket';
+      });
+      const sessList = [...new Set(rows.map(r => r.trading_session ?? r.session ?? '(null)'))];
+      console.log(`  🔍 ${ds}：${rows.length} 筆，session=${sessList.join('|')}，日盤=${dayRows.length} 筆`);
+      if (dayRows.length > 0) { allOptData = dayRows; tradeDate = ds; break; }
     }
-    if (!allOptData.length) throw new Error('找不到選擇權資料（近 7 個交易日）');
+    if (!allOptData.length) throw new Error('找不到日盤選擇權資料（近 7 個交易日）');
 
-    // ── 2. Debug：先印出 trading_session 實際值，再決定過濾方式 ──
-    const sessions = [...new Set(allOptData.map(r => r.trading_session ?? r.session ?? '(null)'))];
-    console.log(`  🔍 trading_session 實際值：${sessions.join(' | ')}`);
-    const allContractDates = [...new Set(allOptData.map(r => r.contract_date || ''))].sort();
-    console.log(`  🔍 contract_date 種類（前10，未過濾）：${allContractDates.slice(0, 10).join(', ')}`);
-
-    // 只取日盤，排除夜盤
-    // FinMind 實際值待確認（可能是 'position'/'after_market' 或其他）
-    const optData = allOptData.filter(r => {
-      const sess = (r.trading_session ?? r.session ?? '').toLowerCase();
-      // 排除明確是夜盤的；若欄位不存在（null/空）則保留
-      return sess !== 'after_market' && sess !== 'night' && sess !== 'aftermarket';
-    });
-    console.log(`  📅 日期：${tradeDate}，原始 ${allOptData.length} 筆，日盤 ${optData.length} 筆`);
-
+    // ── 2. contract_date 格式（已確認）──
+    // 月選：YYYYMM（e.g. 202606）
+    // 週三：YYYYMMWx（e.g. 202606W1）
+    // 週五：YYYYMMFx（e.g. 202606F1）
+    const optData = allOptData;
     const contractDates = [...new Set(optData.map(r => r.contract_date || ''))].sort();
+    console.log(`  📅 日期：${tradeDate}，日盤 ${optData.length} 筆`);
     console.log(`  🔍 contract_date 種類（前10）：${contractDates.slice(0, 10).join(', ')}`);
 
     // ── 3. 依合約類型分類 ──
-    // FinMind contract_date 格式：
-    //   月選擇權（TXO）：YYYY-MM（近月）
-    //   週三選擇權（TX1/TX2/TX4/TX5）：W1/W2/W4/W5 格式 → 但 FinMind 在 TXO data_id 下統一回傳
-    //   週五選擇權（TXU/TXV...）：F1/F2/F3/F4/F5 格式（已確認）
-    const isMonthly = (cd) => /^\d{4}-\d{2}$/.test(cd);     // YYYY-MM
-    const isWed     = (cd) => /^W[1245]$/.test(cd);          // W1/W2/W4/W5（週三到期）
-    const isFri     = (cd) => /^F[1-5]$/.test(cd);           // F1/F2/F3/F4/F5（週五到期）
+    const isMonthly = (cd) => /^[0-9]{6}$/.test(cd);           // YYYYMM（月選）
+    const isWed     = (cd) => /^[0-9]{6}W[1245]$/.test(cd);    // YYYYMMWx（週三）
+    const isFri     = (cd) => /^[0-9]{6}F[1-5]$/.test(cd);     // YYYYMMFx（週五）
 
-    // 找近月合約（日期最近的 YYYY-MM）
+    // 找近月合約（字串排序取最小 = 最近的月份）
     const monthlyCDs = contractDates.filter(isMonthly).sort();
-    const nearMonthCD = monthlyCDs[0] || null;  // 最近的月份
+    const nearMonthCD = monthlyCDs[0] || null;
     console.log(`  📌 近月合約：${nearMonthCD}，週三合約：${contractDates.filter(isWed).join('/')}，週五合約：${contractDates.filter(isFri).join('/')}`);
 
     // 聚合函式：給定篩選條件，計算 callOI/putOI/callVol/putVol
