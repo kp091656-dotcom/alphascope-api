@@ -57,6 +57,16 @@ const TABLES = [
     desc: '選擇權（全量）',
   },
   {
+    name: 'market_chips_daily',
+    params: `select=*&order=date.desc`,
+    desc: '新版籌碼（全量）',
+  },
+  {
+    name: 'options_analytics_daily',
+    params: `select=*&order=date.desc,contract_type.asc`,
+    desc: '新版選擇權分析（全量）',
+  },
+  {
     name: 'alpha_daily_report',
     // 只備份最近 180 天的報告
     params: `select=*&order=report_date.desc&limit=180`,
