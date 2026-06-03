@@ -177,7 +177,7 @@ async function loadSignalBacktest() {
   try {
     // 同時抓選擇權和台指（用個股加權）
     const [optRows, stockRows] = await Promise.all([
-      sbFetch('options_daily', 'order=date.desc&limit=30&select=date,pc_ratio_oi,foreign_opt_net'),
+      sbFetch('options_analytics_daily', 'contract_type=eq.monthly&order=date.desc&limit=30&select=date,pc_ratio_oi'),
       sbFetch('stock_daily_twse', 'stock_id=eq.0050&order=date.desc&limit=31&select=date,close,chg_pct'),
     ]);
 
