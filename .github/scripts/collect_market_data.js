@@ -294,21 +294,24 @@ async function collectOptions() {
     console.log(`  📌 近月合約：${nearMonthCD}，週三合約：${contractDates.filter(isWed).join('/')}，週五合約：${contractDates.filter(isFri).join('/')}`);
 
     // 聚合函式：給定篩選條件，計算 callOI/putOI/callVol/putVol
+    // FinMind TaiwanOptionDaily call_put 實際值為中文「買權」/「賣權」
+    const isCallCP = (v) => { const s = (v||'').trim(); return s === '買權' || s.toUpperCase() === 'C' || s.toUpperCase() === 'CALL'; };
+    const isPutCP  = (v) => { const s = (v||'').trim(); return s === '賣權' || s.toUpperCase() === 'P' || s.toUpperCase() === 'PUT';  };
+
     const aggregate = (filter) => {
       let callOI = 0, putOI = 0, callVol = 0, putVol = 0;
       const byStrike = {};
       for (const r of optData) {
         if (!filter(r.contract_date || '')) continue;
-        const cp  = (r.call_put || '').trim().toUpperCase();
         const oi  = parseFloat(r.open_interest) || 0;
         const vol = parseFloat(r.volume)        || 0;
         const sp  = parseFloat(r.strike_price)  || 0;
-        if (cp === 'C') { callOI += oi; callVol += vol; }
-        if (cp === 'P') { putOI  += oi; putVol  += vol; }
+        if (isCallCP(r.call_put)) { callOI += oi; callVol += vol; }
+        if (isPutCP(r.call_put))  { putOI  += oi; putVol  += vol; }
         if (sp > 0 && oi > 0) {
           if (!byStrike[sp]) byStrike[sp] = { call: 0, put: 0 };
-          if (cp === 'C') byStrike[sp].call += oi;
-          if (cp === 'P') byStrike[sp].put  += oi;
+          if (isCallCP(r.call_put)) byStrike[sp].call += oi;
+          if (isPutCP(r.call_put))  byStrike[sp].put  += oi;
         }
       }
       return { callOI, putOI, callVol, putVol, byStrike };
@@ -409,16 +412,19 @@ async function collectOptions() {
 
       for (const r of (inst || [])) {
         const inv  = (r.institutional_investors || r.name || '').trim();
-        const cp   = (r.call_put || '').trim().toUpperCase();
+        const cpRaw = (r.call_put || '').trim();
+        // FinMind 實際值為中文「買權」/「賣權」
+        const isCall = cpRaw === '買權' || cpRaw.toUpperCase() === 'C' || cpRaw.toUpperCase() === 'CALL';
+        const isPut  = cpRaw === '賣權' || cpRaw.toUpperCase() === 'P' || cpRaw.toUpperCase() === 'PUT';
         const lBal = parseInt(r.long_open_interest_balance_volume)  || 0;
         const sBal = parseInt(r.short_open_interest_balance_volume) || 0;
         const net  = lBal - sBal;
 
-        if (cp === 'C') {
+        if (isCall) {
           if (inv.includes('外資') && !inv.includes('自營商')) callForeignNet = (callForeignNet || 0) + net;
           else if (inv.includes('投信'))  callTrustNet  = (callTrustNet  || 0) + net;
           else if (inv.includes('自營商')) callDealerNet = (callDealerNet || 0) + net;
-        } else if (cp === 'P') {
+        } else if (isPut) {
           if (inv.includes('外資') && !inv.includes('自營商')) putForeignNet = (putForeignNet || 0) + net;
           else if (inv.includes('投信'))  putTrustNet  = (putTrustNet  || 0) + net;
           else if (inv.includes('自營商')) putDealerNet = (putDealerNet || 0) + net;
@@ -487,24 +493,36 @@ async function collectOptions() {
 
     // weekly_wed
     if (nearWedCD) analyticsRows.push({
-      date:          tradeDate,
-      contract_type: 'weekly_wed',
-      contract_code: nearWedCD,
-      call_oi:       wed.callOI || null,
-      put_oi:        wed.putOI  || null,
-      pc_ratio_oi:   wed.callOI > 0 ? parseFloat((wed.putOI / wed.callOI).toFixed(4)) : null,
-      max_pain:      (mpCandidate?.label || '').includes('週三') ? maxPain : null,
+      date:             tradeDate,
+      contract_type:    'weekly_wed',
+      contract_code:    nearWedCD,
+      call_oi:          wed.callOI || null,
+      put_oi:           wed.putOI  || null,
+      pc_ratio_oi:      wed.callOI > 0 ? parseFloat((wed.putOI / wed.callOI).toFixed(4)) : null,
+      max_pain:         (mpCandidate?.label || '').includes('週三') ? maxPain : null,
+      call_foreign_net: null,
+      call_trust_net:   null,
+      call_dealer_net:  null,
+      put_foreign_net:  null,
+      put_trust_net:    null,
+      put_dealer_net:   null,
     });
 
     // weekly_fri
     if (nearFriCD) analyticsRows.push({
-      date:          tradeDate,
-      contract_type: 'weekly_fri',
-      contract_code: nearFriCD,
-      call_oi:       fri.callOI || null,
-      put_oi:        fri.putOI  || null,
-      pc_ratio_oi:   fri.callOI > 0 ? parseFloat((fri.putOI / fri.callOI).toFixed(4)) : null,
-      max_pain:      (mpCandidate?.label || '').includes('週五') ? maxPain : null,
+      date:             tradeDate,
+      contract_type:    'weekly_fri',
+      contract_code:    nearFriCD,
+      call_oi:          fri.callOI || null,
+      put_oi:           fri.putOI  || null,
+      pc_ratio_oi:      fri.callOI > 0 ? parseFloat((fri.putOI / fri.callOI).toFixed(4)) : null,
+      max_pain:         (mpCandidate?.label || '').includes('週五') ? maxPain : null,
+      call_foreign_net: null,
+      call_trust_net:   null,
+      call_dealer_net:  null,
+      put_foreign_net:  null,
+      put_trust_net:    null,
+      put_dealer_net:   null,
     });
 
     try {
