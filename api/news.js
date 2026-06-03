@@ -224,7 +224,7 @@ export default async function handler(req, res) {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 10, 30);
       const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/chips_daily?order=date.desc&limit=${limit}&select=*`,
+        `${SUPABASE_URL}/rest/v1/market_chips_daily?order=date.desc&limit=${limit}&select=*`,
         { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(5000) }
       );
       if (!r.ok) throw new Error(`Supabase HTTP ${r.status}`);
@@ -1741,12 +1741,12 @@ ${redditTitles || '無'}
     try {
       const fields = 'date,fut_tmf_foreign_net,fut_tmf_trust_net,fut_tmf_dealer_net,fut_tmf_total_net,fut_tmf_total_oi';
       const r = await fetch(
-        `${SB_URL}/rest/v1/chips_daily?order=date.desc&limit=15&select=${fields}`,
+        `${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=15&select=${fields}`,
         { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(8000) }
       );
       if (!r.ok) throw new Error(`Supabase HTTP ${r.status}`);
       const rows = await r.json();
-      if (!rows.length) throw new Error('chips_daily 無 TMF 資料');
+      if (!rows.length) throw new Error('market_chips_daily 無 TMF 資料');
 
       const history = rows.map(d => {
         const total_oi  = d.fut_tmf_total_oi  || 1;
