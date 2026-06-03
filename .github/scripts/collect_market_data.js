@@ -46,7 +46,8 @@ async function sbUpsert(table, rows, onConflict) {
   let total = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
+    const conflictCols = Array.isArray(onConflict) ? onConflict.join(',') : onConflict;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflictCols}`, {
       method: 'POST',
       headers: {
         apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
@@ -200,7 +201,23 @@ async function collectInstitutional() {
       byDate[dt].total_net += net;
     }
     const rows = Object.values(byDate);
-    await sbUpsert('institutional_daily', rows, 'date');
+    // 雙寫：institutional_daily（舊）
+    try {
+      await sbUpsert('institutional_daily', rows, 'date');
+    } catch(e) { console.warn(`  ⚠️  institutional_daily：${e.message}`); }
+    // 同步現貨欄位到 market_chips_daily（ON CONFLICT UPDATE）
+    // FinMind 單位：元，需除以 100,000,000 轉億元
+    try {
+      const chipRows = rows.map(r => ({
+        date:             r.date,
+        spot_foreign_net: r.foreign_net != null ? parseFloat((r.foreign_net / 100_000_000).toFixed(2)) : null,
+        spot_trust_net:   r.trust_net   != null ? parseFloat((r.trust_net   / 100_000_000).toFixed(2)) : null,
+        spot_dealer_net:  r.dealer_net  != null ? parseFloat((r.dealer_net  / 100_000_000).toFixed(2)) : null,
+        spot_total_net:   r.total_net   != null ? parseFloat((r.total_net   / 100_000_000).toFixed(2)) : null,
+      }));
+      await sbUpsert('market_chips_daily', chipRows, 'date');
+      console.log(`  ✅ institutional_daily + market_chips_daily 同步：${rows.length} 筆`);
+    } catch(e) { console.warn(`  ⚠️  market_chips_daily 現貨同步失敗：${e.message}`); }
     return { ok: true, count: rows.length };
   } catch (e) { console.error(`  ❌ 三大法人 失敗：${e.message}`); return { ok: false, error: e.message }; }
 }
@@ -440,8 +457,63 @@ async function collectOptions() {
       put_trust_net:          putTrustNet,
       put_dealer_net:         putDealerNet,
     };
-    await sbUpsert('options_daily', [row], 'date');
-    return { ok: true, count: 1, date: tradeDate };
+    // 雙寫：options_daily（舊，保留過渡期）
+    try {
+      await sbUpsert('options_daily', [row], 'date');
+      console.log('  ✅ options_daily（舊表）寫入完成');
+    } catch (e) {
+      console.warn(`  ⚠️  options_daily 寫入失敗：${e.message}`);
+    }
+
+    // 寫入新表 options_analytics_daily（3 列：monthly / weekly_wed / weekly_fri）
+    const analyticsRows = [];
+
+    // monthly
+    analyticsRows.push({
+      date:             tradeDate,
+      contract_type:    'monthly',
+      contract_code:    nearMonthCD || null,
+      call_oi:          monthly.callOI || null,
+      put_oi:           monthly.putOI  || null,
+      pc_ratio_oi:      monthly.callOI > 0 ? parseFloat((monthly.putOI / monthly.callOI).toFixed(4)) : null,
+      max_pain:         (mpCandidate?.label || '').includes('近月') ? maxPain : null,
+      call_foreign_net: callForeignNet,
+      call_trust_net:   callTrustNet,
+      call_dealer_net:  callDealerNet,
+      put_foreign_net:  putForeignNet,
+      put_trust_net:    putTrustNet,
+      put_dealer_net:   putDealerNet,
+    });
+
+    // weekly_wed
+    if (nearWedCD) analyticsRows.push({
+      date:          tradeDate,
+      contract_type: 'weekly_wed',
+      contract_code: nearWedCD,
+      call_oi:       wed.callOI || null,
+      put_oi:        wed.putOI  || null,
+      pc_ratio_oi:   wed.callOI > 0 ? parseFloat((wed.putOI / wed.callOI).toFixed(4)) : null,
+      max_pain:      (mpCandidate?.label || '').includes('週三') ? maxPain : null,
+    });
+
+    // weekly_fri
+    if (nearFriCD) analyticsRows.push({
+      date:          tradeDate,
+      contract_type: 'weekly_fri',
+      contract_code: nearFriCD,
+      call_oi:       fri.callOI || null,
+      put_oi:        fri.putOI  || null,
+      pc_ratio_oi:   fri.callOI > 0 ? parseFloat((fri.putOI / fri.callOI).toFixed(4)) : null,
+      max_pain:      (mpCandidate?.label || '').includes('週五') ? maxPain : null,
+    });
+
+    try {
+      await sbUpsert('options_analytics_daily', analyticsRows, ['date', 'contract_type']);
+      console.log(`  ✅ options_analytics_daily（新表）寫入 ${analyticsRows.length} 列`);
+    } catch (e) {
+      console.error(`  ❌ options_analytics_daily 寫入失敗：${e.message}`);
+    }
+    return { ok: true, count: analyticsRows.length, date: tradeDate };
   } catch (e) { console.error(`  ❌ 選擇權 失敗：${e.message}`); return { ok: false, error: e.message }; }
 }
 
@@ -903,12 +975,19 @@ async function collectChips() {
     } catch(e2) { console.error(`  ❌ TAIFEX 選擇權 fallback 失敗：${e2.message}`); }
   }
 
-    // ── 4. 寫入 chips_daily ──
+    // ── 4. 雙寫：chips_daily（舊，保留過渡期）+ market_chips_daily（新）──
   try {
     await sbUpsert('chips_daily', [result], 'date');
+    console.log('  ✅ chips_daily（舊表）寫入完成');
+  } catch (e) {
+    console.warn(`  ⚠️  chips_daily 寫入失敗：${e.message}`);
+  }
+  try {
+    await sbUpsert('market_chips_daily', [result], 'date');
+    console.log('  ✅ market_chips_daily（新表）寫入完成');
     return { ok: true, date: tradeDate };
   } catch (e) {
-    console.error(`  ❌ chips_daily 寫入失敗：${e.message}`);
+    console.error(`  ❌ market_chips_daily 寫入失敗：${e.message}`);
     return { ok: false, error: e.message };
   }
 }
@@ -1716,6 +1795,9 @@ async function main() {
   const isFinMind = MODE === 'finmind' || MODE === 'all';
   const isNews    = MODE === 'news'    || MODE === 'all';
   const isAlpha   = MODE === 'alpha'   || MODE === 'all';
+  // 新 domain mode（直接指定時執行，all 也包含）
+  // chips = twse 模式中的籌碼部分（collectChips 已含雙寫）
+  // options-analytics = finmind 模式中的選擇權部分（collectOptions 已含雙寫）
   console.log('═══════════════════════════════════════');
   console.log('  AlphaScope — 每日資料收集 v3');
   console.log(`  執行時間：${new Date().toISOString()}`);
