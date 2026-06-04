@@ -1,10 +1,24 @@
-name: Weekly Backup to pCloud
+name: Backup to pCloud
 
 on:
+  # ── 每次 push main 觸發（備份改動的 source code）──
+  push:
+    branches: [main]
+  # ── 每週日 09:00 台灣時間（備份 Supabase 資料）──
   schedule:
-    # 每週日 09:00 台灣時間（UTC 01:00）
     - cron: '0 1 * * 0'
+  # ── 手動觸發 ──
   workflow_dispatch:
+    inputs:
+      mode:
+        description: '備份模式'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - source-only
+          - supabase-only
 
 jobs:
   backup-to-pcloud:
@@ -12,6 +26,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 抓完整 git 歷史，才能用 git diff 找出改動的檔案
+          fetch-depth: 2
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -33,14 +51,48 @@ jobs:
           hostname = ${RCLONE_PCLOUD_HOSTNAME}
           token = ${RCLONE_PCLOUD_TOKEN}
           EOF
+          rclone mkdir pcloud:AlphaScope-Backups || true
+          rclone mkdir pcloud:AlphaScope-Backups/source-code || true
           echo "✅ rclone 設定完成"
 
-      - name: Test pCloud connection
+      # ── Step A：備份 source code（push 觸發時執行）──
+      - name: Backup changed source files to pCloud
+        if: github.event_name == 'push' || inputs.mode == 'source-only' || inputs.mode == 'both'
         run: |
-          rclone lsd pcloud: || echo "⚠️ pCloud 根目錄列出失敗，繼續執行"
-          rclone mkdir pcloud:AlphaScope-Backups || true
+          # 找出本次 commit 改動的檔案（新增 + 修改，不含刪除）
+          CHANGED=$(git diff --name-only --diff-filter=ACM HEAD~1 HEAD)
 
-      - name: Run backup
+          if [ -z "$CHANGED" ]; then
+            echo "ℹ️  本次 push 無改動檔案，略過 source code 備份"
+            exit 0
+          fi
+
+          echo "📝 本次改動的檔案："
+          echo "$CHANGED"
+
+          DEST="pcloud:AlphaScope-Backups/source-code"
+          SUCCESS=0
+          FAIL=0
+
+          while IFS= read -r FILE; do
+            if [ -f "$FILE" ]; then
+              # 保留原始目錄結構上傳
+              rclone copyto "$FILE" "${DEST}/${FILE}" \
+                && echo "  ✅ $FILE" && SUCCESS=$((SUCCESS+1)) \
+                || echo "  ❌ $FILE（上傳失敗）" && FAIL=$((FAIL+1))
+            fi
+          done <<< "$CHANGED"
+
+          echo ""
+          echo "📊 完成：成功 ${SUCCESS} 個，失敗 ${FAIL} 個"
+          echo "☁️  pCloud 路徑：AlphaScope-Backups/source-code/"
+
+          # 有任何失敗就讓 workflow 標記為失敗
+          [ $FAIL -eq 0 ] || exit 1
+
+      # ── Step B：備份 Supabase 資料（週排程 / 手動觸發時執行）──
+      - name: Backup Supabase data to pCloud
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.mode != 'source-only'
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
