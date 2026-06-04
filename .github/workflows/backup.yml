@@ -77,9 +77,13 @@ jobs:
           while IFS= read -r FILE; do
             if [ -f "$FILE" ]; then
               # 保留原始目錄結構上傳
-              rclone copyto "$FILE" "${DEST}/${FILE}" \
-                && echo "  ✅ $FILE" && SUCCESS=$((SUCCESS+1)) \
-                || echo "  ❌ $FILE（上傳失敗）" && FAIL=$((FAIL+1))
+              if rclone copyto "$FILE" "${DEST}/${FILE}"; then
+                echo "  ✅ $FILE"
+                SUCCESS=$((SUCCESS+1))
+              else
+                echo "  ❌ $FILE（上傳失敗）"
+                FAIL=$((FAIL+1))
+              fi
             fi
           done <<< "$CHANGED"
 
