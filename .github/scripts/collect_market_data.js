@@ -782,7 +782,8 @@ async function collectChips() {
     const txForeignRaw = allFut.find(r => r.ContractCode === '臺股期貨' && getIdent(r).includes('外資'));
     if (txForeignRaw) console.log(`  🔍 臺股期貨外資原始：${JSON.stringify(txForeignRaw)}`);
 
-    const parseFut = (rows, prefix) => {
+    // netOnly=true：只寫 _net 欄位（MTX/TMF 表結構無 long/short 欄位）
+    const parseFut = (rows, prefix, netOnly = false) => {
       let totalNet = 0;
       for (const row of rows) {
         const ident    = getIdent(row);
@@ -792,18 +793,15 @@ async function collectChips() {
         const finalNet = netVol !== null ? netVol : (longVol !== null && shortVol !== null ? longVol - shortVol : null);
 
         if (ident.includes('自營商') && !ident.includes('避險')) {
-          result[`${prefix}_dealer_long`]  = longVol;
-          result[`${prefix}_dealer_short`] = shortVol;
+          if (!netOnly) { result[`${prefix}_dealer_long`]  = longVol; result[`${prefix}_dealer_short`] = shortVol; }
           result[`${prefix}_dealer_net`]   = finalNet;
           if (finalNet !== null) totalNet += finalNet;
         } else if (ident.includes('投信')) {
-          result[`${prefix}_trust_long`]   = longVol;
-          result[`${prefix}_trust_short`]  = shortVol;
+          if (!netOnly) { result[`${prefix}_trust_long`]   = longVol; result[`${prefix}_trust_short`]  = shortVol; }
           result[`${prefix}_trust_net`]    = finalNet;
           if (finalNet !== null) totalNet += finalNet;
         } else if (ident.includes('外資') && !ident.includes('自營商')) {
-          result[`${prefix}_foreign_long`]  = longVol;
-          result[`${prefix}_foreign_short`] = shortVol;
+          if (!netOnly) { result[`${prefix}_foreign_long`]  = longVol; result[`${prefix}_foreign_short`] = shortVol; }
           result[`${prefix}_foreign_net`]   = finalNet;
           if (finalNet !== null) totalNet += finalNet;
         }
@@ -824,15 +822,15 @@ async function collectChips() {
       console.log(`  ✅ TX（臺股期貨）：外資 多${result.fut_tx_foreign_long}/空${result.fut_tx_foreign_short}/淨${result.fut_tx_foreign_net} 口，投信淨${result.fut_tx_trust_net}，自營淨${result.fut_tx_dealer_net}`);
     } else console.warn('  ⚠️  TX（臺股期貨）無資料');
 
-    // MTX 小型台指
+    // MTX 小型台指（market_chips_daily 只有 net 欄位，無 long/short）
     if (mtxRows.length) {
-      parseFut(mtxRows, 'fut_mtx');
+      parseFut(mtxRows, 'fut_mtx', true);
       console.log(`  ✅ MTX（小型臺指期貨）：外資淨 ${result.fut_mtx_foreign_net} 口，投信淨 ${result.fut_mtx_trust_net}，自營淨 ${result.fut_mtx_dealer_net}`);
     } else console.warn('  ⚠️  MTX（小型臺指期貨）無資料');
 
-    // TMF 微型台指
+    // TMF 微型台指（market_chips_daily 只有 net 欄位，無 long/short）
     if (tmfRows.length) {
-      parseFut(tmfRows, 'fut_tmf');
+      parseFut(tmfRows, 'fut_tmf', true);
       console.log(`  ✅ TMF（微型臺指期貨）：外資淨 ${result.fut_tmf_foreign_net} 口，投信淨 ${result.fut_tmf_trust_net}，自營淨 ${result.fut_tmf_dealer_net}`);
     } else console.warn('  ⚠️  TMF（微型臺指期貨）無資料');
 
