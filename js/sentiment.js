@@ -215,6 +215,30 @@ async function sentFetchReddit(sub) {
   return [...recent, ...older].slice(0, 20);
 }
 
+/**
+ * 強健 JSON 陣列提取：
+ * 1. 先去掉 Groq 偶爾包的 ```json ... ``` markdown 圍欄
+ * 2. 找第一個 [ 後，用括號深度配對找到完整的 [...]
+ *    避免貪婪正則在巢狀陣列或截斷時匹配錯誤
+ * @returns {string|null} 提取到的 JSON 字串，失敗回傳 null
+ */
+function extractGroqJSON(rawText) {
+  // 去掉 markdown 圍欄（```json 或 ```）
+  let text = rawText.replace(/```(?:json)?/gi, '').trim();
+  const start = text.indexOf('[');
+  if (start === -1) return null;
+  let depth = 0, end = -1;
+  for (let k = start; k < text.length; k++) {
+    if (text[k] === '[') depth++;
+    else if (text[k] === ']') {
+      depth--;
+      if (depth === 0) { end = k; break; }
+    }
+  }
+  if (end === -1) return null; // JSON 被截斷，找不到配對的 ]
+  return text.slice(start, end + 1);
+}
+
 async function sentAnalyzeGroq(posts, onStatus) {
   const BATCH = 10; // llama-3.1-8b-instant 較省 token，可加大 batch
   for (let i = 0; i < posts.length; i += BATCH) {
@@ -241,11 +265,14 @@ ${postLines}`;
     let analyzed = false;
     for (let attempt = 0; attempt < 3 && !analyzed; attempt++) {
       try {
-        const rawText = await callGroq(prompt, 900, 0.15);
-        // 強健 JSON 提取：取第一個 [ 到最後一個 ] 之間的內容，避免 Groq 夾雜說明文字
-        const jsonMatch = rawText.match(/\[.*\]/s);
-        if (!jsonMatch) throw new Error('No JSON array found in response');
-        const parsed = JSON.parse(jsonMatch[0]);
+        const rawText = await callGroq(prompt, 1200, 0.15);
+        // 強健 JSON 提取：去 markdown 圍欄後用括號配對法找完整 [...]
+        const jsonStr = extractGroqJSON(rawText);
+        if (!jsonStr) {
+          console.error('Groq JSON 提取失敗，rawText 前 200 字：', rawText.slice(0, 200));
+          throw new Error('No valid JSON array found in Groq response');
+        }
+        const parsed = JSON.parse(jsonStr);
         parsed.forEach(r => {
           if (batch[r.idx]) {
             batch[r.idx].sentiment   = r.sentiment;
