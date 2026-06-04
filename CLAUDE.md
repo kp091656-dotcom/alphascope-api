@@ -1,16 +1,38 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-05-30
+> 更新日期：2026-06-04
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
+
+-----
+
+## ⚠️ 已知問題（2026-06-04）
+
+### 1. Claude GitHub MCP write 權限問題
+- **現象：** Claude 透過 GitHub MCP 呼叫 `create_or_update_file` 回傳 403
+- **根因：** `Claude Github MCP Connector`（OAuth App）已授權但未安裝到 repo，GitHub App 安裝步驟未完成
+- **嘗試過：** Revoke → Reconnect → Authorize，但 OAuth 流程沒有跳出 repo 選擇畫面
+- **目前狀態：** 新增了 Fine-grained PAT custom connector（`https://api.githubcopilot.com/mcp`，token 已填入），下次對話測試是否生效
+- **暫時解法：** Claude 輸出檔案到 `/mnt/user-data/outputs/`，由使用者手動貼到 GitHub
+
+### 2. 前端網站數據無資料問題
+- **現象：** 網站某些面板顯示無資料或空白
+- **狀態：** 尚未診斷根因，待下次對話確認是 RLS / API endpoint / 資料收集哪個環節出問題
+- **排查方向：** 瀏覽器 DevTools Console → Network → 確認哪個 API 回傳空值或錯誤
+
+### 3. GitHub Actions 問題
+- **Collect TWSE（collect-twse.yml）：** 有問題，尚未確認根因
+- **Backup to pCloud（backup.yml）：** 有問題，尚未確認根因
+- **注意：** backup.yml 已於 2026-06-04 新增 push trigger（備份改動的 source code），但尚未實際驗證能否正確執行
+- **排查方向：** GitHub Actions → 查看各 workflow 的 run log
 
 -----
 
 ## 專案概覽
 
-**名稱：** AlphaScope — AI 驅動財經市場情報網站  
-**網址：** <https://alphascope-fin.vercel.app>  
-**GitHub：** github.com/kp091656-dotcom/alphascope-api  
-**架構：** 單一 Vercel repo（前端 + 後端 API）+ Supabase 歷史資料庫  
+**名稱：** AlphaScope — AI 驅動財經市場情報網站
+**網址：** <https://alphascope-fin.vercel.app>
+**GitHub：** github.com/kp091656-dotcom/alphascope-api
+**架構：** 單一 Vercel repo（前端 + 後端 API）+ Supabase 歷史資料庫
 **分支：** main → 自動部署到 Vercel
 
 -----
@@ -75,48 +97,51 @@ let _giftsData, _giftCat, _giftSort
 let futuresData, futuresSortKey
 ```
 
-> ⚠️ 開新對話時上傳需要修改的 **單一 js 檔**，不必上傳整個 index.html。  
-> 例如改籌碼面板只需上傳 `js/chips.js`，改新聞只需上傳 `js/news_feed.js`。  
+> ⚠️ 開新對話時上傳需要修改的 **單一 js 檔**，不必上傳整個 index.html。
+> 例如改籌碼面板只需上傳 `js/chips.js`，改新聞只需上傳 `js/news_feed.js`。
 > `api.js` 與 `index.html` 骨架通常不需改動。
 
 -----
 
 ## Supabase 資料庫
 
-**Project URL：** `https://fdxedcwtmlurumfjmlys.supabase.co`  
-**anon key：** `sb_publishable_BAaZB86ibYZSvTFkFGkeQA_GspDNdf0`（前端讀取）  
+**Project URL：** `https://fdxedcwtmlurumfjmlys.supabase.co`
+**anon key：** `sb_publishable_BAaZB86ibYZSvTFkFGkeQA_GspDNdf0`（前端讀取）
 **service_role key：** 存在 GitHub Secrets `SUPABASE_SERVICE_KEY`（寫入用，勿公開）
 
-### 資料表（共 16 張）
+### 資料表（共 18 張）
 
-|表名                     |來源               |內容                            |每日筆數   |
-|-----------------------|-----------------|------------------------------|-------|
-|`stock_daily_twse`     |TWSE OpenAPI     |全上市股票收盤、成交量；含 stock_id=‘TAIEX’|~1230+1|
-|`institutional_daily`  |FinMind          |三大法人現貨買賣超                     |1      |
-|`margin_daily`         |FinMind          |融資/融券餘額                       |1      |
-|`options_daily`        |FinMind          |P/C Ratio、法人選擇權               |1      |
-|`futures_daily`        |FinMind + Yahoo Finance|全球商品/指數（前端走 Vercel proxy）  |~35    |
-|`sector_index_daily`   |TWSE OpenAPI     |官方產業指數（76個）                   |76     |
-|`stock_valuation_daily`|TWSE OpenAPI     |個股本益比/殖利率/PBR                 |~1071  |
-|`news_daily`           |RSS（多來源）         |財經新聞快取（保留 48 小時）              |~150   |
-|`alpha_daily_report`   |Groq AI          |Alpha 交易員每日報告                 |1      |
-|`trader_positions`     |Alpha 自動         |Alpha 持倉紀錄（open/closed）       |動態     |
-|`chips_daily`          |FinMind + TAIFEX |籌碼資料（現貨+期貨+選擇權）               |1      |
-|`shareholder_gifts`    |scrape_egift + 手動|股東紀念品資訊（含 eGift）              |年度     |
-|`gift_scrape_log`      |scrape_gifts.js  |爬蟲進度追蹤（每股每年一筆狀態紀錄）            |年度     |
+|表名                     |來源                     |內容                            |每日筆數   |
+|-----------------------|-----------------------|------------------------------|-------|
+|`stock_daily_twse`     |TWSE OpenAPI           |全上市股票收盤、成交量；含 stock_id='TAIEX'|~1230+1|
+|`institutional_daily`  |FinMind                |三大法人現貨買賣超                     |1      |⚠️ 過渡期待刪|
+|`margin_daily`         |FinMind                |融資/融券餘額                       |1      |
+|`options_daily`        |FinMind                |P/C Ratio、法人選擇權               |1      |⚠️ 過渡期待刪|
+|`futures_daily`        |FinMind + Yahoo Finance|全球商品/指數（前端走 Vercel proxy）     |~35    |
+|`sector_index_daily`   |TWSE OpenAPI           |官方產業指數（76個）                   |76     |
+|`stock_valuation_daily`|TWSE OpenAPI           |個股本益比/殖利率/PBR                 |~1071  |
+|`news_daily`           |RSS（多來源）               |財經新聞快取（保留 48 小時）              |~150   |
+|`alpha_daily_report`   |Groq AI                |Alpha 交易員每日報告                 |1      |
+|`trader_positions`     |Alpha 自動               |Alpha 持倉紀錄（open/closed）       |動態     |
+|`chips_daily`          |FinMind + TAIFEX       |籌碼資料（現貨+期貨+選擇權）               |1      |⚠️ 過渡期待刪|
+|`market_chips_daily`   |FinMind + TAIFEX       |新版籌碼（Domain重整）                  |1      |🆕 雙寫中   |
+|`options_analytics_daily`|FinMind              |選擇權分析，複合PK(date,contract_type) |3      |🆕 雙寫中   |
+|`shareholder_gifts`    |scrape_egift + 手動      |股東紀念品資訊（含 eGift）              |年度     |
+|`gift_scrape_log`      |scrape_gifts.js        |爬蟲進度追蹤（每股每年一筆狀態紀錄）            |年度     |
 
 
-> ⚠️ `stock_daily`（舊表）已廢棄，禁止查詢，等待刪除。
+> ⚠️ `stock_daily`（舊表）已刪除。
 
-### RLS 政策（2026-05-27 全面修正）
+### RLS 政策（2026-05-27 全面修正 / 2026-06-03 新表補上）
 
-**所有 12 張 SELECT 可讀表**的 RLS 已統一改為 `TO anon, authenticated`：
+**所有 14 張 SELECT 可讀表**的 RLS 已統一改為 `TO anon, authenticated`：
 
 ```sql
 -- 已修正的表（全部）：
 -- alpha_daily_report, chips_daily, futures_daily, institutional_daily,
 -- margin_daily, news_daily, options_daily, sector_index_daily,
--- shareholder_gifts, stock_daily_twse, stock_valuation_daily, trader_positions
+-- shareholder_gifts, stock_daily_twse, stock_valuation_daily, trader_positions,
+-- market_chips_daily, options_analytics_daily（2026-06-03 新增）
 -- policy name 統一為 "anon read"，roles = {anon,authenticated}
 ```
 
@@ -156,370 +181,158 @@ institutional_daily  : date, foreign_net, trust_net, dealer_net, total_net
 
 margin_daily         : date, margin_balance, margin_chg, short_balance, short_chg
 
-options_daily        : date, pc_ratio_vol, pc_ratio_oi, max_pain, call_oi, put_oi, call_vol, put_vol, foreign_opt_net
+options_daily        : date,
+                       pc_ratio_oi（全部合約）, call_oi（全部）, put_oi（全部）,
+                       pc_ratio_oi_monthly, call_oi_monthly, put_oi_monthly（近月合約）,
+                       pc_ratio_oi_wed, call_oi_wed, put_oi_wed（近週三合約）,
+                       pc_ratio_oi_fri, call_oi_fri, put_oi_fri（近週五合約）,
+                       max_pain（最近到期合約計算：月/週三/週五誰快到期用誰）,
+                       call_foreign_net, call_trust_net, call_dealer_net（CALL 三大法人淨口）,
+                       put_foreign_net, put_trust_net, put_dealer_net（PUT 三大法人淨口）
+                       ⚠️ pc_ratio_vol 已移除
+                       ⚠️ 週五合約 FinMind contract_date 實際格式：202606F1（YYYYMMFx），已確認
+                       ⚠️ 過渡期保留雙寫，新開發請用 options_analytics_daily
 
 sector_index_daily   : date, index_name, close, change, chg_pct
 
-chips_daily          : date（UNIQUE）,
-                       spot_dealer_buy/sell/net, spot_trust_buy/sell/net, spot_foreign_buy/sell/net, spot_total_net,
-                       inst_foreign_net, inst_trust_net, inst_dealer_net（= spot_*_net，前端用別名）,
-                       margin_balance, margin_change（融資餘額/變化，張；由 collectChips 從 FinMind 寫入）,
-                       fut_tx_dealer_long/short/net, fut_tx_trust_long/short/net, fut_tx_foreign_long/short/net, fut_tx_total_net,
-                       fut_mtx_dealer/trust/foreign_net, fut_mtx_total_net,
-                       fut_tmf_dealer/trust/foreign_net, fut_tmf_total_net,
-                       fut_tmf_total_oi（integer，微台全體未平倉量，正確值約 67,426 口）,
-                       opt_call_dealer/trust/foreign_long/short/net,
-                       opt_put_dealer/trust/foreign_long/short/net
+market_chips_daily   : date（PRIMARY KEY）,
+                       現貨（億元）: spot_foreign_buy/sell/net, spot_trust_buy/sell/net,
+                                   spot_dealer_buy/sell/net, spot_total_net,
+                       台指期TX（口）: fut_tx_foreign/trust/dealer_long/short/net, fut_tx_total_net,
+                       小台MTX（口）: fut_mtx_foreign/trust/dealer_net, fut_mtx_total_net,
+                       微台TMF（口）: fut_tmf_foreign/trust/dealer_net, fut_tmf_total_net, fut_tmf_total_oi,
+                       選擇權CALL（口）: opt_call_foreign/trust/dealer_long/short/net,
+                       選擇權PUT（口）:  opt_put_foreign/trust/dealer_long/short/net
 
-shareholder_gifts    : id（UUID）, stock_id, stock_name, sector,
-                       record_date（停止過戶日，DATE）, meeting_date（DATE）,
-                       gift_desc, gift_category（food/goods/voucher/cash/3c/other）,
-                       gift_value_est（估值元，integer）,
-                       share_required（最低持股股數，integer，1張=1000股）,
-                       share_price_ref（參考股價）, cp_ratio（估值/股價%）,
-                       source_url, note, year（integer）,
-                       is_egift（boolean, default false）,
-                       egift_types（text[], 品項陣列）,
-                       egift_min_share（integer, 最低持股，預設1000）,
-                       egift_date（DATE, eGift 開始領取日）,
-                       created_at, updated_at
-                       UNIQUE (stock_id, year)
+options_analytics_daily : date, contract_type（'monthly'|'wed'|'fri'）,
+                          pc_ratio_oi, call_oi, put_oi, max_pain,
+                          call_foreign_net, call_trust_net, call_dealer_net,
+                          put_foreign_net, put_trust_net, put_dealer_net
+                          PRIMARY KEY: (date, contract_type)
 
-gift_scrape_log      : stock_id, stock_name, year, status, checked_at
-                       status: found / not_found / no_pdf / scanned_pdf / error
-                       PRIMARY KEY (stock_id, year)
-```
+shareholder_gifts    : id, stock_id, stock_name, year, gift_type, gift_desc,
+                       record_date, ex_date, is_egift, source_url, created_at
 
-⚠️ **重要：**
-
-- `stock_daily_twse.chg_pct` 是小數（0.0122 = +1.22%），前端顯示時 ×100
-- `sector_index_daily.chg_pct` 已是百分比（1.54 = +1.54%），直接用
-- `margin_daily` FinMind name 值：`MarginPurchase`（融資）、`ShortSale`（融券）
-- `stock_valuation_daily` 查詢一定用 `select=*` 避免 400
-- `chips_daily.spot_*` 單位億元（FinMind 原始元 ÷ 100,000,000）
-- `chips_daily.fut_*` / `opt_*` 單位口數（OI）
-- `chips_daily` 查詢時 **不可** 包含 `short_balance`（該欄位在 `margin_daily`，不在 `chips_daily`）
-- `shareholder_gifts.share_required` 單位是「股」，1張=1000股，預設1000
-
------
-
-## GitHub Actions 每日收集
-
-**Node.js：** 24  
-**⚠️ collect.yml 已拆分為 5 個獨立 workflow 檔案**
-
-|workflow 檔案          |cron           |台灣時間        |收集內容                 |
-|---------------------|---------------|------------|---------------------|
-|`collect-twse.yml`   |`0 22 * * 0-4` |週一~週五 06:00 |TWSE 個股、產業指數、估值、籌碼   |
-|`collect-alpha.yml`  |`20 22 * * 0-4`|週一~週五 06:20 |Alpha 停損停利 + 生成每日報告  |
-|`collect-finmind.yml`|`30 22 * * 0-4`|週一~週五 06:30 |FinMind 法人、融資券、選擇權   |
-|`collect-news.yml`   |`0 */2 * * *`  |全天每 2 小時    |RSS 新聞抓取存 Supabase   |
-|`backup.yml`         |`0 1 * * 0`    |週日 09:00    |Supabase 各表備份到 pCloud|
-|`scrape_gifts.yml`   |（已停用自動排程）      |僅手動觸發       |MOPS 議事手冊爬蟲，每批 100 家 |
-|`scrape_egift.yml`   |`30 1 * * 0`   |**週日** 09:30|集保 eGift 名單同步        |
-
-
-> ⚠️ **新 workflow 第一次需要手動 Run workflow 一次**，之後 cron 才會自動觸發。  
-> ⚠️ `collect-alpha` 用時間差（+20 分鐘）等 TWSE 跑完，不再用 `needs`。
-
-**GitHub Secrets 必要項目：**
-`FINMIND_TOKEN`、`SUPABASE_URL`、`SUPABASE_SERVICE_KEY`、`GROQ_API_KEY`、`RCLONE_PCLOUD_TOKEN`、`RCLONE_PCLOUD_HOSTNAME`
-
-**Vercel 環境變數：**
-`SUPABASE_URL`、`SUPABASE_SERVICE_KEY`、`ADMIN_KEY`、`GROQ_API_KEY`、`GEMINI_API_KEY`、`OWNER_TOKEN_HASH`、`FINMIND_TOKEN`、`TWELVE_DATA_KEY`
-
-### lastTradingDay() 邏輯
-
-- 台灣時間 16:00 前 → 退一天
-- 週末 → 往前找週五
-- GitHub Actions 在 UTC 環境執行，`getDate()` = `getUTCDate()`，無時區問題
-
-### getTradeDate() 時區修正
-
-- `news.js` options endpoint 用 UTC+8 台灣時間
-- `const nowTW = new Date(Date.now() + 8 * 60 * 60 * 1000);`
-- 用 `setUTCDate / getUTCDay` 操作，避免 local timezone 干擾
-
------
-
-## news.js API Endpoints（完整清單）
-
-|endpoint         |方法                   |功能                      |驗證              |
-|-----------------|---------------------|------------------------|----------------|
-|`news_cached`    |GET                  |Supabase 快取新聞           |無               |
-|`alpha_report`   |GET                  |Alpha 每日報告              |無               |
-|`chips`          |GET                  |籌碼資料（chips_daily 最新）    |無               |
-|`alpha_analyze`  |POST                 |AI 分析持倉                 |x-owner-token   |
-|`alpha_positions`|GET/POST/PATCH/DELETE|持倉管理                    |x-owner-token   |
-|`fgi`            |GET                  |恐慌貪婪指數                  |無               |
-|`vix`            |GET                  |VIX 波動率                 |無               |
-|`futures`        |GET                  |全球商品/期貨                 |無               |
-|`twvix`          |GET                  |台灣 VIX                  |無               |
-|`commodities`    |GET                  |大宗商品                    |無               |
-|`finmind`        |GET                  |FinMind proxy           |無               |
-|`gemini`         |POST                 |Gemini AI               |x-owner-token   |
-|`groq`           |POST                 |Groq AI                 |x-owner-token   |
-|`ptt_article`    |GET                  |PTT 文章內容                |無               |
-|`ptt`            |GET                  |PTT 看板                  |無               |
-|`reddit`         |GET                  |Reddit                  |無               |
-|`options`        |GET                  |選擇權資料                   |無               |
-|`institutional`  |GET                  |三大法人（chips_daily）       |無               |
-|`margin`         |GET                  |融資融券                    |無               |
-|`twheatmap`      |GET                  |台股熱圖（FinMind）           |無               |
-|`gifts`          |GET                  |股東紀念品（shareholder_gifts）|無（nocache=1 可強制）|
-|`gifts_admin`    |GET/POST/DELETE      |紀念品管理後台                 |x-admin-key     |
-|`tmf`            |GET                  |微型台指法人部位（chips_daily）   |無               |
-
------
-
-## 前端功能模組
-
-### Tab 架構
-
-|Tab            |panel ID       |show 函式         |
-|---------------|---------------|----------------|
-|全部（新聞）         |`newsFeed`     |—（預設）           |
-|科技/經濟/地緣/全球商品/…|`newsFeed`     |分類 filter       |
-|🇹🇼 台股熱圖         |`heatmapPanel` |`showHeatmap()` |
-|📡 多空訊號         |`signalPanel`  |`showSignal()`  |
-|🔍 選股篩選         |`screenerPanel`|`openScreener()`|
-|🎁 紀念品          |`giftsPanel`   |`showGifts()`   |
-
-
-> ⚠️ **頁面預設停在新聞頁**（不自動 showHeatmap）。`loadHeatmap()` 在背景預載，點 tab 時即時顯示。
-
-### 重要變數
-
-```js
-let allArticles = [];
-let currentCat = 'general';  // 新聞分類
-let _giftsData = null;        // 紀念品資料快取
-let _giftCat   = '';          // 紀念品類別篩選
-let _giftSort  = 'deadline';  // 紀念品排序
-```
-
-### loadMktSignals 注意事項
-
-- `opt`、`inst` 變數已提升到函式外層 scope（不在 if block 內）
-- 包含 `try/finally`，`_busy` 無論成功失敗都會 reset
-- TMF 卡片資料來自 `chips_daily`（`/api/news?endpoint=tmf`），不打 FinMind
-
------
-
-## 股東紀念品 + eGift 功能
-
-### 架構
-
-```
-集保結算所 eGift 頁面（TDCC）
-  ↓ scrape_egift.js（週一三五自動 / 手動觸發）
-  ↓ Step 1：從集保頁面動態找最新 PDF 連結
-  ↓ Step 2：下載 PDF
-  ↓ Step 3：pdf-parse 解析 → 公司清單（代號+名稱+股東會日期）
-  ↓ Step 4：Upsert → shareholder_gifts（is_egift=true）
-  ↓ Step 5：清理已撤回 eGift 公司（is_egift → false）
-```
-
-### 前端紀念品功能
-
-- `showGifts()` → 顯示 `giftsPanel`，隱藏其他所有 panel
-- `loadGifts()` → `GET /api/news?endpoint=gifts&show_past=1&nocache=1`
-- `reRenderGifts()` → 過濾（類別/eGift/已截止）+ 排序 + 渲染卡片
-- 預設過濾掉 `record_date < today`，勾「顯示已截止」才顯示全部
-
-### 管理後台（gifts-admin.html）
-
-- 打 `/api/news?endpoint=gifts_admin`
-- 需要 `x-admin-key` header（= Vercel `ADMIN_KEY` 環境變數）
-- 支援 GET（讀全部）/ POST（新增/更新）/ DELETE（刪除）
-- 每次寫入後自動清除 `_giftsCache`
-
-### TMF 微型台指散戶多空比
-
-- 來源：`chips_daily.fut_tmf_*`
-- `retail_ratio = -(total_net) / total_oi × 100`
-- `total_oi` = 全體未平倉（約 67,426 口，來自 TAIFEX HTML 小計行）
-- HTML 解析：取「小計:」文字之後的數字，合計成交量（最大值）後第一個數字即為 OI
-
------
-
-## 籌碼面板（chips_daily）資料流
-
-```
-FinMind TaiwanStockTotalInstitutionalInvestors
-  → spot_*（億元）
-  → 寫完後同步：inst_foreign_net = spot_foreign_net（別名）
-
-FinMind TaiwanStockTotalMarginPurchaseShortSale
-  → margin_balance, margin_change（張）
-
-TAIFEX OpenAPI MarketDataOfMajorInstitutionalTraders…
-  → fut_tx_* / fut_mtx_* / fut_tmf_*
-
-TAIFEX futDailyMarketCSV POST（TMF 全體 OI）
-  → fut_tmf_total_oi（67,426 口）
-  → HTML fallback：取小計行「合計成交量」之後第一個數字
-
-FinMind TaiwanOptionInstitutionalInvestors (data_id=TXO)
-  → opt_call_* / opt_put_*（CALL/PUT 分開）
+futures_daily        : date, symbol, name, close, chg, chg_pct, source
 ```
 
 -----
 
-## AI 引擎
+## GitHub Actions Workflows
 
-**全部使用 Groq：** `llama-3.3-70b-versatile`  
-**繁體中文：** system message 強制繁體中文  
-**佇列：** `GROQ_MIN_GAP_MS = 8000`（8 秒間隔）  
-**AI 按鈕：** 全部包在 `requireOwner(callback)` 內
-
------
-
-## 設計規範
-
-```css
---bg: #f0f0f5  --surface: #ffffff  --border: #e2e2ec  --border-dark: #c4c4d4
---accent: #6366f1  --accent2: #0ea5e9  --text: #16161a  --muted: #6e6e7e
---up: #dc2626（漲=紅）  --down: #16a34a（跌=綠）  --header-bg: #0c0c18
-```
-
-**字體：** Noto Sans TC 主字體；IBM Plex Mono 僅用於數字/代碼  
-**禁止：** 用 `var(--accent)` 表示漲幅；用裸露 `event` 全域變數
+| 檔案 | 觸發 | 功能 | 狀態 |
+|------|------|------|------|
+| `collect-twse.yml` | 週一~五 14:30 | 抓 TWSE 股價/估值/產業指數 | ⚠️ 有問題 |
+| `collect-finmind.yml` | 週一~五 15:30 | 抓 FinMind 籌碼/選擇權/期貨 | 未知 |
+| `collect-alpha.yml` | 週一~五 16:00 | 產生 Alpha 每日報告 | 正常 |
+| `collect-news.yml` | 每小時 | 抓財經新聞 RSS | 未知 |
+| `backup.yml` | 週日 09:00 + 每次 push main | Supabase 備份 + source code 備份到 pCloud | ⚠️ 有問題 |
+| `scrape_gifts.yml` | 手動觸發 | 爬股東紀念品 | 正常（停用自動排程）|
+| `scrape_egift.yml` | 每週日 09:30 | 爬 eGift 紀念品 | 正常 |
 
 -----
 
-## 常見問題
+## collect_market_data.js 重要備忘
 
-|問題                                |解法                                                             |
-|----------------------------------|---------------------------------------------------------------|
-|FinMind 404                       |確認用 `Authorization: Bearer` header                             |
-|Supabase 400 PGRST204             |欄位不存在；對照本文件；執行 `NOTIFY pgrst, 'reload schema'`                 |
-|Supabase 400（前端查詢）                |確認 RLS 有 anon read policy；新表記得加                                |
-|TMF 全體 OI 抓取錯誤                    |HTML 解析：取「小計:」後數字，最大值（合計成交量）後第一個即為 OI                          |
-|chips_daily 查詢 400                |確認沒有 `select=short_balance`（那是 margin_daily 的欄位）               |
-|三大法人合計數字異常（914億）                  |不要用 institutional_daily.total_net；改用 chips_daily.spot_total_net|
-|institutional_daily 欄位 400        |欄位是 trust_net，不是 invest_net                                    |
-|TXO CALL/PUT 無資料                  |call_put 值是繁體「買權」/「賣權」                                         |
-|Alpha 報告沒有 dominant_player        |chips_daily 要有資料才會注入；手動跑 twse mode                             |
-|gifts_admin 登入 401                |ADMIN_KEY 錯誤或 Vercel 環境變數未設/未 Redeploy                         |
-|gifts_admin 載入中（卡住）               |endpoint 不存在或 mbnSetActive 等函式未定義導致 showGifts() 中途拋錯           |
-|紀念品「目前無符合條件」                      |預設過濾 record_date < today；勾「顯示已截止」查看所有資料                        |
-|多空訊號子儀表「待載入」                      |inst 變數 scope 問題；已提升到外層 + try/finally 保護                       |
-|財經新聞空白                            |檢查 Vercel API /api/news?endpoint=news_cached 是否有回傳；可能是 cache   |
-|台股熱圖一直轉圈                          |loadHeatmap() 背景預載中；點 tab 後若仍空白確認 RLS                          |
-|新 workflow cron 未觸發               |需先手動 Run workflow 一次，GitHub 才會啟動 cron 排程                       |
-|collect-alpha 跑在 TWSE 之前          |改用時間差（06:20）而非 needs；若 TWSE 跑超過 20 分鐘可調整 cron                  |
-|eGift PDF 解析 0 家                  |PDF 換行問題；代號+名稱一行，日期下一行                                         |
-|news.js SyntaxError Unexpected ‘}’|檢查新加的 endpoint if 語句有沒有被合併到注釋同一行                               |
-|MIS 個股無即時價格                       |上櫃股預設用 tse_ 前綴會失敗；需傳 market:'otc'；盤後 z 欄位為最後成交價非即時            |
-|alpha.js macro_data 不顯示           |先確認 Supabase 已執行新增欄位 SQL；舊報告無此欄位屬正常                            |
-|InterestRate FED 無資料               |聯準會利率變動少，抓 90 天；若仍無資料確認 FinMind token 有效                       |
-|DXY 抓取失敗                          |Yahoo Finance v8 API 偶爾限速；失敗靜默不影響其他指標                          |
+### collectOptions() 重要提醒
+
+- 抓取邏輯：逐日往前找，`dayRows.length > 0` 才停，不能只看有無資料
+- `contract_date` 實際格式：
+  - 月選：`202606`（regex: `/^[0-9]{6}$/`）
+  - 週三：`202606W1`（regex: `/^[0-9]{6}W[1245]$/`）
+  - 週五：`202606F1`（regex: `/^[0-9]{6}F[1-5]$/`）
+
+### collectOptions() 最終重構
+
+1. 日盤過濾：排除 `after_market`
+2. Max Pain：取最近到期合約（月選=該月第三個週三；週三/週五=從 tradeDate 起最近的對應星期）
+3. 移除：`pc_ratio_vol`、`foreign_opt_net`
+
+### Schema 重整（雙寫過渡期）
+
+| 函式 | 舊表（保留） | 新表（新增）|
+|------|------------|-----------|
+| `collectChips()` | `chips_daily` | `market_chips_daily` |
+| `collectOptions()` | `options_daily` | `options_analytics_daily`（3列/天）|
+| `collectInstitutional()` | `institutional_daily` | `market_chips_daily`（現貨欄位）|
+
+- `sbUpsert()` 新增支援陣列 `onConflict`：`['date','contract_type']` 自動轉逗號
+
+### 待辦
+
+- [x] Supabase 對兩張新表加 RLS ✅
+- [x] `api/news.js` chips endpoint 切換至 `market_chips_daily` ✅
+- [x] `api/news.js` tmf endpoint 切換至 `market_chips_daily` ✅
+- [x] `valuation.js` 修正 `foreign_opt_net` 400 錯誤，改查 `options_analytics_daily` ✅
+- [x] `backup.js` 新增 `market_chips_daily`、`options_analytics_daily` 備份 ✅
+- [ ] 前端 `chips.js` 的 `/api/news?endpoint=chips` 已正確讀新表（news.js 已改）
+- [ ] 前端期權相關切換至 `options_analytics_daily`（signals.js 等）
+- [ ] 確認新表資料穩定 3～5 天後刪舊表（chips_daily / options_daily / institutional_daily）
+- [ ] 診斷前端數據無資料問題（⚠️ 2026-06-04 新增）
+- [ ] 修復 collect-twse.yml 問題（⚠️ 2026-06-04 新增）
+- [ ] 修復 backup.yml 問題（⚠️ 2026-06-04 新增）
 
 -----
 
-## 2026-05-30 本次對話改動總覽
+## 2026-06-04 本次對話改動總覽
 
-### collect_market_data.js — AI 分析引擎全面升級
+### sentiment.js Groq JSON 解析強化
 
-**systemPrompt 升級（機構級研究框架）**
-- 角色從「台股交易員」升級為「台股專業交易員兼市場分析師」
-- 新增總經面分析維度（SOX/DXY/美債/台幣/聯準會利率/Fear&Greed）
-- 殖利率曲線倒掛（10Y-2Y < 0）→ 偏保守策略
-- `signal_source` 新增「總經面」選項
-- `market_context` 強制要求提及聯準會利率與殖利率曲線
-- `max_tokens` 從 2000 → 3000
+- 新增 `extractGroqJSON()` 函式：先去 markdown 圍欄（` ```json ``` `），再用**括號深度配對**找完整 `[...]`
+- 取代原本貪婪正則 `/\[.*\]/s`，解決巢狀陣列或截斷時匹配錯誤
+- `max_tokens` 900 → 1200，減少截斷機率
+- 解析失敗時 `console.error` 印出 rawText 前 200 字供 debug
+- **注意：** 由於 GitHub MCP write 權限問題，此修改尚未 push，檔案在 `/mnt/user-data/outputs/sentiment.js`
 
-**新增資料注入（userPrompt）**
-- 4b：選擇權 P/C Ratio + Max Pain（`options_daily`）
-- 4c：大台期貨 TX 三大法人淨口（`chips_daily`）
-- 4d：產業指數 Top5 / Bottom5（`sector_index_daily`）
-- 4e：總體經濟指標（SOX、台幣、美債2Y+10Y、聯準會利率、S&P500、DXY）
-- 4f：CNN Fear & Greed Index
+### backup.yml 新增 push trigger
 
-**新增 AI 輸出欄位（全部寫入 Supabase）**
-- `market_context`：盤勢背景分析（含總經）
-- `key_risks`：具體風險 2-3 項（jsonb）
-- `sector_focus`：重點產業 {name, reason, sentiment}（jsonb）
-- `macro_data`：總經指標快照（jsonb）
-- `fear_greed`：Fear & Greed 分數（jsonb）
+- 每次 push main 自動備份改動的 source code 到 `pcloud:AlphaScope-Backups/source-code/`
+- 用 `git diff --name-only --diff-filter=ACM HEAD~1 HEAD` 找出改動檔案
+- 保留原始目錄結構（e.g. `js/sentiment.js` → `source-code/js/sentiment.js`）
+- **注意：** 尚未驗證能否正確執行（⚠️ 待確認）
 
-**資料來源變更**
-- ⚠️ **stooq 完全棄用**（不穩定、限速）
-- 改用 FinMind：美股指數、SOX、VIX、商品、台幣匯率、美債2Y+10Y、聯準會利率
-- 改用 Yahoo Finance v8 chart API：DXY（FinMind 無此資料）
-- 改用 CNN dataviz API：Fear & Greed Index
+### GitHub MCP 權限排查
 
-**FinMind dataset 對照（已驗證）**
-```
-USStockPrice + ^SOX         → SOX 費城半導體
-TaiwanExchangeRate + USD    → 台幣匯率（欄位 spot_buy）
-GovernmentBondsYield + United States 2-Year  → 美債2Y（欄位 value）
-GovernmentBondsYield + United States 10-Year → 美債10Y（欄位 value）
-InterestRate + FED          → 聯準會利率（欄位 interest_rate，抓 90 天）
-```
+- 問題：Claude Github MCP Connector 回傳 403，`has not been installed on any accounts`
+- 嘗試：Revoke → Reconnect，OAuth 頁面出現但只有 Authorize，沒有 repo 安裝步驟
+- 新增 Fine-grained PAT connector（URL: `https://api.githubcopilot.com/mcp`）
+- 權限：Contents R/W、Actions R/W、Metadata R
+- **下次對話開始時先測試 GitHub write 是否生效**
 
-**Supabase 新欄位 SQL**
-```sql
-ALTER TABLE alpha_daily_report
-  ADD COLUMN IF NOT EXISTS market_context  text    DEFAULT '',
-  ADD COLUMN IF NOT EXISTS key_risks       jsonb   DEFAULT '[]',
-  ADD COLUMN IF NOT EXISTS sector_focus    jsonb   DEFAULT '[]',
-  ADD COLUMN IF NOT EXISTS dominant_player text    DEFAULT '',
-  ADD COLUMN IF NOT EXISTS retail_signal   text    DEFAULT '',
-  ADD COLUMN IF NOT EXISTS suggest_cash    boolean DEFAULT false,
-  ADD COLUMN IF NOT EXISTS cash_reason     text    DEFAULT '',
-  ADD COLUMN IF NOT EXISTS margin_alert    text    DEFAULT '',
-  ADD COLUMN IF NOT EXISTS macro_data      jsonb,
-  ADD COLUMN IF NOT EXISTS fear_greed      jsonb;
-NOTIFY pgrst, 'reload schema';
-```
+-----
 
----
+## 2026-06-01 本次對話改動總覽
 
-### alpha.js — 今日總結卡片升級
+### Bug 修復
 
-- `market_summary` 升級為多層次結構：主要判斷 → 盤勢背景（靛藍左邊線）→ ⚠️ 關鍵風險 → 📡 重點產業
-- 新增 `alphaMacroBar`：Fear & Greed 分數 + 總經指標小格（動態建立，不需改 index.html）
-- 殖利率倒掛時顯示橙色警示條
-- alpha report 資料存進 `sessionStorage('alpha_report_cache')` 供其他模組使用
+1. **VIX 顯示「見全球商品」** — `watchlist.js` 第二段重複 VIX 邏輯覆蓋正確結果，刪除重複段
+1. **加權指數 MIS 代碼錯誤** — `tse_TAIEX` → `tse_t00`（TWSE MIS 正確代碼）
+1. **TWSE MIS CORS 錯誤** — `service-worker.js` 新增 `mis.twse.com.tw` 直接放行，前端改走 Vercel proxy（`news.js` 新增 `mis` endpoint）
+1. **自選股顯示昨收** — MIS proxy 實作，`fetchMISPrice` 改打 `${API_BASE}?endpoint=mis&ex_ch=...`
+1. **籌碼圖表最後一筆被截斷** — `chips.js` `makeCanvasChart` PR: 10→32、`makeCumulativeChart` PR: 10→35；tooltip 加 `Math.min` clamp；`roTarget` 從 `chartEl.parentElement` 改為 `chartEl`
+1. **Groq JSON 解析失敗** — `sentiment.js` 改用 `/\[.*\]/s` 正則提取 JSON array（後於 2026-06-04 進一步強化）
+1. **Alpha 報告 upsert 409** — `news.js` upsert URL 加 `?on_conflict=report_date`
+1. **`market_context` 空值不重新產生** — `collect_market_data.js` 跳過邏輯改為：`market_context` 有值才跳過，否則重新產生
+1. **`FINMIND_TOKEN` 未傳入 Alpha workflow** — `collect-alpha.yml` 補上 `FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}`
 
----
+### 今日總結大卡片升級
 
-### signals.js — 個股 Modal + 多空訊號升級
+- `index.html` 新增三個隱藏區塊（有值才顯示）：
+  - `dsbContext`：靛藍左邊線，顯示 `market_context`（盤勢背景）
+  - `dsbRisks`：橙色標題 + ul 列表，顯示 `key_risks`
+  - `dsbSectors`：產業卡片，依 `sentiment` 上色（強勢=紅/中性=灰/弱勢=綠）
+- `watchlist.js` `loadDailySummary` 新增渲染邏輯填入上述三個區塊
 
-**個股 Modal 即時報價（MIS）**
-- `openStockModal` 開啟後，盤中非同步 fetch MIS 一次
-- 覆蓋「今日統計」四格為即時價 ⚡、漲跌幅、昨收、漲跌
-- 漲停橙色、跌停青色標記
-- 標題右側顯示成交時間 + 量（e.g. `13:25:03 · 234k張`）
-- 失敗靜默降級保留昨收
+### Vercel API 新增 endpoint
 
-**多空訊號加總經狀態**
-- `signalDesc` 後追加：10Y-2Y 利差（倒掛警示）、Fed 利率、DXY、SOX 漲跌
-- 從 `sessionStorage('alpha_report_cache')` 取，不多發 API 請求
+- `news.js` 新增 `mis` endpoint：伺服器端打 TWSE MIS，帶正確 Referer，解決前端 CORS
 
----
+### GitHub Actions
 
-### watchlist.js — 自選股即時報價（MIS）
+- `collect-alpha.yml` 補上 `FINMIND_TOKEN`，Alpha 報告現可正確抓取全部 7 個總經指標：
+  SOX、DXY、美債2Y、美債10Y、聯準會利率、S&P500、台幣匯率
 
-- 新增 TWSE MIS helper（`isTradingHours`、`fetchMISPrice`、`parseMISRow`、`startMISPolling`、`stopMISPolling`）
-- 自選股每行加 `data-wl-id`、`.wl-price`、`.wl-chg`
-- `wlRender` 後盤中啟動輪詢，每 5 秒更新
-- 關閉面板自動 `stopMISPolling()`
-- 今日總結大盤 `dsbTWSE` 盤中顯示 MIS 即時加權指數 + `⚡時間戳`
-
----
-
-### TWSE MIS API（新增文件）
-
-- 文件：`TWSE_MIS_SKILL.md`（repo 根目錄）
-- 個股：`tse_{stock_id}.tw` / 上櫃：`otc_{stock_id}.tw`
-- 指數：`tse_t00.tw`（TAIEX）、`tse_t24.tw`（半導體）等
-- 關鍵欄位：`z`=即時價、`y`=昨收、`u`=漲停、`w`=跌停、`v`=量、`t`=時間
-- ⚠️ heatmap 產業指數**暫不接 MIS**（TWSE 指數分類無法涵蓋所有細分產業，混用會造成資料不一致）
-
----
+-----
 
 ## 2026-05-29 本次對話改動總覽
 
@@ -543,22 +356,7 @@ NOTIFY pgrst, 'reload schema';
 ### 籌碼面板趨勢圖新增
 
 - 多空訊號→籌碼面板底部新增 4 張近 10 日 Canvas 趨勢圖
-- 🏢 三大法人現貨買賣超（累積面積圖）
-- 📈 台指期 TX 三大法人淨口（折線圖）
-- ▲ 選擇權 CALL 三大法人淨口（折線圖）
-- ▼ 選擇權 PUT 三大法人淨口（折線圖）
 - 支援 hover tooltip 顯示當日數值、Y 軸對稱零軸、X 軸全日期
-
-### Canvas 無限拉長 Bug 修正（chips.js）
-
-- **根因：** `makeCanvasChart()` 在 `appendChild` 前就執行 `setupCanvas()`，掛載後 ResizeObserver 偵測到寬度從 0→實際值，觸發 `canvas.width` 改變，引發無限 layout 迴圈
-- **修法：**
-1. `cssW` 初始設為 `0`，`draw()` 有 `if (cssW <= 0) return` 守門
-1. 先 `appendChild` 再讓 ResizeObserver 給真實寬度，才執行第一次繪圖
-1. `wrap` 寫死 `height:185px; overflow:hidden`，卡片高度在 DOM 流裡永遠不變
-1. Canvas 外包 `canvasWrap`（`position:relative; height:120px; max-height:120px; overflow:hidden`）
-1. Canvas 用 `position:absolute` 脫離文件流，不參與高度計算
-1. ResizeObserver 只在寬度變化 ≥ 4px 時才觸發，用 `requestAnimationFrame` 節流
 
 -----
 
@@ -567,12 +365,10 @@ NOTIFY pgrst, 'reload schema';
 ### RLS 全面修正
 
 - 所有 12 張 SELECT 可讀表的 RLS 從 `{public}` 改為 `{anon,authenticated}`
-- 財經新聞、台股熱圖、多空訊號、紀念品等功能全部恢復正常
 
 ### Workflow 拆分
 
 - `collect.yml` 拆成 5 個獨立檔案：`collect-twse.yml`、`collect-alpha.yml`、`collect-finmind.yml`、`collect-news.yml`、`backup.yml`
-- 不再需要複雜的 `if: contains(...)` 條件判斷
 
 ### Bug 修復
 
@@ -581,22 +377,16 @@ NOTIFY pgrst, 'reload schema';
 1. **`loadMktSignals._busy` 鎖死** — 加 `try/finally` 確保 reset
 1. **`institutional_daily.invest_net`** — 改為正確欄位名 `trust_net`
 1. **三大法人合計數字錯誤** — 改從 `chips_daily.spot_total_net` 讀取
-1. **TMF OI 解析錯誤（45458→67426）** — 改取「小計:」後合計成交量之後第一個數字
+1. **TMF OI 解析錯誤** — 改取「小計:」後合計成交量之後第一個數字
 1. **`showGifts()` 中 `mbnSetActive` 未定義** — 移除該呼叫
 1. **`gifts` endpoint nocache** — 加 `nocache=1` 參數強制跳過 cache
-
-### 新增功能
-
-- **`gifts` endpoint** — `news.js` 新增，查 `shareholder_gifts`，6 小時 cache
-- **`gifts_admin` endpoint** — `news.js` 新增，支援 GET/POST/DELETE，`x-admin-key` 驗證
-- **`tmf` endpoint** — 改從 `chips_daily` 讀取（不再打 FinMind），資料更準確
-- **紀念品 tab 移植** — 從舊版 `index.html` 完整移植回現版（CSS + HTML + JS）
 
 -----
 
 ## 開發慣例
 
 1. 開新對話上傳需要修改的**單一 js 檔** + `CLAUDE.md`（視需要加 `collect_market_data.js` 或 `news.js`）
+1. **下次對話開始時先測試 GitHub MCP write 是否生效**（新增 PAT connector 後尚未驗證）
 1. Claude 複製到 `/home/claude/alphascope/js/`，修改後輸出到 `/mnt/user-data/outputs/`
 1. 改籌碼相關只需 `chips.js`；改新聞只需 `news_feed.js`；改樣式只需 `style.css`
 1. JS 驗證：`node --check file.js`
@@ -632,5 +422,5 @@ NOTIFY pgrst, 'reload schema';
 - 查詢加 `limit` 避免回傳過多資料
 - 多 ID 篩選用 `stock_id=in.(2330,2454,...)` 而非 `or=(...)`
 - 155 支股票的 in() 查詢需分兩批（各 ~77 支）避免 URL 過長 → 400
-- Upsert 必須指定 `on_conflict` 欄位
+- Upsert 必須指定 `on_conflict` 欄位（URL 參數 `?on_conflict=欄位名`）
 - schema cache 更新：`NOTIFY pgrst, 'reload schema';`
