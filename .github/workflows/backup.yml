@@ -59,11 +59,11 @@ jobs:
       - name: Backup changed source files to pCloud
         if: github.event_name == 'push' || inputs.mode == 'source-only' || inputs.mode == 'both'
         run: |
-          # 找出本次 commit 改動的檔案（新增 + 修改，不含刪除）
-          CHANGED=$(git diff --name-only --diff-filter=ACM HEAD~1 HEAD)
+          # 找出本次 commit 改動的檔案（新增 + 修改，不含刪除），並排除所有 .github/ 開頭的檔案
+          CHANGED=$(git diff --name-only --diff-filter=ACM HEAD~1 HEAD | grep -v '^.github/' || true)
 
           if [ -z "$CHANGED" ]; then
-            echo "ℹ️  本次 push 無改動檔案，略過 source code 備份"
+            echo "ℹ️  本次 push 無程式碼檔案改動（或僅有系統工作流變更），略過 source code 備份"
             exit 0
           fi
 
