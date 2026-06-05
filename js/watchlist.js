@@ -91,12 +91,10 @@ async function loadDailySummary() {
     const twseEl = document.getElementById('dsbTWSE');
     const vixEl  = document.getElementById('dsbVIX');
     try {
-      // 每次都重新抓，確保資料最新
       const fRes  = await fetch(API_BASE + '?endpoint=futures');
       const fJson = await fRes.json();
       const fData = fJson.data || [];
 
-      // VIX：symbol='^VIX'，name='VIX波動率'
       const vix = fData.find(d =>
         (d.symbol && d.symbol.toUpperCase().includes('VIX')) ||
         (d.name && d.name.includes('VIX'))
@@ -109,8 +107,6 @@ async function loadDailySummary() {
         vixEl.textContent = '—';
       }
 
-      // 台灣加權：從 stock_daily_twse 抓 TAIEX（由 collectSectorIndex 每日寫入）
-      // fallback：0050
       let twseShown = false;
       for (const stockId of ['TAIEX', '0050']) {
         try {
@@ -132,6 +128,7 @@ async function loadDailySummary() {
       twseEl.textContent = '—';
       vixEl.textContent  = '—';
     }
+
     // Alpha 建議
     const recs = alpha?.recommendations || [];
     const buys = recs.filter(r => r.action === '買進').length;
@@ -141,14 +138,12 @@ async function loadDailySummary() {
       ? `<span style="color:#dc2626">${buys}買進</span> <span style="color:var(--muted);font-size:0.7rem">/ ${avoids}避開</span>`
       : `<span style="color:var(--muted)">—</span>`;
 
-
-
     // 日期
     document.getElementById('dsbDate').textContent = alpha?.report_date
       ? alpha.report_date + ' 報告'
       : new Date().toLocaleDateString('zh-TW');
 
-    // 一句話重點
+    // 一句話重點（完整顯示，不截斷）
     const note = document.getElementById('dsbNote');
     if (alpha?.market_summary) {
       note.textContent = `📌 ${alpha.market_summary}`;
@@ -187,10 +182,8 @@ async function loadDailySummary() {
       sectorsEl.style.display = 'block';
     }
 
-    // 法人籌碼警示
     await loadInstAlert();
 
-    // ── MIS 即時大盤（盤中覆蓋昨收顯示）──
     if (isTradingHours()) {
       const taiexRow = await fetchMISPrice([{ id: 't00', market: 'tse' }]);
       if (taiexRow.length) {
@@ -219,14 +212,13 @@ async function refreshDailySummary() {
 async function loadInstAlert() {
   try {
     const bar = document.getElementById('instAlertBar');
-    // 從 chips_daily 讀取（億元單位，資料正確）
     const rows = await sbFetch('chips_daily', 'order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,spot_total_net');
     if (!Array.isArray(rows) || !rows[0]) return;
     const d = rows[0];
-    const foreignNet = (d.spot_foreign_net || 0) * 1e8; // 億→元（供門檻比較）
+    const foreignNet = (d.spot_foreign_net || 0) * 1e8;
     const trustNet   = (d.spot_trust_net   || 0) * 1e8;
     const total      = (d.spot_total_net   || 0) * 1e8;
-    const threshold = 3000000000; // 30億門檻
+    const threshold = 3000000000;
     const alerts = [];
     const fmt = v => v >= 0 ? `+${(v/1e8).toFixed(1)}億` : `${(v/1e8).toFixed(1)}億`;
     const clr = v => v >= 0 ? '#dc2626' : '#16a34a';
@@ -263,7 +255,7 @@ function openWatchlistPanel() {
   if (!isOpen) {
     wlRender();
   } else {
-    stopMISPolling(); // 關閉時停止輪詢
+    stopMISPolling();
   }
 }
 
@@ -281,24 +273,20 @@ async function wlRender() {
     </div>`;
 
   try {
-    // 取最新 5 個交易日日期
     const dateRes = await sbFetch('stock_daily_twse', 'order=date.desc&limit=5&select=date&stock_id=eq.TAIEX');
     const dates = (dateRes || []).map(r => r.date);
     const latestDate = dates[0];
     if (!latestDate) return;
 
-    // 一次抓 5 日 × 所有自選股資料
     const rows = await sbFetch('stock_daily_twse',
       `date=in.(${dates.join(',')})&stock_id=in.(${list.join(',')})&select=stock_id,name,close,chg_pct,date&order=stock_id.asc,date.asc`);
 
-    // 整理成 { stockId: { latest, history:[close...] } }
     const dataMap = {};
     (rows || []).forEach(r => {
       if (!dataMap[r.stock_id]) dataMap[r.stock_id] = { name: r.name, history: [] };
       dataMap[r.stock_id].history.push({ date: r.date, close: r.close, chg_pct: r.chg_pct });
     });
 
-    // 輔助：產生迷你 SVG 折線
     function makeSparkline(history, color) {
       if (!history || history.length < 2) {
         return `<svg width="52" height="24" viewBox="0 0 52 24"><line x1="2" y1="12" x2="50" y2="12" stroke="var(--border)" stroke-width="1.5"/></svg>`;
@@ -313,7 +301,6 @@ async function wlRender() {
         const y = H - pad - ((p - minP) / range) * (H - pad * 2);
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       }).join(' ');
-      // 最後一個點座標
       const lastPts = pts.split(' ');
       const [lx, ly] = lastPts[lastPts.length - 1].split(',');
       return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -345,10 +332,9 @@ async function wlRender() {
       el.appendChild(row);
     }
 
-    // ── 盤中啟動 MIS 即時輪詢 ──
     if (isTradingHours() && list.length) {
       startMISPolling(
-        list.map(id => ({ id, market: 'tse' })), // 預設上市，上櫃個股會無回應（靜默失敗）
+        list.map(id => ({ id, market: 'tse' })),
         (data) => {
           const row = document.querySelector(`.wl-item[data-wl-id="${data.id}"]`);
           if (!row) return;
@@ -422,7 +408,6 @@ async function runScreener() {
     const latestDate = dateRes[0]?.date;
     if (!latestDate) throw new Error('無資料');
 
-    // 抓股價 + 估值資料
     const [priceRows, valRows] = await Promise.all([
       sbFetch('stock_daily_twse', `date=eq.${latestDate}&order=volume.desc&limit=600&select=stock_id,name,close,chg_pct,volume`),
       sbFetch('stock_valuation_daily', `order=dividend_yield.desc&limit=600&select=stock_id,pe_ratio,pb_ratio,dividend_yield`),
@@ -482,20 +467,16 @@ async function runScreener() {
 // ══════════════════════════════════════════════════════════════
 // ⑤ 個股 Modal 擴充：法人籌碼 + 基本面 tab
 // ══════════════════════════════════════════════════════════════
-// 在 openStockModal 之後，額外抓法人 + 估值資料注入 modal
 const _origOpenStockModal = openStockModal;
 openStockModal = async function(stock) {
   await _origOpenStockModal(stock);
-  // 等待 modal 顯示後注入額外區塊
   setTimeout(() => injectStockModalExtras(stock), 200);
 };
 
 async function injectStockModalExtras(stock) {
-  // 找插入點
   const box = document.getElementById('stockModalBox');
   if (!box) return;
 
-  // 移除舊的 extra 區塊
   const old = box.querySelector('#modalExtras');
   if (old) old.remove();
 
@@ -516,7 +497,6 @@ async function injectStockModalExtras(stock) {
       <div id="modalChipData" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);text-align:center;padding:0.75rem;">載入籌碼資料中…</div>
     </div>`;
 
-  // 插到 AI 研究區塊前面
   const aiDiv = box.querySelector('#modalAiResult')?.closest('div');
   if (aiDiv) {
     box.insertBefore(extra, aiDiv.previousElementSibling || aiDiv);
@@ -524,13 +504,11 @@ async function injectStockModalExtras(stock) {
     box.appendChild(extra);
   }
 
-  // 並行抓估值 + 法人籌碼
   const [valRes, instRes] = await Promise.allSettled([
     sbFetch('stock_valuation_daily', `stock_id=eq.${stock.id}&order=date.desc&limit=1&select=pe_ratio,pb_ratio,dividend_yield,date`),
     sbFetch('institutional_daily', `stock_id=eq.${stock.id}&order=date.desc&limit=5&select=date,foreign_net,trust_net,dealer_net`).catch(() => null),
   ]);
 
-  // 基本面
   const val = valRes.status === 'fulfilled' && valRes.value?.[0];
   const valEl = document.getElementById('modalValuation');
   if (val) {
@@ -549,7 +527,6 @@ async function injectStockModalExtras(stock) {
     valEl.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.7rem;color:var(--muted);text-align:center;padding:0.5rem;">估值資料累積中</div>';
   }
 
-  // 籌碼
   const instRows = instRes.status === 'fulfilled' ? (instRes.value || []) : [];
   const chipEl = document.getElementById('modalChipData');
   if (instRows.length) {
@@ -592,22 +569,18 @@ async function runAlphaBacktest() {
   out.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted);font-family:\'IBM Plex Mono\',monospace;font-size:0.75rem;"><div class="spinner" style="margin:0 auto 0.5rem;"></div>回測中（抓 30 天歷史報告）…</div>';
 
   try {
-    // 抓最近 30 天的 alpha_daily_report
     const reports = await sbFetch('alpha_daily_report', 'order=report_date.desc&limit=30&select=report_date,market_mood,recommendations');
     if (!reports || !reports.length) throw new Error('無歷史報告');
 
-    // 抓最新收盤日（用來算每筆進出場）
     const dateRes = await sbFetch('stock_daily_twse', 'order=date.desc&limit=1&select=date');
     const latestDate = dateRes[0]?.date;
 
-    // 對每份報告的 買進推薦，模擬「當日進場，N天後出場」
     let totalTrades = 0, wins = 0, totalPnl = 0;
     const tradeLog = [];
 
     for (const rpt of reports) {
       const buys = (rpt.recommendations || []).filter(r => r.action === '買進');
       for (const rec of buys) {
-        // 找進場日後的收盤價（+1日 ~ +holding_days日）
         const holdDays = rec.holding_days || 5;
         const entryDate = rpt.report_date;
         try {
@@ -620,7 +593,6 @@ async function runAlphaBacktest() {
           const exitClose  = exitRow?.close;
           if (!entryClose || !exitClose) continue;
 
-          // 判斷停損停利（先到先觸發）
           let actualExit = exitClose;
           let exitReason = `第${priceRows.indexOf(exitRow)+1}天出場`;
           for (const row of priceRows) {
@@ -689,7 +661,6 @@ async function runAlphaBacktest() {
 document.addEventListener('DOMContentLoaded', () => {
   loadDailySummary();
 });
-// 若 DOMContentLoaded 已過（script defer），直接執行
 if (document.readyState !== 'loading') loadDailySummary();
 
 // ESC 關閉選股 Modal
