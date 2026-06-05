@@ -1360,7 +1360,6 @@ ${redditTitles || '無'}
     }
 
     const today = new Date();
-    // 若今天是週末或非交易時間，往前找最近交易日
     const getTradeDate = (offset = 0) => {
       const d = new Date(today);
       d.setDate(d.getDate() - offset);
@@ -1371,22 +1370,16 @@ ${redditTitles || '無'}
     };
 
     const BASE = 'https://api.finmindtrade.com/api/v4/data';
-    const fetchFM = async (params) => {
-      const url = BASE + '?' + new URLSearchParams(params);
-      const r = await fetch(url, { signal: (new AbortController()).signal, headers: { Authorization: `Bearer ${TOKEN}` } });
-      const d = await r.json();
-      return d.data || [];
-    };
 
-    // 嘗試最近 4 個交易日（控制總時間在 Vercel 10s 上限內）
-    let optData = [], instData = [];
-    const overallDeadline = Date.now() + 8000; // 整體最多 8 秒
+    // 嘗試最近 4 個交易日
+    let optData = [], instData = [], tradeDate = '';
+    const overallDeadline = Date.now() + 8000;
     for (let i = 0; i <= 4; i++) {
-      if (Date.now() > overallDeadline) break; // 整體超時保護
+      if (Date.now() > overallDeadline) break;
       const date = getTradeDate(i);
       const ctrl = new AbortController();
       const remaining = overallDeadline - Date.now();
-      const perReqTimeout = Math.min(5000, remaining - 500); // 每次最多 5 秒，保留 500ms 緩衝
+      const perReqTimeout = Math.min(5000, remaining - 500);
       if (perReqTimeout <= 0) break;
       setTimeout(() => ctrl.abort(), perReqTimeout);
       try {
@@ -1394,9 +1387,17 @@ ${redditTitles || '無'}
           fetch(`${BASE}?dataset=TaiwanOptionDaily&data_id=TXO&start_date=${date}&end_date=${date}`, { signal: ctrl.signal }).then(r => r.json()),
           fetch(`${BASE}?dataset=TaiwanOptionInstitutionalInvestors&data_id=TXO&start_date=${date}&end_date=${date}`, { signal: ctrl.signal }).then(r => r.json()),
         ]);
-        optData  = (opt.data  || []).filter(d => d.trading_session === 'position');
-        instData = inst.data || [];
-        if (optData.length > 0) break;
+        // 過濾日盤（排除夜盤 after_market）
+        const dayRows = (opt.data || []).filter(d => {
+          const sess = (d.trading_session || '').toLowerCase();
+          return sess !== 'after_market' && sess !== 'night' && sess !== 'aftermarket';
+        });
+        if (dayRows.length > 0) {
+          optData   = dayRows;
+          instData  = inst.data || [];
+          tradeDate = date;
+          break;
+        }
       } catch(e) { continue; }
     }
 
@@ -1404,70 +1405,140 @@ ${redditTitles || '無'}
       return res.status(200).json({ error: 'no data', pcRatio: null, institution: null, maxPain: null });
     }
 
-    // ── P/C Ratio（成交量）──
-    let callVol = 0, putVol = 0;
-    let callOI  = 0, putOI  = 0;
-    const byStrike = {}; // 用於 Max Pain
+    // ── contract_date 分類 ──
+    // 月選：YYYYMM（6碼數字）
+    // 週三：YYYYMMWx
+    // 週五：YYYYMMFx
+    const isMonthly = (cd) => /^[0-9]{6}$/.test(cd);
+    const isWed     = (cd) => /^[0-9]{6}W[1245]$/.test(cd);
+    const isFri     = (cd) => /^[0-9]{6}F[1-5]$/.test(cd);
 
-    for (const row of optData) {
-      const cp  = (row.call_put || '').trim().toUpperCase();
-      const vol = parseFloat(row.volume) || 0;
-      const oi  = parseFloat(row.open_interest) || 0;
-      const sp  = parseFloat(row.strike_price) || 0;
-      if (cp === 'C' || cp === 'CALL') { callVol += vol; callOI += oi; }
-      if (cp === 'P' || cp === 'PUT')  { putVol  += vol; putOI  += oi; }
-      // 累積各履約價 OI（Max Pain 用）
-      if (sp > 0) {
-        if (!byStrike[sp]) byStrike[sp] = { call: 0, put: 0 };
-        if (cp === 'C' || cp === 'CALL') byStrike[sp].call += oi;
-        if (cp === 'P' || cp === 'PUT')  byStrike[sp].put  += oi;
-      }
-    }
+    const contractDates = [...new Set(optData.map(r => r.contract_date || ''))].sort();
+    const nearMonthCD = contractDates.filter(isMonthly).sort()[0] || null;
+    const nearWedCD   = contractDates.filter(isWed).sort()[0]     || null;
+    const nearFriCD   = contractDates.filter(isFri).sort()[0]     || null;
 
-    const pcVolRatio = callVol > 0 ? putVol / callVol : null;
-    const pcOIRatio  = callOI  > 0 ? putOI  / callOI  : null;
+    // ── 聚合函式：給定 contract_date 過濾條件，回傳 { callOI, putOI, byStrike } ──
+    const isCallCP = (v) => { const s = (v||'').trim(); return s === '買權' || s.toUpperCase() === 'C' || s.toUpperCase() === 'CALL'; };
+    const isPutCP  = (v) => { const s = (v||'').trim(); return s === '賣權' || s.toUpperCase() === 'P' || s.toUpperCase() === 'PUT';  };
 
-    // ── 三大法人籌碼解析 ──
-    const institution = { 外資: null, 自營商: null, 投信: null };
-    for (const row of instData) {
-      const name = row.institutional_investors || row.name || '';
-      const longOI  = parseInt(row.long_open_interest_balance_volume)  || 0;
-      const shortOI = parseInt(row.short_open_interest_balance_volume) || 0;
-      const net = longOI - shortOI;
-      if (name.includes('外資')) institution['外資'] = net;
-      else if (name.includes('自營')) institution['自營商'] = net;
-      else if (name.includes('投信')) institution['投信'] = net;
-    }
-
-    // ── Max Pain 計算 ──
-    // 對每個可能的結算價，計算所有 Call/Put 買方的總損失
-    let maxPain = null;
-    const strikes = Object.keys(byStrike).map(Number).sort((a,b) => a-b);
-    if (strikes.length > 0) {
-      let minLoss = Infinity;
-      for (const settle of strikes) {
-        let totalLoss = 0;
-        for (const sp of strikes) {
-          const { call, put } = byStrike[sp];
-          // Call 買方在 settle < sp 時虧損：(sp - settle) * call_oi
-          if (settle < sp) totalLoss += (sp - settle) * call;
-          // Put 買方在 settle > sp 時虧損：(settle - sp) * put_oi
-          if (settle > sp) totalLoss += (settle - sp) * put;
+    const aggregate = (filterFn) => {
+      let callOI = 0, putOI = 0;
+      const byStrike = {};
+      for (const r of optData) {
+        if (!filterFn(r.contract_date || '')) continue;
+        const oi = parseFloat(r.open_interest) || 0;
+        const sp = parseFloat(r.strike_price)  || 0;
+        if (isCallCP(r.call_put)) callOI += oi;
+        if (isPutCP(r.call_put))  putOI  += oi;
+        if (sp > 0 && oi > 0) {
+          if (!byStrike[sp]) byStrike[sp] = { call: 0, put: 0 };
+          if (isCallCP(r.call_put)) byStrike[sp].call += oi;
+          if (isPutCP(r.call_put))  byStrike[sp].put  += oi;
         }
-        if (totalLoss < minLoss) { minLoss = totalLoss; maxPain = settle; }
+      }
+      return { callOI, putOI, byStrike };
+    };
+
+    const all     = aggregate(() => true);
+    const monthly = nearMonthCD ? aggregate(cd => cd === nearMonthCD) : { callOI: 0, putOI: 0, byStrike: {} };
+    const wed     = nearWedCD   ? aggregate(cd => cd === nearWedCD)   : { callOI: 0, putOI: 0, byStrike: {} };
+    const fri     = nearFriCD   ? aggregate(cd => cd === nearFriCD)   : { callOI: 0, putOI: 0, byStrike: {} };
+
+    // ── Max Pain：取距今最近到期的合約計算 ──
+    const tradeDateObj = new Date(tradeDate + 'T00:00:00Z');
+
+    const getMonthlyExpiry = (cd) => {
+      // cd = "YYYYMM"，找該月第三個週三
+      const y = parseInt(cd.slice(0, 4)), m = parseInt(cd.slice(4, 6));
+      let count = 0;
+      for (let day = 1; day <= 31; day++) {
+        const d = new Date(Date.UTC(y, m - 1, day));
+        if (d.getMonth() !== m - 1) break;
+        if (d.getDay() === 3 && ++count === 3) return d;
+      }
+      return null;
+    };
+    const getNextWeekday = (targetDay) => {
+      const d = new Date(tradeDateObj);
+      for (let i = 0; i < 7; i++) { if (d.getDay() === targetDay) return d; d.setUTCDate(d.getUTCDate() + 1); }
+      return null;
+    };
+
+    const mpCandidates = [];
+    if (nearMonthCD) { const exp = getMonthlyExpiry(nearMonthCD); if (exp) mpCandidates.push({ byStrike: monthly.byStrike, expiry: exp }); }
+    if (nearWedCD)   { const exp = getNextWeekday(3); if (exp) mpCandidates.push({ byStrike: wed.byStrike, expiry: exp }); }
+    if (nearFriCD)   { const exp = getNextWeekday(5); if (exp) mpCandidates.push({ byStrike: fri.byStrike, expiry: exp }); }
+
+    const validCandidates = mpCandidates.filter(c => c.expiry >= tradeDateObj).sort((a, b) => a.expiry - b.expiry);
+    const mpCandidate = validCandidates[0] || mpCandidates[0] || null;
+
+    let maxPain = null;
+    if (mpCandidate) {
+      const mpStrikes = Object.keys(mpCandidate.byStrike).map(Number).sort((a, b) => a - b);
+      if (mpStrikes.length > 0) {
+        let minLoss = Infinity;
+        for (const settle of mpStrikes) {
+          let loss = 0;
+          for (const sp of mpStrikes) {
+            if (settle < sp) loss += (sp - settle) * mpCandidate.byStrike[sp].call;
+            if (settle > sp) loss += (settle - sp) * mpCandidate.byStrike[sp].put;
+          }
+          if (loss < minLoss) { minLoss = loss; maxPain = settle; }
+        }
       }
     }
 
-    const dataDate = optData[0]?.date?.slice(0, 10) || '';
+    // ── 三大法人：CALL/PUT 分別累加，回傳 { net, call, put } ──
+    // FinMind TaiwanOptionInstitutionalInvestors call_put 為中文「買權」/「賣權」
+    const institution = {
+      '外資':  { call: null, put: null, net: null },
+      '自營商': { call: null, put: null, net: null },
+      '投信':  { call: null, put: null, net: null },
+    };
+    for (const row of instData) {
+      const name   = (row.institutional_investors || row.name || '').trim();
+      const cpRaw  = (row.call_put || '').trim();
+      const isCall = cpRaw === '買權' || cpRaw.toUpperCase() === 'C' || cpRaw.toUpperCase() === 'CALL';
+      const isPut  = cpRaw === '賣權' || cpRaw.toUpperCase() === 'P' || cpRaw.toUpperCase() === 'PUT';
+      const lBal   = parseInt(row.long_open_interest_balance_volume)  || 0;
+      const sBal   = parseInt(row.short_open_interest_balance_volume) || 0;
+      const netVal = lBal - sBal;
+
+      let key = null;
+      if (name.includes('外資') && !name.includes('自營')) key = '外資';
+      else if (name.includes('自營')) key = '自營商';
+      else if (name.includes('投信')) key = '投信';
+      if (!key) continue;
+
+      if (isCall) institution[key].call = (institution[key].call || 0) + netVal;
+      if (isPut)  institution[key].put  = (institution[key].put  || 0) + netVal;
+    }
+    // net = call淨 - put淨（買權多 - 賣權多，正值=偏多）
+    for (const key of Object.keys(institution)) {
+      const { call, put } = institution[key];
+      if (call !== null || put !== null)
+        institution[key].net = (call || 0) - (put || 0);
+    }
+
+    const pcOI = (all.callOI > 0) ? +(all.putOI / all.callOI).toFixed(3) : null;
+
     const optPayload = {
-      date: dataDate,
-      pcRatio: { volume: pcVolRatio ? +pcVolRatio.toFixed(3) : null,
-                 oi:     pcOIRatio  ? +pcOIRatio.toFixed(3)  : null,
-                 callVol: Math.round(callVol), putVol: Math.round(putVol),
-                 callOI:  Math.round(callOI),  putOI:  Math.round(putOI) },
-      institution,
+      date: tradeDate,
+      // 全部合約
+      pcRatio: {
+        oi:     pcOI,
+        callOI: Math.round(all.callOI),
+        putOI:  Math.round(all.putOI),
+      },
+      // 分合約類型（近月 / 近週三 / 近週五）
+      byContract: {
+        monthly:    { code: nearMonthCD, callOI: Math.round(monthly.callOI), putOI: Math.round(monthly.putOI), pcRatio: monthly.callOI > 0 ? +(monthly.putOI / monthly.callOI).toFixed(3) : null },
+        weekly_wed: { code: nearWedCD,   callOI: Math.round(wed.callOI),     putOI: Math.round(wed.putOI),     pcRatio: wed.callOI > 0     ? +(wed.putOI / wed.callOI).toFixed(3)     : null },
+        weekly_fri: { code: nearFriCD,   callOI: Math.round(fri.callOI),     putOI: Math.round(fri.putOI),     pcRatio: fri.callOI > 0     ? +(fri.putOI / fri.callOI).toFixed(3)     : null },
+      },
+      institution, // { 外資: { call, put, net }, 自營商: {...}, 投信: {...} }
       maxPain,
-      strikes: strikes.slice(0, 30),
     };
     global._optionsCache = { data: optPayload, ts: Date.now() };
     res.status(200).json({ ...optPayload, cached: false });
