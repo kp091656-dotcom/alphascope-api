@@ -73,7 +73,6 @@ async function loadMktSignals() {
   // ── ① 填入選擇權資料 ──
   if (opt && opt.pcRatio) {
     const pcOI  = opt.pcRatio.oi;
-    const pcVol = opt.pcRatio.volume;
 
     // P/C OI
     const oiEl = document.getElementById('ms_pcOI');
@@ -92,26 +91,11 @@ async function loadMktSignals() {
     oiLbl.style.color = oiColor;
     score += oiScore;
 
-    // P/C Vol
-    const volEl  = document.getElementById('ms_pcVol');
-    const volLbl = document.getElementById('ms_pcVolLabel');
-    volEl.textContent = pcVol != null ? pcVol.toFixed(2) : '—';
-    let vColor = 'var(--muted)', vText = '中性'; vScore = 0;
-    if (pcVol != null) {
-      if      (pcVol >= 1.1)  { vColor='var(--up)';   vText='偏多'; vScore=1; }
-      else if (pcVol >= 0.8)  { vColor='var(--muted)'; vText='中性'; vScore=0; }
-      else                    { vColor='var(--down)';  vText='偏空'; vScore=-1;}
-    }
-    volEl.style.color  = vColor;
-    volLbl.textContent = vText;
-    volLbl.style.color = vColor;
-    score += vScore;
-
     // Max Pain
     const mp = opt.maxPain;
     document.getElementById('ms_maxPain').textContent = mp ? mp.toLocaleString() + ' 點' : '—';
 
-    // 法人選擇權部位
+    // 法人選擇權部位（institution[name] = { net, call, put }）
     const instRows = document.getElementById('ms_instRows');
     const inst = opt.institution || {};
     instRows.innerHTML = ['外資','自營商','投信'].map(name => {
@@ -121,7 +105,7 @@ async function loadMktSignals() {
       const pos   = net >= 0;
       const color = pos ? 'var(--up)' : 'var(--down)';
       const sign  = pos ? '+' : '';
-      const barW  = Math.min(100, Math.abs(net) / 3000 * 100);
+      const barW  = Math.min(100, Math.abs(net) / 5000 * 100);
       const callStr = v.call != null ? `${v.call >= 0 ? '+' : ''}${v.call.toLocaleString()}` : '—';
       const putStr  = v.put  != null ? `${v.put  >= 0 ? '+' : ''}${v.put.toLocaleString()}`  : '—';
       if (name === '外資') score += pos ? 1 : -1;
@@ -373,8 +357,8 @@ async function loadMktSignals() {
   const chipsLbl   = chipsRaw >= 2 ? '強力買超' : chipsRaw >= 1 ? '小幅買超' : chipsRaw <= -2 ? '強力賣超' : chipsRaw <= -1 ? '小幅賣超' : '中性';
   _setSubGauge('subArcChips', 'subTxtChips', 'subLblChips', chipsRaw, 3, chipsLbl, chipsColor);
 
-  // 選擇權子分數（pcOI + pcVol + 外資選擇權）
-  const optRaw   = opt ? (() => { let s = oiScore + vScore; const fw = (opt.institution||{})['外資']; if (fw && fw.net != null) s += (fw.net >= 0 ? 1 : -1); return s; })() : 0;
+  // 選擇權子分數（pcOI + 外資選擇權淨部位）
+  const optRaw   = opt ? (() => { let s = oiScore; const fw = (opt.institution||{})['外資']; if (fw && fw.net != null) s += (fw.net >= 0 ? 1 : -1); return s; })() : 0;
   const optColor = optRaw >= 1 ? 'var(--up)' : optRaw <= -1 ? 'var(--down)' : 'var(--muted)';
   const optLbl   = optRaw >= 2 ? 'PUT偏少' : optRaw >= 1 ? '略偏多' : optRaw <= -2 ? 'PUT偏多' : optRaw <= -1 ? '略偏空' : '中性';
   _setSubGauge('subArcOpt', 'subTxtOpt', 'subLblOpt', optRaw, 4, optLbl, optColor);
@@ -406,35 +390,55 @@ async function loadMktSignals() {
 
 // ── 台指選擇權：P/C Ratio + 三大法人 + Max Pain ──
 async function loadOptions() {
-  try {
-    const res  = await fetch(API_BASE + '?endpoint=options');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.error || !data.pcRatio) throw new Error(data.error || 'no data');
-
+  // ── 共用：渲染選擇權資料到 DOM ──
+  const renderOptions = (data) => {
     document.getElementById('optLoading').style.display = 'none';
     document.getElementById('optContent').style.display = 'block';
 
-    // ── P/C Ratio（用未平倉口數）──
-    const pcOI  = data.pcRatio.oi;
+    // ── P/C Ratio OI（全部合約）──
+    const pcOI  = data.pcRatio?.oi;
     const pcVal = document.getElementById('pcRatioVal');
     const pcLbl = document.getElementById('pcRatioLabel');
-    pcVal.textContent = pcOI != null ? pcOI.toFixed(2) : '—';
+    pcVal.textContent = pcOI != null ? Number(pcOI).toFixed(2) : '—';
     let pcColor = 'var(--muted)', pcText = '中性';
     if (pcOI != null) {
-      if      (pcOI >= 1.7)  { pcColor = 'var(--up)';   pcText = '強力偏多'; }
-      else if (pcOI >= 1.3)  { pcColor = 'var(--up)';   pcText = '略偏多';   }
-      else if (pcOI >= 1.0)  { pcColor = 'var(--muted)'; pcText = '中性';    }
-      else if (pcOI >= 0.7)  { pcColor = 'var(--down)';  pcText = '略偏空';  }
-      else                   { pcColor = 'var(--down)';  pcText = '強力偏空'; }
+      if      (pcOI >= 1.7)  { pcColor = 'var(--up)';    pcText = '強力偏多'; }
+      else if (pcOI >= 1.3)  { pcColor = 'var(--up)';    pcText = '略偏多';   }
+      else if (pcOI >= 1.0)  { pcColor = 'var(--muted)'; pcText = '中性';     }
+      else if (pcOI >= 0.7)  { pcColor = 'var(--down)';  pcText = '略偏空';   }
+      else                   { pcColor = 'var(--down)';   pcText = '強力偏空'; }
     }
     pcVal.style.color = pcColor;
     pcLbl.textContent = pcText;
     pcLbl.style.color = pcColor;
-    document.getElementById('pcCallOI').textContent = data.pcRatio.callOI?.toLocaleString() || '—';
-    document.getElementById('pcPutOI').textContent  = data.pcRatio.putOI?.toLocaleString()  || '—';
+    document.getElementById('pcCallOI').textContent = data.pcRatio?.callOI?.toLocaleString() || '—';
+    document.getElementById('pcPutOI').textContent  = data.pcRatio?.putOI?.toLocaleString()  || '—';
 
-    // ── 三大法人（CALL淨 - PUT淨）──
+    // ── 分合約類型 OI（近月 / 週三 / 週五）──
+    const bc = data.byContract || {};
+    const renderContractRow = (label, obj) => {
+      if (!obj) return '';
+      const pc = obj.pcRatio != null ? Number(obj.pcRatio).toFixed(2) : '—';
+      const c  = obj.callOI  != null ? obj.callOI.toLocaleString()    : '—';
+      const p  = obj.putOI   != null ? obj.putOI.toLocaleString()     : '—';
+      const pcColor = obj.pcRatio == null ? 'var(--muted)'
+                    : obj.pcRatio >= 1.3  ? 'var(--up)'
+                    : obj.pcRatio >= 1.0  ? 'var(--muted)'
+                    : 'var(--down)';
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:0.3rem;font-family:'IBM Plex Mono',monospace;font-size:0.6rem;">
+        <span style="color:var(--muted);width:52px;flex-shrink:0;">${label}</span>
+        <span style="color:${pcColor};font-weight:700;width:32px;">${pc}</span>
+        <span style="color:var(--muted);">C</span><span style="color:var(--up);width:46px;">${c}</span>
+        <span style="color:var(--muted);">P</span><span style="color:var(--down);width:46px;">${p}</span>
+      </div>`;
+    };
+    const bcEl = document.getElementById('optByContract');
+    if (bcEl) bcEl.innerHTML =
+      renderContractRow('近月', bc.monthly) +
+      renderContractRow('週三', bc.weekly_wed) +
+      renderContractRow('週五', bc.weekly_fri);
+
+    // ── 三大法人選擇權淨部位 { net, call, put } ──
     const instEl = document.getElementById('instRows');
     const inst = data.institution || {};
     instEl.innerHTML = ['外資','自營商','投信'].map(name => {
@@ -444,7 +448,7 @@ async function loadOptions() {
       const pos   = net >= 0;
       const color = pos ? 'var(--up)' : 'var(--down)';
       const sign  = pos ? '+' : '';
-      const barW  = Math.min(100, Math.abs(net) / 3000 * 100);
+      const barW  = Math.min(100, Math.abs(net) / 5000 * 100);
       const callStr = v.call != null ? `${v.call >= 0 ? '+' : ''}${v.call.toLocaleString()}` : '—';
       const putStr  = v.put  != null ? `${v.put  >= 0 ? '+' : ''}${v.put.toLocaleString()}`  : '—';
       return `<div style="margin-bottom:0.5rem;">
@@ -453,7 +457,7 @@ async function loadOptions() {
           <div style="flex:1;height:7px;background:var(--surface);border-radius:2px;overflow:hidden;">
             <div style="height:100%;width:${barW}%;background:${color};border-radius:2px;transition:width 0.6s;"></div>
           </div>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:${color};font-weight:700;width:52px;text-align:right;">${sign}${net.toLocaleString()}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:${color};font-weight:700;width:56px;text-align:right;">${sign}${net.toLocaleString()}</span>
         </div>
         <div style="display:flex;gap:0.6rem;padding-left:42px;font-family:'IBM Plex Mono',monospace;font-size:0.57rem;color:var(--muted);">
           <span>買權 <b style="color:var(--up);">${callStr}</b></span>
@@ -462,90 +466,52 @@ async function loadOptions() {
       </div>`;
     }).join('');
 
-    // ── Max Pain ──
+    // ── Max Pain（最近到期合約）──
     const mp = data.maxPain;
     document.getElementById('maxPainVal').textContent = mp ? mp.toLocaleString() : '—';
-
-    // 距離結算日提示（台指週選，每週三結算）
+    // 找最近到期（週三優先）
     const today = new Date();
-    const dow   = today.getDay(); // 0=日 3=三
-    const daysToSettle = dow <= 3 ? 3 - dow : 3 + (7 - dow);
+    const dow = today.getDay();
+    const daysToWed = ((3 - dow + 7) % 7) || 7;
+    const daysToFri = ((5 - dow + 7) % 7) || 7;
+    const nearestDays = Math.min(daysToWed, daysToFri);
+    const nearestDay  = daysToWed <= daysToFri ? '週三' : '週五';
     document.getElementById('maxPainNote').textContent =
-      `距本週結算 ${daysToSettle} 天 · 賣方（法人）獲利最大點`;
+      `距最近結算（${nearestDay}）${nearestDays} 天 · 賣方（法人）獲利最大點`;
 
-    document.getElementById('optTs').textContent = `資料日期：${data.date || '—'}`;
+    document.getElementById('optTs').textContent = `資料日期：${data.date || '—'}${data._source === 'supabase' ? '（Supabase）' : ''}`;
+  };
+
+  try {
+    const res  = await fetch(API_BASE + '?endpoint=options');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error || !data.pcRatio) throw new Error(data.error || 'no data');
+    renderOptions(data);
   } catch(e) {
     console.warn('loadOptions FinMind 失敗，嘗試 Supabase fallback:', e.message);
-    // ── Fallback：直接從 Supabase options_daily 取最新一筆 ──
+    // ── Fallback：從 Supabase options_analytics_daily 取最新一筆 ──
     try {
-      const rows = await sbFetch('options_daily', 'order=date.desc&limit=1&select=date,pc_ratio_oi,pc_ratio_vol,foreign_opt_net');
-      const row  = rows?.[0];
-      if (!row) throw new Error('Supabase 也無資料');
-
-      // 用 Supabase 資料組成最小可顯示結構
+      const rows = await sbFetch('options_analytics_daily', 'order=date.desc&limit=2&select=date,contract_type,pc_ratio_oi,call_oi,put_oi,foreign_opt_net');
+      if (!rows?.length) throw new Error('Supabase 也無資料');
+      // 找全部合約那筆
+      const allRow = rows.find(r => r.contract_type === 'all') || rows[0];
       const fallbackData = {
-        date:      row.date,
-        pcRatio:   { oi: row.pc_ratio_oi, volume: row.pc_ratio_vol, callOI: null, putOI: null },
-        institution: { '外資': row.foreign_opt_net, '自營商': null, '投信': null },
-        maxPain:   null,
-        _source:   'supabase',
+        date:    allRow.date,
+        _source: 'supabase',
+        pcRatio: { oi: allRow.pc_ratio_oi, callOI: allRow.call_oi, putOI: allRow.put_oi },
+        byContract: null,
+        institution: {
+          '外資':  { net: allRow.foreign_opt_net, call: null, put: null },
+          '自營商': { net: null, call: null, put: null },
+          '投信':  { net: null, call: null, put: null },
+        },
+        maxPain: null,
       };
-
-      document.getElementById('optLoading').style.display = 'none';
-      document.getElementById('optContent').style.display = 'block';
-
-      const pcOI  = fallbackData.pcRatio.oi;
-      const pcVal = document.getElementById('pcRatioVal');
-      const pcLbl = document.getElementById('pcRatioLabel');
-      pcVal.textContent = pcOI != null ? Number(pcOI).toFixed(2) : '—';
-      let pcColor = 'var(--muted)', pcText = '中性';
-      if (pcOI != null) {
-        if      (pcOI >= 1.7)  { pcColor = 'var(--up)';    pcText = '強力偏多'; }
-        else if (pcOI >= 1.3)  { pcColor = 'var(--up)';    pcText = '略偏多';   }
-        else if (pcOI >= 1.0)  { pcColor = 'var(--muted)'; pcText = '中性';     }
-        else if (pcOI >= 0.7)  { pcColor = 'var(--down)';  pcText = '略偏空';   }
-        else                   { pcColor = 'var(--down)';   pcText = '強力偏空'; }
-      }
-      pcVal.style.color = pcColor;
-      pcLbl.textContent = pcText;
-      pcLbl.style.color = pcColor;
-      document.getElementById('pcCallOI').textContent = '—';
-      document.getElementById('pcPutOI').textContent  = '—';
-
-      const inst = fallbackData.institution;
-      const instEl = document.getElementById('instRows');
-      instEl.innerHTML = ['外資','自營商','投信'].map(name => {
-        const v = inst[name];
-        if (!v || v.net == null) return '';
-        const net   = v.net;
-        const pos   = net >= 0;
-        const color = pos ? 'var(--up)' : 'var(--down)';
-        const sign  = pos ? '+' : '';
-        const barW  = Math.min(100, Math.abs(net) / 3000 * 100);
-        const callStr = v.call != null ? `${v.call >= 0 ? '+' : ''}${v.call.toLocaleString()}` : '—';
-        const putStr  = v.put  != null ? `${v.put  >= 0 ? '+' : ''}${v.put.toLocaleString()}`  : '—';
-        return `<div style="margin-bottom:0.5rem;">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);width:36px;flex-shrink:0;">${name}</span>
-            <div style="flex:1;height:7px;background:var(--surface);border-radius:2px;overflow:hidden;">
-              <div style="height:100%;width:${barW}%;background:${color};border-radius:2px;"></div>
-            </div>
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:${color};font-weight:700;width:52px;text-align:right;">${sign}${net.toLocaleString()}</span>
-          </div>
-          <div style="display:flex;gap:0.6rem;padding-left:42px;font-family:'IBM Plex Mono',monospace;font-size:0.57rem;color:var(--muted);">
-            <span>買權 <b style="color:var(--up);">${callStr}</b></span>
-            <span>賣權 <b style="color:var(--down);">${putStr}</b></span>
-          </div>
-        </div>`;
-      }).join('');
-
-      document.getElementById('maxPainVal').textContent = '—';
-      document.getElementById('maxPainNote').textContent = '（FinMind 逾時，Max Pain 暫無）';
-      document.getElementById('optTs').textContent = `資料日期：${row.date}（Supabase）`;
-
+      renderOptions(fallbackData);
     } catch(e2) {
       const is504 = e.message.includes('504') || e.message.includes('timeout');
-      const msg   = is504 ? '選擇權資料暫時無法取得（伺服器逾時），請稍後重新整理' : `選擇權資料載入失敗：${e.message}`;
+      const msg = is504 ? '選擇權資料暫時無法取得（伺服器逾時），請稍後重新整理' : `選擇權資料載入失敗：${e.message}`;
       document.getElementById('optLoading').textContent = msg;
       console.warn('loadOptions fallback 也失敗:', e2.message);
     }
