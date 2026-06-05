@@ -1,26 +1,43 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-04（第二次）
+> 更新日期：2026-06-06
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 -----
 
-## ⚠️ 已知問題（2026-06-04）
+## ⚠️ 已知問題
 
-### 1. Claude GitHub MCP 無法使用
-- **結論：** Fine-grained PAT connector（`https://api.githubcopilot.com/mcp`）工具未載入，`api.github.com` 也被 web_fetch 擋住
-- **暫時解法：** Claude 輸出到 `/mnt/user-data/outputs/`，由使用者手動 push
-
-### 2. 籌碼面板數據全空（market_chips_daily）
+### 1. 籌碼面板數據全空（market_chips_daily）
 - **根因：** 6-03 那筆因 `fut_mtx_dealer_long` 欄位不存在，upsert 失敗，新表無資料
 - **修復：** `collect_market_data.js` 已修正（MTX/TMF 改用 `netOnly=true`）→ 已輸出待 push
 - **補資料：** 需在 Supabase SQL Editor 執行「從 chips_daily 補寫 6-03 至 market_chips_daily」的 SQL（已在對話中提供）→ **尚未執行**
 
-### 3. collect-twse.yml 問題
+### 2. collect-twse.yml 問題
 - **狀態：** 尚未查看 Actions log，待排查
 
-### 4. sentiment.js 未 push
+### 3. sentiment.js 未 push
 - **狀態：** Groq JSON 解析強化版在 `/mnt/user-data/outputs/sentiment.js`，待手動 push
+
+-----
+
+## ✅ 已解決問題
+
+### GitHub MCP ✅（2026-06-06）
+- **解法：** 安裝 Claude Github MCP Connector GitHub App（`https://github.com/apps/claude-github-mcp-connector/installations/new`），選 All repositories
+- **使用方式：** 對話框 `+` → Connectors → 開啟 GitHub MCP toggle（Load tools when needed 即可，不需 Tools already loaded）
+- **能力：** 直接讀取 repo 檔案、push commit，無需再手動上傳/下載
+
+### backup.yml push trigger ✅（2026-06-05）
+- push main 自動備份正常運作，已確認
+
+-----
+
+## 開發工作流程（GitHub MCP 可用後）
+
+1. 告訴 Claude 要改什麼
+2. Claude 直接用 `GitHub MCP:get_file_contents` 讀取 repo 檔案
+3. 修改後用 `GitHub MCP:push_files` 直接 push，不需再上傳/下載
+4. 重要改動後更新 CLAUDE.md 並 push
 
 -----
 
@@ -94,9 +111,8 @@ let _giftsData, _giftCat, _giftSort
 let futuresData, futuresSortKey
 ```
 
-> ⚠️ 開新對話時上傳需要修改的 **單一 js 檔**，不必上傳整個 index.html。
-> 例如改籌碼面板只需上傳 `js/chips.js`，改新聞只需上傳 `js/news_feed.js`。
-> `api.js` 與 `index.html` 骨架通常不需改動。
+> ⚠️ 開新對話時直接請 Claude 用 GitHub MCP 讀取需要修改的檔案，不需上傳。
+> 例如改籌碼面板：「請讀取 js/chips.js 並修改 xxx」
 
 -----
 
@@ -223,7 +239,7 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 | `collect-finmind.yml` | 週一~五 15:30 | 抓 FinMind 籌碼/選擇權/期貨 | 未知 |
 | `collect-alpha.yml` | 週一~五 16:00 | 產生 Alpha 每日報告 | 正常 |
 | `collect-news.yml` | 每小時 | 抓財經新聞 RSS | 未知 |
-| `backup.yml` | 週日 09:00 + 每次 push main | Supabase 備份 + source code 備份到 pCloud | ⚠️ 有問題 |
+| `backup.yml` | 週日 09:00 + 每次 push main | Supabase 備份 + source code 備份到 pCloud | ✅ 正常 |
 | `scrape_gifts.yml` | 手動觸發 | 爬股東紀念品 | 正常（停用自動排程）|
 | `scrape_egift.yml` | 每週日 09:30 | 爬 eGift 紀念品 | 正常 |
 
@@ -248,7 +264,7 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 ### Schema 重整（雙寫過渡期）
 
 | 函式 | 舊表（保留） | 新表（新增）|
-|------|------------|-----------|
+|------|------------|----------|
 | `collectChips()` | `chips_daily` | `market_chips_daily` |
 | `collectOptions()` | `options_daily` | `options_analytics_daily`（3列/天）|
 | `collectInstitutional()` | `institutional_daily` | `market_chips_daily`（現貨欄位）|
@@ -262,16 +278,28 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 - [x] `api/news.js` tmf endpoint 切換至 `market_chips_daily` ✅
 - [x] `valuation.js` 修正 `foreign_opt_net` 400 錯誤，改查 `options_analytics_daily` ✅
 - [x] `backup.js` 新增 `market_chips_daily`、`options_analytics_daily` 備份 ✅
-- [x] `backup.yml` shell bug 修正（FAIL 計數 `&&` 優先級問題）✅
-- [x] `collect_market_data.js` MTX/TMF `netOnly` 修正（移除不存在的 long/short 欄位）✅
-- [x] `api/news.js` options endpoint 重寫（分合約 OI、三大法人 {net,call,put}、Max Pain 最近合約、刪 pc_ratio_vol）✅
-- [x] `js/signals.js` 對應新 options API 結構（byContract 四種OI、三大法人渲染修正、刪 pcVol）✅
-- [x] `index.html` 加 `optByContract` div、刪 P/C Ratio Vol、ms_maxPain 改版 ✅
-- [ ] **補資料：** 在 Supabase SQL Editor 從 `chips_daily` 補寫 6-03 至 `market_chips_daily`（SQL 已提供）
-- [ ] push 所有待 push 的檔案：`sentiment.js`、`collect_market_data.js`、`backup.yml`、`news.js`、`signals.js`、`index.html`
+- [x] `backup.yml` shell bug 修正 ✅
+- [x] `collect_market_data.js` MTX/TMF `netOnly` 修正 ✅
+- [x] `api/news.js` options endpoint 重寫 ✅
+- [x] `js/signals.js` 對應新 options API 結構 ✅
+- [x] `index.html` 加 `optByContract` div ✅
+- [x] GitHub MCP 連線 ✅（2026-06-06）
+- [ ] **補資料：** 在 Supabase SQL Editor 從 `chips_daily` 補寫 6-03 至 `market_chips_daily`
+- [ ] push 待 push 的檔案：`sentiment.js`、`collect_market_data.js`、`news.js`、`signals.js`、`index.html`
 - [ ] 確認 `market_chips_daily` 資料正常後，前端籌碼面板恢復顯示
-- [ ] 排查 `collect-twse.yml` 問題（查 Actions log）
-- [ ] 確認新表資料穩定 3～5 天後刪舊表（`chips_daily` / `options_daily` / `institutional_daily`）
+- [ ] 排查 `collect-twse.yml` 問題
+- [ ] 確認新表資料穩定 3～5 天後刪舊表
+
+-----
+
+## 2026-06-06 改動總覽
+
+### GitHub MCP 連線成功
+- 安裝 Claude Github MCP Connector GitHub App
+- 現可直接讀取/push repo 檔案，不需手動上傳
+
+### js/watchlist.js — market_summary 截斷修正
+- 移除 `slice(0, 80)` 硬截斷，改為完整顯示 `alpha.market_summary`
 
 -----
 
@@ -284,176 +312,114 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 - 根因：`market_chips_daily` 的 MTX/TMF 欄位只有 `_net`，無 `_long`/`_short`
 
 ### backup.yml — shell bug 修正
-- 原本：`rclone ... && echo ✅ && SUCCESS+=1 || echo ❌ && FAIL+=1`（`&&`/`||` 優先級讓 FAIL 永遠被加 1）
+- 原本：`rclone ... && echo ✅ && SUCCESS+=1 || echo ❌ && FAIL+=1`
 - 改為：`if rclone ...; then SUCCESS+=1; else FAIL+=1; fi`
 
 ### api/news.js — options endpoint 完整重寫
-- 分合約類型：`isMonthly`（6碼）/ `isWed`（`...Wx`）/ `isFri`（`...Fx`）
-- 各自獨立計算 callOI / putOI / pcRatio，回傳 `byContract: { monthly, weekly_wed, weekly_fri }`
-- 三大法人：CALL/PUT 分別累加，回傳 `{ net, call, put }`（net = call淨 - put淨）
-- Max Pain：取最近到期合約計算（週三/週五/近月，誰最快到期用誰）
-- 移除：`pc_ratio_vol`（`volume` 欄位）、`strikes` 陣列
+- 分合約類型：`isMonthly` / `isWed` / `isFri`
+- 各自獨立計算 callOI / putOI / pcRatio，回傳 `byContract`
+- Max Pain、三大法人 CALL/PUT 分別累加
+- 移除：`pc_ratio_vol`、`strikes` 陣列
 
 ### js/signals.js — 對應新 options API
-- `loadOptions()` 重構：`renderOptions(data)` 共用渲染函式（主流程 + fallback 共用）
-- 新增 `optByContract` 區塊渲染（近月/週三/週五各一行，顯示 P/C + CallOI + PutOI）
-- 三大法人渲染：直接讀 `v.net` / `v.call` / `v.put`
-- 市場總覽：移除 ms_pcVol / vScore，score 計算只用 pcOI + 外資淨部位
+- `renderOptions(data)` 共用渲染函式
+- 新增 `optByContract` 區塊渲染
 - Fallback 改讀 `options_analytics_daily`
 
 ### index.html — HTML 結構調整
-- 市場總覽：P/C Ratio Vol stat-card → Max Pain stat-card（`id="ms_maxPain"`）
-- 選擇權卡片：`opt-oi-grid` 下方新增 `id="optByContract"` 分合約 OI 容器
+- P/C Ratio Vol → Max Pain stat-card
+- 新增 `id="optByContract"` 分合約 OI 容器
 
 -----
 
 ## 2026-06-04（第一次對話）改動總覽
 
 ### sentiment.js Groq JSON 解析強化
-
-- 新增 `extractGroqJSON()` 函式：先去 markdown 圍欄（` ```json ``` `），再用**括號深度配對**找完整 `[...]`
-- 取代原本貪婪正則 `/\[.*\]/s`，解決巢狀陣列或截斷時匹配錯誤
-- `max_tokens` 900 → 1200，減少截斷機率
-- 解析失敗時 `console.error` 印出 rawText 前 200 字供 debug
-- **注意：** 由於 GitHub MCP write 權限問題，此修改尚未 push，檔案在 `/mnt/user-data/outputs/sentiment.js`
+- 新增 `extractGroqJSON()` 函式：括號深度配對找完整 `[...]`
+- `max_tokens` 900 → 1200
+- **注意：** 尚未 push
 
 ### backup.yml 新增 push trigger
-
-- 每次 push main 自動備份改動的 source code 到 `pcloud:AlphaScope-Backups/source-code/`
-- 用 `git diff --name-only --diff-filter=ACM HEAD~1 HEAD` 找出改動檔案
-- 保留原始目錄結構（e.g. `js/sentiment.js` → `source-code/js/sentiment.js`）
-- **注意：** 尚未驗證能否正確執行（⚠️ 待確認）
-
-### GitHub MCP 權限排查
-
-- 問題：Claude Github MCP Connector 回傳 403，`has not been installed on any accounts`
-- 嘗試：Revoke → Reconnect，OAuth 頁面出現但只有 Authorize，沒有 repo 安裝步驟
-- 新增 Fine-grained PAT connector（URL: `https://api.githubcopilot.com/mcp`）
-- 權限：Contents R/W、Actions R/W、Metadata R
-- **下次對話開始時先測試 GitHub write 是否生效**
+- 每次 push main 自動備份到 pCloud ✅（2026-06-05 已驗證）
 
 -----
 
 ## 2026-06-01 本次對話改動總覽
 
 ### Bug 修復
-
-1. **VIX 顯示「見全球商品」** — `watchlist.js` 第二段重複 VIX 邏輯覆蓋正確結果，刪除重複段
-1. **加權指數 MIS 代碼錯誤** — `tse_TAIEX` → `tse_t00`（TWSE MIS 正確代碼）
-1. **TWSE MIS CORS 錯誤** — `service-worker.js` 新增 `mis.twse.com.tw` 直接放行，前端改走 Vercel proxy（`news.js` 新增 `mis` endpoint）
-1. **自選股顯示昨收** — MIS proxy 實作，`fetchMISPrice` 改打 `${API_BASE}?endpoint=mis&ex_ch=...`
-1. **籌碼圖表最後一筆被截斷** — `chips.js` `makeCanvasChart` PR: 10→32、`makeCumulativeChart` PR: 10→35；tooltip 加 `Math.min` clamp；`roTarget` 從 `chartEl.parentElement` 改為 `chartEl`
-1. **Groq JSON 解析失敗** — `sentiment.js` 改用 `/\[.*\]/s` 正則提取 JSON array（後於 2026-06-04 進一步強化）
-1. **Alpha 報告 upsert 409** — `news.js` upsert URL 加 `?on_conflict=report_date`
-1. **`market_context` 空值不重新產生** — `collect_market_data.js` 跳過邏輯改為：`market_context` 有值才跳過，否則重新產生
-1. **`FINMIND_TOKEN` 未傳入 Alpha workflow** — `collect-alpha.yml` 補上 `FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}`
+1. VIX 顯示「見全球商品」
+2. 加權指數 MIS 代碼錯誤（tse_TAIEX → tse_t00）
+3. TWSE MIS CORS 錯誤 → Vercel proxy
+4. 自選股顯示昨收 → MIS proxy 實作
+5. 籌碼圖表最後一筆被截斷
+6. Groq JSON 解析失敗
+7. Alpha 報告 upsert 409
+8. `market_context` 空值不重新產生
+9. `FINMIND_TOKEN` 未傳入 Alpha workflow
 
 ### 今日總結大卡片升級
+- 新增三個隱藏區塊：`dsbContext`、`dsbRisks`、`dsbSectors`
 
-- `index.html` 新增三個隱藏區塊（有值才顯示）：
-  - `dsbContext`：靛藍左邊線，顯示 `market_context`（盤勢背景）
-  - `dsbRisks`：橙色標題 + ul 列表，顯示 `key_risks`
-  - `dsbSectors`：產業卡片，依 `sentiment` 上色（強勢=紅/中性=灰/弱勢=綠）
-- `watchlist.js` `loadDailySummary` 新增渲染邏輯填入上述三個區塊
-
-### Vercel API 新增 endpoint
-
-- `news.js` 新增 `mis` endpoint：伺服器端打 TWSE MIS，帶正確 Referer，解決前端 CORS
-
-### GitHub Actions
-
-- `collect-alpha.yml` 補上 `FINMIND_TOKEN`，Alpha 報告現可正確抓取全部 7 個總經指標：
-  SOX、DXY、美債2Y、美債10Y、聯準會利率、S&P500、台幣匯率
+### Vercel API 新增 mis endpoint
 
 -----
 
 ## 2026-05-29 本次對話改動總覽
 
 ### 前端架構重構（index.html 拆分）
-
-- 原本 7,624 行的 `index.html` 拆成 1 個 CSS + 12 個 JS 獨立檔案
-- `index.html` 瘦身到 ~1,230 行（純 HTML 骨架）
-- 好處：跟 AI 對話只需上傳單一 js 檔，省 80%+ token
+- 7,624 行 → 1,230 行（純 HTML 骨架）+ 12 個 JS 檔
 
 ### 前端檔案命名
-
-- `js/news.js`（舊）→ `js/news_feed.js`（新），避免與 `api/news.js` 混淆
-- `api/news.js` = Vercel Serverless Function（後端）
-- `js/news_feed.js` = 前端新聞渲染 JS
+- `js/news.js` → `js/news_feed.js`
 
 ### Workflow 調整
-
-- `scrape_gifts.yml` 停用自動排程（cron 已注解），只保留手動觸發
-- `scrape_egift.yml` 改為**每週日**09:30 執行（原為週一三五）
+- `scrape_gifts.yml` 停用自動排程
+- `scrape_egift.yml` 改為每週日執行
 
 ### 籌碼面板趨勢圖新增
-
-- 多空訊號→籌碼面板底部新增 4 張近 10 日 Canvas 趨勢圖
-- 支援 hover tooltip 顯示當日數值、Y 軸對稱零軸、X 軸全日期
+- 近 10 日 Canvas 趨勢圖 × 4
 
 -----
 
 ## 2026-05-27 本次對話改動總覽
 
 ### RLS 全面修正
-
-- 所有 12 張 SELECT 可讀表的 RLS 從 `{public}` 改為 `{anon,authenticated}`
-
-### Workflow 拆分
-
-- `collect.yml` 拆成 5 個獨立檔案：`collect-twse.yml`、`collect-alpha.yml`、`collect-finmind.yml`、`collect-news.yml`、`backup.yml`
-
-### Bug 修復
-
-1. **頁面預設顯示** — 移除 `showHeatmap()` 自動執行，改為 `loadHeatmap()` 背景預載
-1. **多空訊號 `inst is not defined`** — `opt`/`inst` 提升到外層 scope
-1. **`loadMktSignals._busy` 鎖死** — 加 `try/finally` 確保 reset
-1. **`institutional_daily.invest_net`** — 改為正確欄位名 `trust_net`
-1. **三大法人合計數字錯誤** — 改從 `chips_daily.spot_total_net` 讀取
-1. **TMF OI 解析錯誤** — 改取「小計:」後合計成交量之後第一個數字
-1. **`showGifts()` 中 `mbnSetActive` 未定義** — 移除該呼叫
-1. **`gifts` endpoint nocache** — 加 `nocache=1` 參數強制跳過 cache
+### Workflow 拆分（collect.yml → 5 個獨立檔案）
+### 多項 Bug 修復
 
 -----
 
 ## 開發慣例
 
-1. 開新對話上傳需要修改的**單一 js 檔** + `CLAUDE.md`（視需要加 `collect_market_data.js` 或 `news.js`）
-1. **下次對話開始時先測試 GitHub MCP write 是否生效**（新增 PAT connector 後尚未驗證）
-1. Claude 複製到 `/home/claude/alphascope/js/`，修改後輸出到 `/mnt/user-data/outputs/`
-1. 改籌碼相關只需 `chips.js`；改新聞只需 `news_feed.js`；改樣式只需 `style.css`
+1. **直接請 Claude 用 GitHub MCP 讀取並修改檔案**，不需上傳
+1. 改籌碼相關只需讀 `chips.js`；改新聞只需讀 `news_feed.js`
 1. JS 驗證：`node --check file.js`
-1. HTML 驗證：用 Python 統計 `<script>/<style>` 開關標籤數量是否一致
+1. HTML 驗證：用 Python 統計 `<script>/<style>` 開關標籤數量
 1. 漲跌色一律 `var(--up)` / `var(--down)`
 1. 不可用裸露 `event`，改傳 `this` 或 `addEventListener`
 1. Supabase 寫入前先對照本文件確認欄位名稱
-1. 新功能同步更新 CLAUDE.md
-1. `str_replace` 後務必確認相鄰上下文，避免 if 語句被合併到注釋同行
+1. 新功能同步更新 CLAUDE.md 並 push
+1. `str_replace` 後務必確認相鄰上下文
 1. 新增 show 函式時，記得在其他所有 `showXxx()` 函式裡加上隱藏新 panel 的邏輯
-1. Canvas 圖表禁止在 `appendChild` 前執行 `setupCanvas/draw`（會觸發無限 ResizeObserver 迴圈）
+1. Canvas 圖表禁止在 `appendChild` 前執行 `setupCanvas/draw`
 
 -----
 
 ## 工程原則
 
 ### Debug 流程
-
 - 遇到 bug **必須先看程式碼找根源**，不可憑推測直接改
 - HTTP 500 → 看 Vercel Logs；HTTP 400 → 多半是 Supabase 資料表/欄位問題
-- 找到根源後說明原因，再提出修法
-- 前端顯示異常優先用瀏覽器 DevTools Console 找錯誤
 
 ### Security
-
 - API key 只存 Vercel env 或 GitHub Secrets
 - Groq endpoint 一律走 `requireOwner()` + `x-owner-token` 雙層保護
-- `gifts_admin` 走 `x-admin-key` header，`ADMIN_KEY` 存 Vercel env
+- `gifts_admin` 走 `x-admin-key` header
 
 ### Supabase 查詢原則
-
 - 新功能一律用 `stock_daily_twse`，禁止用 `stock_daily`（舊表）
 - 查詢加 `limit` 避免回傳過多資料
 - 多 ID 篩選用 `stock_id=in.(2330,2454,...)` 而非 `or=(...)`
-- 155 支股票的 in() 查詢需分兩批（各 ~77 支）避免 URL 過長 → 400
-- Upsert 必須指定 `on_conflict` 欄位（URL 參數 `?on_conflict=欄位名`）
+- 155 支股票的 in() 查詢需分兩批（各 ~77 支）避免 URL 過長
+- Upsert 必須指定 `on_conflict` 欄位
 - schema cache 更新：`NOTIFY pgrst, 'reload schema';`
