@@ -427,7 +427,7 @@
       <!-- 欄①：台指選擇權 -->
       <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🎯 台指選擇權</div>
-        <!-- P/C Ratio -->
+        <!-- P/C Ratio OI + Max Pain -->
         <div class="stat-grid stat-grid-2" style="margin-bottom:0.3rem;">
           <div class="stat-card">
             <div class="stat-label">P/C Ratio OI</div>
@@ -435,15 +435,10 @@
             <div id="ms_pcOILabel" class="stat-badge"></div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">P/C Ratio Vol</div>
-            <div id="ms_pcVol" class="stat-value">—</div>
-            <div id="ms_pcVolLabel" class="stat-badge"></div>
+            <div class="stat-label">Max Pain</div>
+            <div id="ms_maxPain" class="stat-value" style="font-size:1rem;">—</div>
+            <div class="stat-badge" style="color:var(--muted);font-size:0.55rem;">點</div>
           </div>
-        </div>
-        <!-- Max Pain -->
-        <div class="opt-maxpain">
-          <span class="opt-maxpain-label">Max Pain</span>
-          <span id="ms_maxPain" class="opt-maxpain-val">—</span>
         </div>
         <!-- 法人部位 -->
         <div class="opt-inst-label">法人選擇權淨部位（口）</div>
@@ -1022,6 +1017,11 @@
                 <div class="opt-oi-label">Put 未平倉</div>
                 <div id="pcPutOI" class="opt-oi-val opt-oi-put"></div>
               </div>
+            </div>
+            <!-- 分合約類型 OI -->
+            <div style="margin-top:0.6rem;padding:0.5rem 0.6rem;background:var(--bg);border-radius:8px;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem;">依合約分類 P/C · Call OI · Put OI</div>
+              <div id="optByContract"></div>
             </div>
           </div>
 

@@ -1,29 +1,26 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-04
+> 更新日期：2026-06-04（第二次）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 -----
 
 ## ⚠️ 已知問題（2026-06-04）
 
-### 1. Claude GitHub MCP write 權限問題
-- **現象：** Claude 透過 GitHub MCP 呼叫 `create_or_update_file` 回傳 403
-- **根因：** `Claude Github MCP Connector`（OAuth App）已授權但未安裝到 repo，GitHub App 安裝步驟未完成
-- **嘗試過：** Revoke → Reconnect → Authorize，但 OAuth 流程沒有跳出 repo 選擇畫面
-- **目前狀態：** 新增了 Fine-grained PAT custom connector（`https://api.githubcopilot.com/mcp`，token 已填入），下次對話測試是否生效
-- **暫時解法：** Claude 輸出檔案到 `/mnt/user-data/outputs/`，由使用者手動貼到 GitHub
+### 1. Claude GitHub MCP 無法使用
+- **結論：** Fine-grained PAT connector（`https://api.githubcopilot.com/mcp`）工具未載入，`api.github.com` 也被 web_fetch 擋住
+- **暫時解法：** Claude 輸出到 `/mnt/user-data/outputs/`，由使用者手動 push
 
-### 2. 前端網站數據無資料問題
-- **現象：** 網站某些面板顯示無資料或空白
-- **狀態：** 尚未診斷根因，待下次對話確認是 RLS / API endpoint / 資料收集哪個環節出問題
-- **排查方向：** 瀏覽器 DevTools Console → Network → 確認哪個 API 回傳空值或錯誤
+### 2. 籌碼面板數據全空（market_chips_daily）
+- **根因：** 6-03 那筆因 `fut_mtx_dealer_long` 欄位不存在，upsert 失敗，新表無資料
+- **修復：** `collect_market_data.js` 已修正（MTX/TMF 改用 `netOnly=true`）→ 已輸出待 push
+- **補資料：** 需在 Supabase SQL Editor 執行「從 chips_daily 補寫 6-03 至 market_chips_daily」的 SQL（已在對話中提供）→ **尚未執行**
 
-### 3. GitHub Actions 問題
-- **Collect TWSE（collect-twse.yml）：** 有問題，尚未確認根因
-- **Backup to pCloud（backup.yml）：** 有問題，尚未確認根因
-- **注意：** backup.yml 已於 2026-06-04 新增 push trigger（備份改動的 source code），但尚未實際驗證能否正確執行
-- **排查方向：** GitHub Actions → 查看各 workflow 的 run log
+### 3. collect-twse.yml 問題
+- **狀態：** 尚未查看 Actions log，待排查
+
+### 4. sentiment.js 未 push
+- **狀態：** Groq JSON 解析強化版在 `/mnt/user-data/outputs/sentiment.js`，待手動 push
 
 -----
 
@@ -265,16 +262,52 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 - [x] `api/news.js` tmf endpoint 切換至 `market_chips_daily` ✅
 - [x] `valuation.js` 修正 `foreign_opt_net` 400 錯誤，改查 `options_analytics_daily` ✅
 - [x] `backup.js` 新增 `market_chips_daily`、`options_analytics_daily` 備份 ✅
-- [ ] 前端 `chips.js` 的 `/api/news?endpoint=chips` 已正確讀新表（news.js 已改）
-- [ ] 前端期權相關切換至 `options_analytics_daily`（signals.js 等）
-- [ ] 確認新表資料穩定 3～5 天後刪舊表（chips_daily / options_daily / institutional_daily）
-- [ ] 診斷前端數據無資料問題（⚠️ 2026-06-04 新增）
-- [ ] 修復 collect-twse.yml 問題（⚠️ 2026-06-04 新增）
-- [ ] 修復 backup.yml 問題（⚠️ 2026-06-04 新增）
+- [x] `backup.yml` shell bug 修正（FAIL 計數 `&&` 優先級問題）✅
+- [x] `collect_market_data.js` MTX/TMF `netOnly` 修正（移除不存在的 long/short 欄位）✅
+- [x] `api/news.js` options endpoint 重寫（分合約 OI、三大法人 {net,call,put}、Max Pain 最近合約、刪 pc_ratio_vol）✅
+- [x] `js/signals.js` 對應新 options API 結構（byContract 四種OI、三大法人渲染修正、刪 pcVol）✅
+- [x] `index.html` 加 `optByContract` div、刪 P/C Ratio Vol、ms_maxPain 改版 ✅
+- [ ] **補資料：** 在 Supabase SQL Editor 從 `chips_daily` 補寫 6-03 至 `market_chips_daily`（SQL 已提供）
+- [ ] push 所有待 push 的檔案：`sentiment.js`、`collect_market_data.js`、`backup.yml`、`news.js`、`signals.js`、`index.html`
+- [ ] 確認 `market_chips_daily` 資料正常後，前端籌碼面板恢復顯示
+- [ ] 排查 `collect-twse.yml` 問題（查 Actions log）
+- [ ] 確認新表資料穩定 3～5 天後刪舊表（`chips_daily` / `options_daily` / `institutional_daily`）
 
 -----
 
-## 2026-06-04 本次對話改動總覽
+## 2026-06-04（第二次對話）改動總覽
+
+### collect_market_data.js — MTX/TMF netOnly 修正
+- `parseFut()` 新增 `netOnly = false` 參數
+- `parseFut(txRows, 'fut_tx')` → TX 照舊，寫 long/short/net
+- `parseFut(mtxRows, 'fut_mtx', true)` / `parseFut(tmfRows, 'fut_tmf', true)` → 只寫 net
+- 根因：`market_chips_daily` 的 MTX/TMF 欄位只有 `_net`，無 `_long`/`_short`
+
+### backup.yml — shell bug 修正
+- 原本：`rclone ... && echo ✅ && SUCCESS+=1 || echo ❌ && FAIL+=1`（`&&`/`||` 優先級讓 FAIL 永遠被加 1）
+- 改為：`if rclone ...; then SUCCESS+=1; else FAIL+=1; fi`
+
+### api/news.js — options endpoint 完整重寫
+- 分合約類型：`isMonthly`（6碼）/ `isWed`（`...Wx`）/ `isFri`（`...Fx`）
+- 各自獨立計算 callOI / putOI / pcRatio，回傳 `byContract: { monthly, weekly_wed, weekly_fri }`
+- 三大法人：CALL/PUT 分別累加，回傳 `{ net, call, put }`（net = call淨 - put淨）
+- Max Pain：取最近到期合約計算（週三/週五/近月，誰最快到期用誰）
+- 移除：`pc_ratio_vol`（`volume` 欄位）、`strikes` 陣列
+
+### js/signals.js — 對應新 options API
+- `loadOptions()` 重構：`renderOptions(data)` 共用渲染函式（主流程 + fallback 共用）
+- 新增 `optByContract` 區塊渲染（近月/週三/週五各一行，顯示 P/C + CallOI + PutOI）
+- 三大法人渲染：直接讀 `v.net` / `v.call` / `v.put`
+- 市場總覽：移除 ms_pcVol / vScore，score 計算只用 pcOI + 外資淨部位
+- Fallback 改讀 `options_analytics_daily`
+
+### index.html — HTML 結構調整
+- 市場總覽：P/C Ratio Vol stat-card → Max Pain stat-card（`id="ms_maxPain"`）
+- 選擇權卡片：`opt-oi-grid` 下方新增 `id="optByContract"` 分合約 OI 容器
+
+-----
+
+## 2026-06-04（第一次對話）改動總覽
 
 ### sentiment.js Groq JSON 解析強化
 
