@@ -151,8 +151,7 @@ async function loadDailySummary() {
     // 一句話重點
     const note = document.getElementById('dsbNote');
     if (alpha?.market_summary) {
-      const short = alpha.market_summary.slice(0, 80) + (alpha.market_summary.length > 80 ? '…' : '');
-      note.textContent = `📌 ${short}`;
+      note.textContent = `📌 ${alpha.market_summary}`;
     } else {
       note.textContent = '今日 Alpha 報告尚未生成，請稍後再查看。';
     }
