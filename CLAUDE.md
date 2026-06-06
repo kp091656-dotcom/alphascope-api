@@ -7,11 +7,7 @@
 
 ## ⚠️ 已知問題
 
-### 1. collect-finmind.yml 狀態未知
-- **狀態：** 尚未確認是否正常運作
-
-### 2. collect-news.yml 狀態未知
-- **狀態：** 尚未確認是否正常運作
+> 目前無已知問題。
 
 -----
 
@@ -24,8 +20,8 @@
 ### 待 push 檔案已全部 push ✅（2026-06-06）
 - `sentiment.js`、`collect_market_data.js`、`news.js`、`signals.js`、`index.html` 均已 push
 
-### collect-twse.yml ✅（2026-06-06）
-- 已排查，恢復正常
+### 所有 Workflows 確認正常 ✅（2026-06-06）
+- collect-twse.yml、collect-finmind.yml、collect-alpha.yml、collect-news.yml 全部綠燈
 
 ### GitHub MCP ✅（2026-06-06）
 - **解法：** 安裝 Claude Github MCP Connector GitHub App（`https://github.com/apps/claude-github-mcp-connector/installations/new`），選 All repositories
@@ -241,11 +237,11 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 | 檔案 | 觸發 | 功能 | 狀態 |
 |------|------|------|------|
 | `collect-twse.yml` | 週一~五 14:30 | 抓 TWSE 股價/估值/產業指數 | ✅ 正常 |
-| `collect-finmind.yml` | 週一~五 15:30 | 抓 FinMind 籌碼/選擇權/期貨 | ⚠️ 未確認 |
+| `collect-finmind.yml` | 週一~五 15:30 | 抓 FinMind 籌碼/選擇權/期貨 | ✅ 正常 |
 | `collect-alpha.yml` | 週一~五 16:00 | 產生 Alpha 每日報告 | ✅ 正常 |
-| `collect-news.yml` | 每小時 | 抓財經新聞 RSS | ⚠️ 未確認 |
+| `collect-news.yml` | 每小時 | 抓財經新聞 RSS | ✅ 正常 |
 | `backup.yml` | 週日 09:00 + 每次 push main | Supabase 備份 + source code 備份到 pCloud | ✅ 正常 |
-| `scrape_gifts.yml` | 手動觸發 | 爬股東紀念品 | 正常（停用自動排程）|
+| `scrape_gifts.yml` | 手動觸發 | 爬股東紀念品 | ✅ 正常（停用自動排程）|
 | `scrape_egift.yml` | 每週日 09:30 | 爬 eGift 紀念品 | ✅ 正常 |
 
 -----
@@ -278,34 +274,18 @@ futures_daily        : date, symbol, name, close, chg, chg_pct, source
 
 ### 待辦
 
-- [x] Supabase 對兩張新表加 RLS ✅
-- [x] `api/news.js` chips endpoint 切換至 `market_chips_daily` ✅
-- [x] `api/news.js` tmf endpoint 切換至 `market_chips_daily` ✅
-- [x] `valuation.js` 修正 `foreign_opt_net` 400 錯誤，改查 `options_analytics_daily` ✅
-- [x] `backup.js` 新增 `market_chips_daily`、`options_analytics_daily` 備份 ✅
-- [x] `backup.yml` shell bug 修正 ✅
-- [x] `collect_market_data.js` MTX/TMF `netOnly` 修正 ✅
-- [x] `api/news.js` options endpoint 重寫 ✅
-- [x] `js/signals.js` 對應新 options API 結構 ✅
-- [x] `index.html` 加 `optByContract` div ✅
-- [x] GitHub MCP 連線 ✅（2026-06-06）
-- [x] 補資料：從 `chips_daily` 補寫 6-03 至 `market_chips_daily` ✅（2026-06-06）
-- [x] push 待 push 的檔案：`sentiment.js`、`collect_market_data.js`、`news.js`、`signals.js`、`index.html` ✅（2026-06-06）
-- [x] 前端籌碼面板恢復顯示 ✅（2026-06-06）
-- [x] 排查 `collect-twse.yml` 問題 ✅（2026-06-06）
-- [ ] 確認 `collect-finmind.yml` 狀態
-- [ ] 確認 `collect-news.yml` 狀態
+- [x] 所有項目已完成 ✅
 - [ ] 確認新表資料穩定 3～5 天後刪舊表（`chips_daily`、`options_daily`、`institutional_daily`）
 
 -----
 
 ## 2026-06-06 改動總覽
 
-### 補資料 + 待辦清理
-- Supabase MCP 直接執行 SQL，從 `chips_daily` 補寫 6-03 至 `market_chips_daily` ✅
+### 全面收尾
+- 補資料：Supabase MCP 直接執行 SQL，從 `chips_daily` 補寫 6-03 至 `market_chips_daily` ✅
 - 籌碼面板前端顯示恢復正常 ✅
 - 所有待 push 檔案已 push ✅
-- collect-twse.yml 已排查恢復正常 ✅
+- 所有 GitHub Actions Workflows 確認全部綠燈 ✅
 
 ### GitHub MCP 連線成功
 - 安裝 Claude Github MCP Connector GitHub App
