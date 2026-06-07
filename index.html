@@ -4,33 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>AlphaScope — AI 財經市場情報</title>
-
-  <!-- ── PWA ── -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0c0c18">
   <meta name="mobile-web-app-capable" content="yes">
-  <!-- iOS PWA -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AlphaScope">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
   <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png">
-  <!-- favicon -->
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
-  <!-- OG / 分享卡片 -->
   <meta property="og:title" content="AlphaScope — AI 財經情報">
   <meta property="og:description" content="台股熱圖・多空訊號・全球商品・新聞摘要">
   <meta property="og:image" content="/icons/icon-512x512.png">
   <meta name="description" content="AI 驅動台股市場情報：熱圖、多空訊號、全球商品、新聞摘要">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <!-- ── Styles ── -->
   <link rel="stylesheet" href="/css/style.css">
 </head>
 
-<!-- Header -->
 <header>
   <div style="display:flex;align-items:center;gap:1.25rem">
     <div class="logo">Alpha<span style="color:#818cf8">Scope</span> <span class="logo-badge">BETA</span></div>
@@ -53,7 +45,6 @@
   </nav>
 </header>
 
-<!-- API Config -->
 <div class="api-config-bar">
   <div class="api-row">
     <button class="api-fetch-btn" id="fetchBtn" onclick="loadCachedNews()">載入財經新聞</button>
@@ -65,7 +56,6 @@
   </div>
 </div>
 
-<!-- Categories -->
 <div class="category-bar">
   <button class="cat-tab active" data-cat="general">全部</button>
   <button class="cat-tab" data-cat="tech">💻 科技</button>
@@ -82,7 +72,6 @@
 
 <main>
   <div>
-    <!-- 今日總結橫幅 -->
     <div id="dailySummaryBanner">
       <div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.6rem;flex-wrap:wrap;">
         <span style="font-size:0.72rem;color:var(--muted);font-weight:600;">◆ 今日總結</span>
@@ -97,27 +86,19 @@
         <button onclick="openWatchlistPanel()" style="font-size:0.75rem;padding:0.3rem 0.75rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;white-space:nowrap;">⭐ 自選股</button>
       </div>
       <div class="dsb-note" id="dsbNote">載入中…</div>
-
-      <!-- 盤勢背景 -->
       <div id="dsbContext" style="display:none;margin-top:0.65rem;padding:0.55rem 0.75rem;border-left:3px solid #3b82f6;background:rgba(59,130,246,0.06);border-radius:0 6px 6px 0;font-size:0.75rem;color:var(--text);line-height:1.6;"></div>
-
-      <!-- 關鍵風險 -->
       <div id="dsbRisks" style="display:none;margin-top:0.6rem;">
         <div style="font-size:0.68rem;font-weight:700;color:#d97706;margin-bottom:0.35rem;">⚠ 關鍵風險</div>
         <ul id="dsbRiskList" style="margin:0;padding-left:1.1rem;font-size:0.73rem;color:var(--text);line-height:1.7;"></ul>
       </div>
-
-      <!-- 今日重點產業 -->
       <div id="dsbSectors" style="display:none;margin-top:0.6rem;">
         <div style="font-size:0.68rem;font-weight:700;color:var(--muted);margin-bottom:0.35rem;">🏭 今日重點產業</div>
         <div id="dsbSectorList" style="display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
       </div>
     </div>
 
-    <!-- 法人籌碼異動警示 -->
     <div id="instAlertBar"></div>
 
-    <!-- 自選股面板 -->
     <div id="watchlistPanel">
       <div style="display:flex;align-items:center;margin-bottom:0.6rem;gap:0.5rem;">
         <span style="font-size:0.78rem;font-weight:700;">⭐ 自選股</span>
@@ -132,7 +113,6 @@
       <div id="wlList"><div style="font-size:0.78rem;color:var(--muted);padding:0.5rem 0;">尚未加入自選股</div></div>
     </div>
 
-    <!-- 今日市場摘要 -->
     <div id="marketSummaryBox" style="display:none;margin-bottom:1.5rem;background:#fff;border:1.5px solid var(--accent);border-radius:10px;overflow:hidden;">
       <div style="background:var(--accent);padding:0.6rem 1.2rem;display:flex;align-items:center;justify-content:space-between;">
         <span style="color:#fff;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:700;letter-spacing:0.08em;">◆ 今日市場摘要 · Groq AI</span>
@@ -147,9 +127,7 @@
     </div>
 
     <div class="feed-header">
-      <div>
-        <div class="feed-title">財經快訊</div>
-      </div>
+      <div><div class="feed-title">財經快訊</div></div>
       <div style="display:flex;align-items:center;gap:0.6rem;">
         <div class="feed-count" id="feedCount"></div>
       </div>
@@ -157,705 +135,564 @@
     <div id="newsFeed">
       <div class="feed-state"><div class="spinner"></div><p>載入示範資料中…</p></div>
     </div>
-    <!-- Futures Leaderboard Panel -->
+
+    <!-- Futures Panel -->
     <div id="futuresPanel" style="display:none;">
-  <div class="panel-header">
-    <div class="panel-title">全球商品排行榜</div>
-    <div style="display:flex;gap:0.5rem;align-items:center;">
-      <span id="futuresTs" class="ts-label"></span>
-      
-      <button class="icon-btn" onclick="loadFutures()">↻ 更新</button>
-    </div>
-  </div>
-  <div id="futuresLoading" style="text-align:center;padding:3rem;color:var(--muted);font-size:0.78rem;">載入中…</div>
-  <div id="futuresContent" style="display:none;">
-    <!-- Sort tabs -->
-    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
-      <button class="fut-sort-btn active" onclick="renderFuturesChart('chgPct')" >漲跌幅</button>
-      <button class="fut-sort-btn" onclick="renderFuturesChart('volPct')" >波幅</button>
-    </div>
-    <div id="futuresChart"></div>
-  </div>
-    </div><!-- end futuresPanel -->
-
-    <!-- ── 社群情緒面板 ── -->
-    <div id="sentimentPanel" style="display:none;">
-  <div class="panel-header">
-    <div class="panel-title">社群情緒儀表板</div>
-    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-      <span id="sentimentTs" class="ts-label"></span>
-      <button onclick="requireOwner(()=>startSentimentAnalysis())" id="sentimentAnalyzeBtn" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.9rem;border:none;border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;">▶ 分析</button>
-      <button onclick="loadSentimentDemo()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.9rem;border:1px solid var(--accent2);border-radius:4px;background:transparent;color:var(--accent2);cursor:pointer;">Demo</button>
-    </div>
-  </div>
-
-  <!-- AI Summary -->
-  <div id="sentAiSummary" style="display:none;background:#fff;color:var(--text);border-radius:6px;padding:16px 20px;margin-bottom:18px;border-left:4px solid var(--accent);box-shadow:0 0 0 1px var(--border);">
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--accent);letter-spacing:0.12em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-      <span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;animation:sentPulse 1.5s infinite;"></span>
-      AI SENTIMENT SUMMARY
-    </div>
-    <p id="sentAiText" style="font-size:0.85rem;line-height:1.7;"></p>
-  </div>
-
-  <!-- Source tabs -->
-  <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
-    <button class="sent-src-tab active" data-src="all" onclick="sentFilterSrc('all',this)">🌐 全部</button>
-    <button class="sent-src-tab" data-src="ptt" onclick="sentFilterSrc('ptt',this)">🇹🇼 PTT 股票版</button>
-    <button class="sent-src-tab" data-src="wsb" onclick="sentFilterSrc('wsb',this)">🟠 Reddit WSB</button>
-    <button class="sent-src-tab" data-src="inv" onclick="sentFilterSrc('inv',this)">🔵 r/investing</button>
-  </div>
-
-  <!-- Gauge + bars row -->
-  <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;margin-bottom:18px;" class="sent-top-grid">
-    <!-- Gauge -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px 16px;display:flex;flex-direction:column;align-items:center;">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:12px;">SENTIMENT SCORE</div>
-      <svg viewBox="0 0 200 110" style="width:180px;height:99px;">
-        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="16" stroke-linecap="round"/>
-        <path d="M 20 100 A 80 80 0 0 1 80 28"   fill="none" stroke="#c8e6c9" stroke-width="16" stroke-linecap="round"/>
-        <path d="M 80 28  A 80 80 0 0 1 120 28"  fill="none" stroke="#e2e3e5" stroke-width="16" stroke-linecap="round"/>
-        <path d="M 120 28 A 80 80 0 0 1 180 100" fill="none" stroke="#ffccbc" stroke-width="16" stroke-linecap="round"/>
-        <line id="sentNeedle" x1="100" y1="100" x2="100" y2="30" stroke="#1a1814" stroke-width="3" stroke-linecap="round" transform="rotate(0,100,100)"/>
-        <circle cx="100" cy="100" r="6" fill="#1a1814"/>
-        <text x="16"  y="118" font-size="9" fill="#8a8278" font-family="IBM Plex Mono">BEAR</text>
-        <text x="168" y="118" font-size="9" fill="#8a8278" font-family="IBM Plex Mono">BULL</text>
-      </svg>
-      <div id="sentGaugeValue" style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--muted);">—</div>
-      <div id="sentGaugeLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);margin-top:2px;">等待分析</div>
-    </div>
-    <!-- Bars -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 20px;">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:14px;">BREAKDOWN</div>
-      <div style="display:flex;flex-direction:column;gap:12px;" id="sentBarsWrap">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#dc2626;width:50px;">多頭</span>
-          <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBullBar" style="height:100%;width:0%;background:#dc2626;border-radius:2px;transition:width 0.8s;"></div></div>
-          <span id="sentBullCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);width:28px;text-align:right;">0</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);width:50px;">中性</span>
-          <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentNeuBar" style="height:100%;width:0%;background:var(--muted);border-radius:2px;transition:width 0.8s;"></div></div>
-          <span id="sentNeuCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);width:28px;text-align:right;">0</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--accent3);width:50px;">空頭</span>
-          <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBearBar" style="height:100%;width:0%;background:#16a34a;border-radius:2px;transition:width 0.8s;"></div></div>
-          <span id="sentBearCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent3);width:28px;text-align:right;">0</span>
-        </div>
-      </div>
-      <!-- per-source mini -->
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;">BY SOURCE</div>
-          <div style="display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:0.58rem;">
-            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>多頭</span>
-            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#b4b2a9;display:inline-block;"></span>中性</span>
-            <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent3);display:inline-block;"></span>空頭</span>
-          </div>
-        </div>
-        <div id="sentSrcBreakdown" style="display:flex;flex-direction:column;gap:6px;"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Posts list -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
-    <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;">貼文列表</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;" id="sentFilterPills">
-      <button class="sent-pill active-all" onclick="sentFilterSentiment('all',this)">全部</button>
-      <button class="sent-pill" onclick="sentFilterSentiment('bull',this)">多頭 🔴</button>
-      <button class="sent-pill" onclick="sentFilterSentiment('neutral',this)">中性 ⚪</button>
-      <button class="sent-pill" onclick="sentFilterSentiment('bear',this)">空頭 🟢</button>
-    </div>
-  </div>
-  <div id="sentPostList" style="display:flex;flex-direction:column;gap:8px;">
-    <div style="text-align:center;padding:36px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">
-      點擊「▶ 分析」開始，或點「Demo」查看效果
-    </div>
-  </div>
-    </div><!-- end sentimentPanel -->
-
-    <!-- ── 台股熱圖面板 ── -->
-    <div id="heatmapPanel" style="display:none;">
-  <!-- 左欄：熱圖（全寬） -->
-  <div>
-      <!-- 頂部控制列 -->
       <div class="panel-header">
-        <div class="panel-title">🇹🇼 台股市場熱圖</div>
+        <div class="panel-title">全球商品排行榜</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span id="futuresTs" class="ts-label"></span>
+          <button class="icon-btn" onclick="loadFutures()">↻ 更新</button>
+        </div>
+      </div>
+      <div id="futuresLoading" style="text-align:center;padding:3rem;color:var(--muted);font-size:0.78rem;">載入中…</div>
+      <div id="futuresContent" style="display:none;">
+        <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+          <button class="fut-sort-btn active" onclick="renderFuturesChart('chgPct')">漲跌幅</button>
+          <button class="fut-sort-btn" onclick="renderFuturesChart('volPct')">波幅</button>
+        </div>
+        <div id="futuresChart"></div>
+      </div>
+    </div>
+
+    <!-- 社群情緒面板 -->
+    <div id="sentimentPanel" style="display:none;">
+      <div class="panel-header">
+        <div class="panel-title">社群情緒儀表板</div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-          <span id="heatmapTs" class="ts-label"></span>
-          <span class="info-badge" title="面積依市值^0.38壓縮，台積電佔約12%，保留相對大小">面積 ≈ 市值</span>
-          <button class="icon-btn" onclick="debugHeatmapDates()" title="查看 Supabase 各日期資料覆蓋率" style="font-size:0.58rem;opacity:0.7;">🔍 除錯</button>
-          <button class="icon-btn" onclick="loadHeatmap()">↻ 更新</button>
+          <span id="sentimentTs" class="ts-label"></span>
+          <button onclick="requireOwner(()=>startSentimentAnalysis())" id="sentimentAnalyzeBtn" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.9rem;border:none;border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;">▶ 分析</button>
+          <button onclick="loadSentimentDemo()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.9rem;border:1px solid var(--accent2);border-radius:4px;background:transparent;color:var(--accent2);cursor:pointer;">Demo</button>
         </div>
       </div>
-      <!-- 色階 + 說明列 -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">漲跌幅</span>
-          <div style="display:flex;gap:2px;align-items:center;">
-            <div style="width:20px;height:10px;border-radius:2px;background:#7b1a1a;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#a83030;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#dc2626;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#e07850;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#8a8480;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#4a9d6a;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#16a34a;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#1a7040;"></div>
-            <div style="width:20px;height:10px;border-radius:2px;background:#0f4a28;"></div>
+      <div id="sentAiSummary" style="display:none;background:#fff;color:var(--text);border-radius:6px;padding:16px 20px;margin-bottom:18px;border-left:4px solid var(--accent);box-shadow:0 0 0 1px var(--border);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--accent);letter-spacing:0.12em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+          <span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;animation:sentPulse 1.5s infinite;"></span>
+          AI SENTIMENT SUMMARY
+        </div>
+        <p id="sentAiText" style="font-size:0.85rem;line-height:1.7;"></p>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="sent-src-tab active" data-src="all" onclick="sentFilterSrc('all',this)">🌐 全部</button>
+        <button class="sent-src-tab" data-src="ptt" onclick="sentFilterSrc('ptt',this)">🇹🇼 PTT 股票版</button>
+        <button class="sent-src-tab" data-src="wsb" onclick="sentFilterSrc('wsb',this)">🟠 Reddit WSB</button>
+        <button class="sent-src-tab" data-src="inv" onclick="sentFilterSrc('inv',this)">🔵 r/investing</button>
+      </div>
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;margin-bottom:18px;" class="sent-top-grid">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px 16px;display:flex;flex-direction:column;align-items:center;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:12px;">SENTIMENT SCORE</div>
+          <svg viewBox="0 0 200 110" style="width:180px;height:99px;">
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="16" stroke-linecap="round"/>
+            <path d="M 20 100 A 80 80 0 0 1 80 28"   fill="none" stroke="#c8e6c9" stroke-width="16" stroke-linecap="round"/>
+            <path d="M 80 28  A 80 80 0 0 1 120 28"  fill="none" stroke="#e2e3e5" stroke-width="16" stroke-linecap="round"/>
+            <path d="M 120 28 A 80 80 0 0 1 180 100" fill="none" stroke="#ffccbc" stroke-width="16" stroke-linecap="round"/>
+            <line id="sentNeedle" x1="100" y1="100" x2="100" y2="30" stroke="#1a1814" stroke-width="3" stroke-linecap="round" transform="rotate(0,100,100)"/>
+            <circle cx="100" cy="100" r="6" fill="#1a1814"/>
+            <text x="16"  y="118" font-size="9" fill="#8a8278" font-family="IBM Plex Mono">BEAR</text>
+            <text x="168" y="118" font-size="9" fill="#8a8278" font-family="IBM Plex Mono">BULL</text>
+          </svg>
+          <div id="sentGaugeValue" style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--muted);">—</div>
+          <div id="sentGaugeLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);margin-top:2px;">等待分析</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 20px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:14px;">BREAKDOWN</div>
+          <div style="display:flex;flex-direction:column;gap:12px;" id="sentBarsWrap">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#dc2626;width:50px;">多頭</span>
+              <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBullBar" style="height:100%;width:0%;background:#dc2626;border-radius:2px;transition:width 0.8s;"></div></div>
+              <span id="sentBullCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);width:28px;text-align:right;">0</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);width:50px;">中性</span>
+              <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentNeuBar" style="height:100%;width:0%;background:var(--muted);border-radius:2px;transition:width 0.8s;"></div></div>
+              <span id="sentNeuCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);width:28px;text-align:right;">0</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--accent3);width:50px;">空頭</span>
+              <div style="flex:1;background:#e5e7eb;border-radius:2px;height:16px;overflow:hidden;"><div id="sentBearBar" style="height:100%;width:0%;background:#16a34a;border-radius:2px;transition:width 0.8s;"></div></div>
+              <span id="sentBearCnt" style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent3);width:28px;text-align:right;">0</span>
+            </div>
           </div>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:#dc2626;font-weight:600;">▲漲</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent3);font-weight:600;">▼跌</span>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;">BY SOURCE</div>
+              <div style="display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:0.58rem;">
+                <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>多頭</span>
+                <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:#b4b2a9;display:inline-block;"></span>中性</span>
+                <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent3);display:inline-block;"></span>空頭</span>
+              </div>
+            </div>
+            <div id="sentSrcBreakdown" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
         </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">點擊開啟 TradingView · 滑鼠懸停查看詳情</span>
       </div>
-      <!-- 產業漲跌幅 bar -->
-      <div id="hmSectorBar" style="margin-bottom:10px;display:none;">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:6px;">
-          <span id="hmSectorBarTitle">產業漲跌幅</span><span style="opacity:0.6;"> · 點擊篩選</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;">貼文列表</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;" id="sentFilterPills">
+          <button class="sent-pill active-all" onclick="sentFilterSentiment('all',this)">全部</button>
+          <button class="sent-pill" onclick="sentFilterSentiment('bull',this)">多頭 🔴</button>
+          <button class="sent-pill" onclick="sentFilterSentiment('neutral',this)">中性 ⚪</button>
+          <button class="sent-pill" onclick="sentFilterSentiment('bear',this)">空頭 🟢</button>
         </div>
-        <div id="hmSectorBarRows" style="display:flex;flex-direction:column;gap:4px;"></div>
       </div>
-
-      <!-- 產業篩選 -->
-      <div id="hmSectorFilter" style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;">
-        <button class="hm-filter-btn active" data-sector="all" onclick="hmFilterSector('all',this)">全部</button>
-      </div>
-      <!-- Loading -->
-      <div id="heatmapLoading" style="text-align:center;padding:3rem;color:var(--muted);font-size:0.78rem;"><div class="spinner" style="margin:0 auto 12px;"></div>載入台股資料中…</div>
-      <!-- SVG treemap -->
-      <div id="heatmapSvgWrap" style="display:none;">
-        <svg id="heatmapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="sentPostList" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="text-align:center;padding:36px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">
+          點擊「▶ 分析」開始，或點「Demo」查看效果
+        </div>
       </div>
     </div>
 
-    <!-- ── 右欄：台指多空儀表板（已移至獨立 tab）── -->
-  </div><!-- end heatmapPanel -->
+    <!-- 台股熱圖面板 -->
+    <div id="heatmapPanel" style="display:none;">
+      <div>
+        <div class="panel-header">
+          <div class="panel-title">🇹🇼 台股市場熱圖</div>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span id="heatmapTs" class="ts-label"></span>
+            <span class="info-badge" title="面積依市值^0.38壓縮，台積電佔約12%，保留相對大小">面積 ≈ 市值</span>
+            <button class="icon-btn" onclick="debugHeatmapDates()" title="查看 Supabase 各日期資料覆蓋率" style="font-size:0.58rem;opacity:0.7;">🔍 除錯</button>
+            <button class="icon-btn" onclick="loadHeatmap()">↻ 更新</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">漲跌幅</span>
+            <div style="display:flex;gap:2px;align-items:center;">
+              <div style="width:20px;height:10px;border-radius:2px;background:#7b1a1a;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#a83030;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#dc2626;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#e07850;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#8a8480;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#4a9d6a;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#16a34a;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#1a7040;"></div>
+              <div style="width:20px;height:10px;border-radius:2px;background:#0f4a28;"></div>
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:#dc2626;font-weight:600;">▲漲</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--accent3);font-weight:600;">▼跌</span>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);">點擊開啟 TradingView · 滑鼠懸停查看詳情</span>
+        </div>
+        <div id="hmSectorBar" style="margin-bottom:10px;display:none;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:6px;">
+            <span id="hmSectorBarTitle">產業漲跌幅</span><span style="opacity:0.6;"> · 點擊篩選</span>
+          </div>
+          <div id="hmSectorBarRows" style="display:flex;flex-direction:column;gap:4px;"></div>
+        </div>
+        <div id="hmSectorFilter" style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="hm-filter-btn active" data-sector="all" onclick="hmFilterSector('all',this)">全部</button>
+        </div>
+        <div id="heatmapLoading" style="text-align:center;padding:3rem;color:var(--muted);font-size:0.78rem;"><div class="spinner" style="margin:0 auto 12px;"></div>載入台股資料中…</div>
+        <div id="heatmapSvgWrap" style="display:none;">
+          <svg id="heatmapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </div>
+    </div>
 
+    <div id="hmTooltip"></div>
 
-  <!-- Tooltip（DESIGN.md warm dark palette） -->
-  <div id="hmTooltip"></div>
-
-    <!-- ── 多空訊號面板（獨立 tab）── -->
+    <!-- 多空訊號面板 -->
     <div id="signalPanel" style="display:none;">
-
-  <!-- 標題列 -->
-  <div class="signal-header">
-    <div class="panel-title">📡 多空訊號</div>
-    <button class="icon-btn" onclick="loadMktSignals()">↻ 更新</button>
-  </div>
-
-  <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:1rem;">
-
-    <!-- 第一列：綜合訊號儀表盤 -->
-    <div id="mktSignalSummary" style="display:flex;flex-direction:column;align-items:center;gap:1rem;padding:1.4rem 1.2rem;">
-
-      <!-- 圓形儀表盤 -->
-      <div style="position:relative;width:160px;height:160px;flex-shrink:0;">
-        <svg width="160" height="160" viewBox="0 0 160 160" style="display:block;">
-          <circle cx="80" cy="80" r="66" fill="none" stroke="var(--border)" stroke-width="10" stroke-dasharray="331 415" stroke-dashoffset="-83" stroke-linecap="round"/>
-          <circle id="signalGaugeArc" cx="80" cy="80" r="66" fill="none" stroke="var(--muted)" stroke-width="10"
-            stroke-dasharray="0 415" stroke-dashoffset="-83" stroke-linecap="round"
-            style="transition:stroke-dasharray 0.8s ease,stroke 0.5s;"/>
-          <text id="signalGaugeScore" x="80" y="72" text-anchor="middle" font-size="34" font-weight="800" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
-          <text x="80" y="90" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="inherit">/100</text>
-          <text id="signalGaugeLabel" x="80" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="var(--muted)" font-family="inherit">載入中</text>
-        </svg>
-        <div style="position:absolute;bottom:14px;left:6px;font-size:0.55rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">空</div>
-        <div style="position:absolute;bottom:14px;right:6px;font-size:0.55rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">多</div>
+      <div class="signal-header">
+        <div class="panel-title">📡 多空訊號</div>
+        <button class="icon-btn" onclick="loadMktSignals()">↻ 更新</button>
       </div>
 
-      <!-- 標題 + 描述 -->
-      <div style="text-align:center;">
-        <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.9rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
-        <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);margin-top:4px;"></div>
-      </div>
+      <div id="mktSignalPanel" style="display:flex;flex-direction:column;gap:1rem;">
 
-      <!-- 隱藏相容元素 -->
-      <div id="mktSignalDot" style="display:none;"></div>
-      <div id="mktSignalScore" style="display:none;"></div>
-
-      <!-- 4 個子分數小卡 -->
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0.5rem;width:100%;">
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
-          <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">法人籌碼</div>
-          <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
-            <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
-            <circle id="subArcChips" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3"
-              stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
-            <text id="subTxtChips" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
-          </svg>
-          <div id="subLblChips" style="font-size:0.55rem;color:var(--muted);">待載入</div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
-          <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">選擇權</div>
-          <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
-            <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
-            <circle id="subArcOpt" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3"
-              stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
-            <text id="subTxtOpt" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
-          </svg>
-          <div id="subLblOpt" style="font-size:0.55rem;color:var(--muted);">待載入</div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
-          <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">融資券</div>
-          <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
-            <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
-            <circle id="subArcMargin" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3"
-              stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
-            <text id="subTxtMargin" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
-          </svg>
-          <div id="subLblMargin" style="font-size:0.55rem;color:var(--muted);">待載入</div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
-          <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">恐慌指數</div>
-          <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
-            <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
-            <circle id="subArcVix" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3"
-              stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
-            <text id="subTxtVix" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
-          </svg>
-          <div id="subLblVix" style="font-size:0.55rem;color:var(--muted);">待載入</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 第二列：三欄 grid（選擇權 | 三大法人 | 融資融券） -->
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:start;">
-
-      <!-- 欄①：台指選擇權 -->
-      <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🎯 台指選擇權</div>
-        <!-- P/C Ratio OI + Max Pain -->
-        <div class="stat-grid stat-grid-2" style="margin-bottom:0.3rem;">
-          <div class="stat-card">
-            <div class="stat-label">P/C Ratio OI</div>
-            <div id="ms_pcOI" class="stat-value">—</div>
-            <div id="ms_pcOILabel" class="stat-badge"></div>
+        <!-- 綜合訊號儀表盤 -->
+        <div id="mktSignalSummary" style="display:flex;flex-direction:column;align-items:center;gap:1rem;padding:1.4rem 1.2rem;">
+          <div style="position:relative;width:160px;height:160px;flex-shrink:0;">
+            <svg width="160" height="160" viewBox="0 0 160 160" style="display:block;">
+              <circle cx="80" cy="80" r="66" fill="none" stroke="var(--border)" stroke-width="10" stroke-dasharray="331 415" stroke-dashoffset="-83" stroke-linecap="round"/>
+              <circle id="signalGaugeArc" cx="80" cy="80" r="66" fill="none" stroke="var(--muted)" stroke-width="10"
+                stroke-dasharray="0 415" stroke-dashoffset="-83" stroke-linecap="round"
+                style="transition:stroke-dasharray 0.8s ease,stroke 0.5s;"/>
+              <text id="signalGaugeScore" x="80" y="72" text-anchor="middle" font-size="34" font-weight="800" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
+              <text x="80" y="90" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="inherit">/100</text>
+              <text id="signalGaugeLabel" x="80" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="var(--muted)" font-family="inherit">載入中</text>
+            </svg>
+            <div style="position:absolute;bottom:14px;left:6px;font-size:0.55rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">空</div>
+            <div style="position:absolute;bottom:14px;right:6px;font-size:0.55rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">多</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Max Pain</div>
-            <div id="ms_maxPain" class="stat-value" style="font-size:1rem;">—</div>
-            <div class="stat-badge" style="color:var(--muted);font-size:0.55rem;">點</div>
+          <div style="text-align:center;">
+            <div id="mktSignalTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.9rem;font-weight:700;letter-spacing:0.04em;">載入中…</div>
+            <div id="mktSignalDesc" style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);margin-top:4px;"></div>
           </div>
-        </div>
-        <!-- 法人部位 -->
-        <div class="opt-inst-label">法人選擇權淨部位（口）</div>
-        <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.28rem;"></div>
-        <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.7rem;"></div>
-      </div>
-
-      <!-- 欄②：微台指散戶多空比 -->
-      <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🔬 微型台指 TMF（微台）OI 口數</div>
-        <div id="ms_tmfLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
-        <div id="ms_tmfContent" style="display:none;">
-          <!-- 主數字：散戶多空比 -->
-          <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.25rem;">
-            <div id="ms_tmfRatio" style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:800;line-height:1;">—</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">%</div>
-          </div>
-          <div id="ms_tmfLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;padding:0.22rem 0.5rem;border-radius:4px;display:inline-block;margin-bottom:0.8rem;font-weight:600;"></div>
-
-          <!-- 計算明細 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.8rem;">
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.6rem;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">三大法人合計淨額</div>
-              <div id="ms_tmfTotalNet" style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:700;">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);">口</div>
+          <div id="mktSignalDot" style="display:none;"></div>
+          <div id="mktSignalScore" style="display:none;"></div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0.5rem;width:100%;">
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
+              <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">法人籌碼</div>
+              <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
+                <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
+                <circle id="subArcChips" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3" stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
+                <text id="subTxtChips" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
+              </svg>
+              <div id="subLblChips" style="font-size:0.55rem;color:var(--muted);">待載入</div>
             </div>
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.6rem;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">全體未平倉量</div>
-              <div id="ms_tmfTotalOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:700;">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);">口</div>
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
+              <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">選擇權</div>
+              <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
+                <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
+                <circle id="subArcOpt" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3" stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
+                <text id="subTxtOpt" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
+              </svg>
+              <div id="subLblOpt" style="font-size:0.55rem;color:var(--muted);">待載入</div>
+            </div>
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
+              <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">融資券</div>
+              <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
+                <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
+                <circle id="subArcMargin" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3" stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
+                <text id="subTxtMargin" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
+              </svg>
+              <div id="subLblMargin" style="font-size:0.55rem;color:var(--muted);">待載入</div>
+            </div>
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.4rem;text-align:center;">
+              <div style="font-size:0.58rem;color:var(--muted);margin-bottom:4px;">恐慌指數</div>
+              <svg width="38" height="38" viewBox="0 0 38 38" style="display:block;margin:0 auto 2px;">
+                <circle cx="19" cy="19" r="14" fill="none" stroke="var(--border)" stroke-width="3"/>
+                <circle id="subArcVix" cx="19" cy="19" r="14" fill="none" stroke="var(--muted)" stroke-width="3" stroke-dasharray="0 88" stroke-dashoffset="22" stroke-linecap="round" style="transition:all 0.6s;"/>
+                <text id="subTxtVix" x="19" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="'IBM Plex Mono',monospace">—</text>
+              </svg>
+              <div id="subLblVix" style="font-size:0.55rem;color:var(--muted);">待載入</div>
             </div>
           </div>
-
-          <!-- 法人明細 -->
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">法人淨部位（口）</div>
-          <div id="ms_tmfInstRows" style="display:flex;flex-direction:column;gap:0.25rem;margin-bottom:0.6rem;"></div>
-
-          <!-- 近10日趨勢 bar -->
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">近期散戶多空比（%）</div>
-          <div id="ms_tmfBars" style="display:flex;align-items:flex-end;gap:3px;height:44px;"></div>
-          <div id="ms_tmfDates" style="display:flex;gap:3px;margin-top:3px;"></div>
-
-          <div id="ms_tmfTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.6rem;"></div>
         </div>
-      </div>
 
-      <!-- 欄③：融資融券 + 回測 -->
-      <div style="display:flex;flex-direction:column;gap:1rem;">
+        <!-- 三欄 grid -->
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:start;">
 
-        <!-- 融資融券 -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">💳 融資融券</div>
-          <div id="ms_marginLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
-          <div id="ms_marginContent" style="display:none;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.7rem;">
-              <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
-                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融資餘額（億）</div>
-                <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
-                <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
+          <!-- 欄①：台指選擇權 -->
+          <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🎯 台指選擇權</div>
+            <div class="stat-grid stat-grid-2" style="margin-bottom:0.3rem;">
+              <div class="stat-card">
+                <div class="stat-label">P/C Ratio OI</div>
+                <div id="ms_pcOI" class="stat-value">—</div>
+                <div id="ms_pcOILabel" class="stat-badge"></div>
               </div>
-              <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
-                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融券餘額（張）</div>
-                <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
-                <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
+              <div class="stat-card">
+                <div class="stat-label">Max Pain</div>
+                <div id="ms_maxPain" class="stat-value" style="font-size:1rem;">—</div>
+                <div class="stat-badge" style="color:var(--muted);font-size:0.55rem;">點</div>
               </div>
             </div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">融資近10日趨勢（億）</div>
-            <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:3px;height:40px;"></div>
-            <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.5rem;"></div>
+            <!-- ✅ Max Pain 近5日趨勢圖（多空訊號儀表板）-->
+            <div id="ms_maxPainTrend"></div>
+            <div class="opt-inst-label" style="margin-top:0.75rem;">法人選擇權淨部位（口）</div>
+            <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.28rem;"></div>
+            <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.7rem;"></div>
           </div>
-        </div>
 
-        <!-- 訊號回測 -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.7rem;">📐 訊號回測</div>
-          <div id="ms_backtestSection">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;padding:0.75rem;">
-              資料累積中…<br><span style="font-size:0.55rem;opacity:0.7;">建議累積 5 個交易日後查看</span>
+          <!-- 欄②：微台指散戶多空比 -->
+          <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">🔬 微型台指 TMF（微台）OI 口數</div>
+            <div id="ms_tmfLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+            <div id="ms_tmfContent" style="display:none;">
+              <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.25rem;">
+                <div id="ms_tmfRatio" style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:800;line-height:1;">—</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">%</div>
+              </div>
+              <div id="ms_tmfLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;padding:0.22rem 0.5rem;border-radius:4px;display:inline-block;margin-bottom:0.8rem;font-weight:600;"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.8rem;">
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.6rem;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">三大法人合計淨額</div>
+                  <div id="ms_tmfTotalNet" style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:700;">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);">口</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.6rem;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">全體未平倉量</div>
+                  <div id="ms_tmfTotalOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:700;">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);">口</div>
+                </div>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">法人淨部位（口）</div>
+              <div id="ms_tmfInstRows" style="display:flex;flex-direction:column;gap:0.25rem;margin-bottom:0.6rem;"></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">近期散戶多空比（%）</div>
+              <div id="ms_tmfBars" style="display:flex;align-items:flex-end;gap:3px;height:44px;"></div>
+              <div id="ms_tmfDates" style="display:flex;gap:3px;margin-top:3px;"></div>
+              <div id="ms_tmfTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.6rem;"></div>
+            </div>
+          </div>
+
+          <!-- 欄③：融資融券 + 回測 -->
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:1rem;">💳 融資融券</div>
+              <div id="ms_marginLoading" style="font-size:0.72rem;color:var(--muted);">載入中…</div>
+              <div id="ms_marginContent" style="display:none;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.7rem;">
+                  <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融資餘額（億）</div>
+                    <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
+                    <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
+                  </div>
+                  <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融券餘額（張）</div>
+                    <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
+                    <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
+                  </div>
+                </div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">融資近10日趨勢（億）</div>
+                <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:3px;height:40px;"></div>
+                <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.5rem;"></div>
+              </div>
+            </div>
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.7rem;">📐 訊號回測</div>
+              <div id="ms_backtestSection">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;padding:0.75rem;">
+                  資料累積中…<br><span style="font-size:0.55rem;opacity:0.7;">建議累積 5 個交易日後查看</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-      </div><!-- end 欄③ -->
-    </div><!-- end 三欄 grid -->
-
-    <!-- 第三列：估值警示 + β 分布（新增）-->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-
-      <!-- 估值警示卡 -->
-      <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📊 熱圖估值分布</div>
-        <div id="ms_valLoading" style="font-size:0.72rem;color:var(--muted);">計算中…</div>
-        <div id="ms_valContent" style="display:none;">
-          <!-- 估值統計 -->
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem;">
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-bottom:3px;">偏便宜</div>
-              <div id="ms_valCheap" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#16a34a;">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
-            </div>
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-bottom:3px;">合理</div>
-              <div id="ms_valOk" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:var(--muted);">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
-            </div>
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-bottom:3px;">偏貴/高估</div>
-              <div id="ms_valExp" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#dc2626;">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
-            </div>
-          </div>
-          <!-- 平均 PER / 殖利率 -->
-          <div style="display:flex;flex-direction:column;gap:0.25rem;margin-bottom:0.6rem;">
-            <div style="display:flex;justify-content:space-between;">
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">平均本益比</span>
-              <span id="ms_avgPER" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;">
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">平均殖利率</span>
-              <span id="ms_avgDY" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;">
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">高息股（≥5%）</span>
-              <span id="ms_highDYCount" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;color:#f59e0b;">—</span>
+        <!-- 估值+β grid -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📊 熱圖估值分布</div>
+            <div id="ms_valLoading" style="font-size:0.72rem;color:var(--muted);">計算中…</div>
+            <div id="ms_valContent" style="display:none;">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem;">
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-bottom:3px;">偏便宜</div>
+                  <div id="ms_valCheap" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#16a34a;">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-bottom:3px;">合理</div>
+                  <div id="ms_valOk" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:var(--muted);">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-bottom:3px;">偏貴/高估</div>
+                  <div id="ms_valExp" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#dc2626;">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:0.25rem;margin-bottom:0.6rem;">
+                <div style="display:flex;justify-content:space-between;"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">平均本益比</span><span id="ms_avgPER" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span></div>
+                <div style="display:flex;justify-content:space-between;"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">平均殖利率</span><span id="ms_avgDY" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span></div>
+                <div style="display:flex;justify-content:space-between;"><span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">高息股（≥5%）</span><span id="ms_highDYCount" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;color:#f59e0b;">—</span></div>
+              </div>
+              <div id="ms_valSignal" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;padding:0.35rem 0.6rem;border-radius:6px;text-align:center;font-weight:600;"></div>
             </div>
           </div>
-          <!-- 市場估值情境 -->
-          <div id="ms_valSignal" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;padding:0.35rem 0.6rem;border-radius:6px;text-align:center;font-weight:600;"></div>
-        </div>
-      </div>
-
-      <!-- β 值分布卡 -->
-      <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📐 CAPM β 值分析</div>
-        <div id="ms_betaLoading" style="font-size:0.72rem;color:var(--muted);">計算中…</div>
-        <div id="ms_betaContent" style="display:none;">
-          <!-- β 統計 -->
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem;">
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.46rem;color:var(--muted);margin-bottom:3px;">低波動 β&lt;0.8</div>
-              <div id="ms_betaLow" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#0ea5e9;">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+          <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📐 CAPM β 值分析</div>
+            <div id="ms_betaLoading" style="font-size:0.72rem;color:var(--muted);">計算中…</div>
+            <div id="ms_betaContent" style="display:none;">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem;">
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.46rem;color:var(--muted);margin-bottom:3px;">低波動 β&lt;0.8</div>
+                  <div id="ms_betaLow" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#0ea5e9;">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.46rem;color:var(--muted);margin-bottom:3px;">市場 0.8~1.2</div>
+                  <div id="ms_betaMid" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:var(--muted);">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.46rem;color:var(--muted);margin-bottom:3px;">高波動 β&gt;1.2</div>
+                  <div id="ms_betaHigh" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#f97316;">—</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">市場平均 β</span>
+                <span id="ms_avgBeta" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">高波動 Top 5</div>
+              <div id="ms_betaTop5" style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.6rem;"></div>
+              <div id="ms_betaSignal" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;padding:0.35rem 0.6rem;border-radius:6px;text-align:center;font-weight:600;"></div>
             </div>
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.46rem;color:var(--muted);margin-bottom:3px;">市場 0.8~1.2</div>
-              <div id="ms_betaMid" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:var(--muted);">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+          </div>
+        </div>
+
+        <!-- 籌碼面板 -->
+        <div id="chipsPanel" style="margin-top:1rem;">
+          <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--accent);border-left:2px solid var(--accent);padding-left:8px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">籌碼面板</div>
+            <span id="chips-date" style="font-size:0.55rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;"></span>
+            <span id="chips-loading" style="font-size:0.55rem;color:var(--muted);">載入中…</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">🏢 三大法人現貨 <span style="font-size:0.52rem;opacity:0.7;">億元</span></div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買進</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣出</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買賣超</th>
+                </tr></thead>
+                <tbody id="chips-spot-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
+              </table>
+              <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計</span>
+                <span id="chips-spot-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+              </div>
             </div>
-            <div style="background:var(--bg);border-radius:8px;padding:0.5rem;text-align:center;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.46rem;color:var(--muted);margin-bottom:3px;">高波動 β&gt;1.2</div>
-              <div id="ms_betaHigh" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;color:#f97316;">—</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.45rem;color:var(--muted);">支</div>
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📈 台指期 TX（大台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">多方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">空方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額</th>
+                </tr></thead>
+                <tbody id="chips-tx-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
+              </table>
+              <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計淨額</span>
+                <span id="chips-tx-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+              </div>
             </div>
           </div>
-          <!-- 平均 β + 解讀 -->
-          <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;">
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">市場平均 β</span>
-            <span id="ms_avgBeta" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📉 小型台指 MTX（小台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
+                </tr></thead>
+                <tbody id="chips-mtx-body"><tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
+              </table>
+              <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
+                <span id="chips-mtx-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+              </div>
+            </div>
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">🔬 微型台指 TMF（微台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
+                </tr></thead>
+                <tbody id="chips-tmf-body"><tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
+              </table>
+              <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
+                <span id="chips-tmf-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+              </div>
+            </div>
           </div>
-          <!-- 高 β Top5 -->
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">高波動 Top 5</div>
-          <div id="ms_betaTop5" style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.6rem;"></div>
-          <!-- β 情境解讀 -->
-          <div id="ms_betaSignal" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;padding:0.35rem 0.6rem;border-radius:6px;text-align:center;font-weight:600;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.5rem;">
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#ef4444;font-weight:600;">▲ 選擇權 CALL（買權 OI）<span style="font-size:0.52rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span></div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
+                </tr></thead>
+                <tbody id="chips-call-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
+              </table>
+            </div>
+            <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#22c55e;font-weight:600;">▼ 選擇權 PUT（賣權 OI）<span style="font-size:0.52rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span></div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
+                </tr></thead>
+                <tbody id="chips-put-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="chips-trend-chart" style="margin-top:1rem;"></div>
+        </div>
+
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.6;padding:0 0.2rem;">
+          ⚠️ 盤後資料，僅供參考，不構成投資建議
         </div>
       </div>
 
-    </div><!-- end 估值+β grid -->
-
-    <!-- ══ 籌碼面板：現貨+期貨+選擇權三大法人 ══ -->
-    <div id="chipsPanel" style="margin-top:1rem;">
-
-      <!-- 標題 -->
-      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem;">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--accent);
-          border-left:2px solid var(--accent);padding-left:8px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
-          籌碼面板
+      <!-- Alpha 交易室 -->
+      <div id="alphaTraderSection" style="margin-top:1.5rem;">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap;">
+          <div style="font-size:1.05rem;font-weight:700;color:var(--text);">🤖 Alpha 交易室</div>
+          <div id="alphaStatusBadge" style="font-size:0.68rem;padding:2px 8px;border-radius:99px;background:var(--surface);color:var(--muted);border:1px solid var(--border);">待機中</div>
+          <div id="alphaDateBadge" style="font-size:0.68rem;color:var(--muted);display:none;"></div>
+          <div style="flex:1"></div>
+          <button onclick="alphaAnalyze()" id="alphaBtn" style="padding:0.32rem 0.85rem;font-size:0.78rem;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:600;">🔄 手動刷新</button>
+          <button onclick="showAlphaReport()" style="padding:0.32rem 0.75rem;font-size:0.78rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);cursor:pointer;">📋 交易報告</button>
+          <button onclick="toggleAlphaBacktest()" style="padding:0.32rem 0.75rem;font-size:0.78rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);cursor:pointer;">📐 30天回測</button>
         </div>
-        <span id="chips-date" style="font-size:0.55rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;"></span>
-        <span id="chips-loading" style="font-size:0.55rem;color:var(--muted);">載入中…</span>
-      </div>
-
-      <!-- 第一列：現貨 + TX 台指期 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-
-        <!-- 現貨三大法人 -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">
-            🏢 三大法人現貨 <span style="font-size:0.52rem;opacity:0.7;">億元</span>
+        <div id="alphaFlowBar" style="display:flex;align-items:center;gap:0;margin-bottom:1rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0.55rem 0.8rem;overflow-x:auto;">
+          <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;"><div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">1</div><span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">收集資料</span></div>
+          <div style="flex:1;min-width:14px;height:1px;background:var(--border);margin:0 0.4rem;"></div>
+          <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;"><div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">2</div><span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">AI 分析</span></div>
+          <div style="flex:1;min-width:14px;height:1px;background:var(--border);margin:0 0.4rem;"></div>
+          <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;"><div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">3</div><span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">生成報告</span></div>
+          <div style="flex:1;min-width:14px;height:1px;background:var(--border);margin:0 0.4rem;"></div>
+          <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;"><div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">4</div><span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">自動進場</span></div>
+        </div>
+        <div id="alphaMarketSummary" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.15rem;margin-bottom:1rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.65rem;flex-wrap:wrap;">
+            <span style="font-size:0.68rem;color:var(--muted);letter-spacing:0.03em;">市場情緒</span>
+            <span id="alphaMoodBadge" style="font-size:0.7rem;padding:2px 9px;border-radius:99px;font-weight:600;"></span>
+            <span id="alphaDataSources" style="font-size:0.65rem;color:var(--muted);padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--border);"></span>
+            <span style="font-size:0.65rem;color:var(--muted);margin-left:auto;" id="alphaGenTime"></span>
           </div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
-            <thead><tr>
-              <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買進</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣出</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買賣超</th>
-            </tr></thead>
-            <tbody id="chips-spot-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
-          </table>
-          <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計</span>
-            <span id="chips-spot-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+          <div id="alphaMarketText" style="font-size:0.85rem;color:var(--text);line-height:1.65;white-space:pre-line;"></div>
+          <div id="alphaMetaBar" style="display:none;flex-wrap:wrap;gap:0.4rem;margin-top:0.6rem;"></div>
+          <div id="alphaCashBar" style="display:none;align-items:center;gap:0.4rem;margin-top:0.5rem;padding:0.4rem 0.7rem;background:rgba(217,119,6,0.08);border-left:3px solid #d97706;border-radius:0 6px 6px 0;"></div>
+          <div id="alphaNote" style="font-size:0.78rem;color:var(--accent);margin-top:0.6rem;padding:0.45rem 0.7rem;background:rgba(99,102,241,0.07);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;line-height:1.5;display:none;"></div>
+        </div>
+        <div id="alphaRecommendations" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+        <div id="alphaBacktestPanel" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.15rem;margin-top:0.75rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.75rem;">
+            <span style="font-size:0.8rem;font-weight:700;">📐 Alpha 30天模擬回測</span>
+            <span style="font-size:0.63rem;color:var(--muted);">· 歷史報告進出場績效</span>
+            <button id="alphaBacktestBtn" onclick="runAlphaBacktest()" style="margin-left:auto;padding:0.28rem 0.8rem;font-size:0.7rem;border-radius:5px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:600;">▶ 開始回測</button>
           </div>
+          <div id="alphaBacktestResult" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);text-align:center;padding:0.5rem;">點擊「▶ 開始回測」模擬近 30 天買進推薦的進出場績效</div>
+        </div>
+        <div id="alphaLoading" style="display:none;text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:0.85rem;">
+          <div class="spinner" style="margin:0 auto 1rem;"></div>
+          <div id="alphaLoadingText">Alpha 正在整合市場資料…</div>
+          <div style="font-size:0.72rem;opacity:0.55;margin-top:0.3rem;">約需 15–25 秒</div>
         </div>
 
-        <!-- TX 台指期 -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">
-            📈 台指期 TX（大台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
-            <thead><tr>
-              <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">多方</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">空方</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額</th>
-            </tr></thead>
-            <tbody id="chips-tx-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
-          </table>
-          <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計淨額</span>
-            <span id="chips-tx-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 第二列：MTX 小台 + TMF 微台 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-
-        <!-- MTX 小台 -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">
-            📉 小型台指 MTX（小台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
-            <thead><tr>
-              <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
-            </tr></thead>
-            <tbody id="chips-mtx-body"><tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
-          </table>
-          <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
-            <span id="chips-mtx-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+        <!-- 交易報告 modal -->
+        <div id="alphaReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;overflow-y:auto;padding:1rem;">
+          <div style="max-width:720px;margin:2rem auto;background:var(--bg);border-radius:16px;padding:1.5rem;border:1px solid var(--border);box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+            <div style="display:flex;align-items:center;margin-bottom:1.2rem;">
+              <div style="font-size:1rem;font-weight:700;">📋 Alpha 交易報告書</div>
+              <button onclick="document.getElementById('alphaReportModal').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;">✕</button>
+            </div>
+            <!-- ✅ 部位風險總覽容器 -->
+            <div id="alphaRiskOverview" style="display:none;margin-bottom:1.2rem;"></div>
+            <div id="alphaReportContent"></div>
           </div>
         </div>
 
-        <!-- TMF 微台 -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">
-            🔬 微型台指 TMF（微台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
-            <thead><tr>
-              <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
-            </tr></thead>
-            <tbody id="chips-tmf-body"><tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
-          </table>
-          <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
-            <span id="chips-tmf-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
+        <!-- 平倉 modal -->
+        <div id="alphaCloseModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;align-items:center;justify-content:center;">
+          <div style="background:var(--bg);border-radius:14px;padding:1.5rem;border:1px solid var(--border);width:320px;box-shadow:0 8px 40px rgba(0,0,0,0.2);">
+            <div style="font-weight:700;margin-bottom:0.3rem;">平倉確認</div>
+            <div id="alphaCloseInfo" style="font-size:0.78rem;color:var(--muted);margin-bottom:0.9rem;line-height:1.5;"></div>
+            <div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem;">實際出場價格</div>
+            <input id="alphaExitPriceInput" type="number" step="0.01" placeholder="輸入出場價" style="width:100%;padding:0.5rem 0.65rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;box-sizing:border-box;margin-bottom:0.9rem;">
+            <div style="display:flex;gap:0.5rem;">
+              <button onclick="alphaConfirmClose()" style="flex:1;padding:0.5rem;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:600;">確認平倉</button>
+              <button onclick="document.getElementById('alphaCloseModal').style.display='none'" style="flex:1;padding:0.5rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);cursor:pointer;">取消</button>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- 第三列：選擇權 CALL + PUT -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.5rem;">
-
-        <!-- CALL -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#ef4444;font-weight:600;">
-            ▲ 選擇權 CALL（買權 OI）<span style="font-size:0.52rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
-            <thead><tr>
-              <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
-            </tr></thead>
-            <tbody id="chips-call-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
-          </table>
-        </div>
-
-        <!-- PUT -->
-        <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#22c55e;font-weight:600;">
-            ▼ 選擇權 PUT（賣權 OI）<span style="font-size:0.52rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
-            <thead><tr>
-              <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
-              <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
-            </tr></thead>
-            <tbody id="chips-put-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 近N日趨勢圖 -->
-      <div id="chips-trend-chart" style="margin-top:1rem;"></div>
-    </div><!-- end chipsPanel -->
-
-        <!-- 免責聲明 -->
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);line-height:1.6;padding:0 0.2rem;">
-      ⚠️ 盤後資料，僅供參考，不構成投資建議
-    </div>
-
-  </div>
-
-  <!-- ══════════════════════════════════════
-       🤖 Alpha 交易室
-       ══════════════════════════════════════ -->
-  <div id="alphaTraderSection" style="margin-top:1.5rem;">
-
-    <!-- 標題列 -->
-    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap;">
-      <div style="font-size:1.05rem;font-weight:700;color:var(--text);">🤖 Alpha 交易室</div>
-      <div id="alphaStatusBadge" style="font-size:0.68rem;padding:2px 8px;border-radius:99px;background:var(--surface);color:var(--muted);border:1px solid var(--border);">待機中</div>
-      <div id="alphaDateBadge" style="font-size:0.68rem;color:var(--muted);display:none;"></div>
-      <div style="flex:1"></div>
-      <button onclick="alphaAnalyze()" id="alphaBtn" style="padding:0.32rem 0.85rem;font-size:0.78rem;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:600;">🔄 手動刷新</button>
-      <button onclick="showAlphaReport()" style="padding:0.32rem 0.75rem;font-size:0.78rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);cursor:pointer;">📋 交易報告</button>
-      <button onclick="toggleAlphaBacktest()" style="padding:0.32rem 0.75rem;font-size:0.78rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);cursor:pointer;">📐 30天回測</button>
-    </div>
-
-    <!-- Alpha 運作流程條 -->
-    <div id="alphaFlowBar" style="display:flex;align-items:center;gap:0;margin-bottom:1rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0.55rem 0.8rem;overflow-x:auto;">
-      <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;">
-        <div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">1</div>
-        <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">收集資料</span>
-      </div>
-      <div style="flex:1;min-width:14px;height:1px;background:var(--border);margin:0 0.4rem;"></div>
-      <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;">
-        <div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">2</div>
-        <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">AI 分析</span>
-      </div>
-      <div style="flex:1;min-width:14px;height:1px;background:var(--border);margin:0 0.4rem;"></div>
-      <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;">
-        <div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">3</div>
-        <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">生成報告</span>
-      </div>
-      <div style="flex:1;min-width:14px;height:1px;background:var(--border);margin:0 0.4rem;"></div>
-      <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;">
-        <div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.12);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent);">4</div>
-        <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">自動進場</span>
-      </div>
-    </div>
-
-    <!-- 市場總覽 -->
-    <div id="alphaMarketSummary" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.15rem;margin-bottom:1rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
-      <!-- 頂列：情緒 + 資料來源 + 時間 -->
-      <div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.65rem;flex-wrap:wrap;">
-        <span style="font-size:0.68rem;color:var(--muted);letter-spacing:0.03em;">市場情緒</span>
-        <span id="alphaMoodBadge" style="font-size:0.7rem;padding:2px 9px;border-radius:99px;font-weight:600;"></span>
-        <span id="alphaDataSources" style="font-size:0.65rem;color:var(--muted);padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--border);"></span>
-        <span style="font-size:0.65rem;color:var(--muted);margin-left:auto;" id="alphaGenTime"></span>
-      </div>
-      <!-- 市場摘要 -->
-      <div id="alphaMarketText" style="font-size:0.85rem;color:var(--text);line-height:1.65;white-space:pre-line;"></div>
-      <!-- 主導者 / 散戶訊號 / 融資警示 -->
-      <div id="alphaMetaBar" style="display:none;flex-wrap:wrap;gap:0.4rem;margin-top:0.6rem;"></div>
-      <!-- 空手建議橫幅 -->
-      <div id="alphaCashBar" style="display:none;align-items:center;gap:0.4rem;margin-top:0.5rem;padding:0.4rem 0.7rem;background:rgba(217,119,6,0.08);border-left:3px solid #d97706;border-radius:0 6px 6px 0;"></div>
-      <!-- Alpha 警語 -->
-      <div id="alphaNote" style="font-size:0.78rem;color:var(--accent);margin-top:0.6rem;padding:0.45rem 0.7rem;background:rgba(99,102,241,0.07);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;line-height:1.5;display:none;"></div>
-    </div>
-
-    <!-- 推薦個股卡片 -->
-    <div id="alphaRecommendations" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
-
-    <!-- 30天回測區塊 -->
-    <div id="alphaBacktestPanel" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.15rem;margin-top:0.75rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
-      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.75rem;">
-        <span style="font-size:0.8rem;font-weight:700;">📐 Alpha 30天模擬回測</span>
-        <span style="font-size:0.63rem;color:var(--muted);">· 歷史報告進出場績效</span>
-        <button id="alphaBacktestBtn" onclick="runAlphaBacktest()" style="margin-left:auto;padding:0.28rem 0.8rem;font-size:0.7rem;border-radius:5px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:600;">▶ 開始回測</button>
-      </div>
-      <div id="alphaBacktestResult" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);text-align:center;padding:0.5rem;">點擊「▶ 開始回測」模擬近 30 天買進推薦的進出場績效</div>
-    </div>
-
-    <!-- 載入中 -->
-    <div id="alphaLoading" style="display:none;text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:0.85rem;">
-      <div class="spinner" style="margin:0 auto 1rem;"></div>
-      <div id="alphaLoadingText">Alpha 正在整合市場資料…</div>
-      <div style="font-size:0.72rem;opacity:0.55;margin-top:0.3rem;">約需 15–25 秒</div>
-    </div>
-
-    <!-- 交易報告 modal -->
-    <div id="alphaReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;overflow-y:auto;padding:1rem;">
-      <div style="max-width:720px;margin:2rem auto;background:var(--bg);border-radius:16px;padding:1.5rem;border:1px solid var(--border);box-shadow:0 8px 40px rgba(0,0,0,0.18);">
-        <div style="display:flex;align-items:center;margin-bottom:1.2rem;">
-          <div style="font-size:1rem;font-weight:700;">📋 Alpha 交易報告書</div>
-          <button onclick="document.getElementById('alphaReportModal').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;">✕</button>
-        </div>
-        <div id="alphaReportContent"></div>
-      </div>
-    </div>
-
-    <!-- 平倉 modal -->
-    <div id="alphaCloseModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;align-items:center;justify-content:center;">
-      <div style="background:var(--bg);border-radius:14px;padding:1.5rem;border:1px solid var(--border);width:320px;box-shadow:0 8px 40px rgba(0,0,0,0.2);">
-        <div style="font-weight:700;margin-bottom:0.3rem;">平倉確認</div>
-        <div id="alphaCloseInfo" style="font-size:0.78rem;color:var(--muted);margin-bottom:0.9rem;line-height:1.5;"></div>
-        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem;">實際出場價格</div>
-        <input id="alphaExitPriceInput" type="number" step="0.01" placeholder="輸入出場價" style="width:100%;padding:0.5rem 0.65rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;box-sizing:border-box;margin-bottom:0.9rem;">
-        <div style="display:flex;gap:0.5rem;">
-          <button onclick="alphaConfirmClose()" style="flex:1;padding:0.5rem;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:600;">確認平倉</button>
-          <button onclick="document.getElementById('alphaCloseModal').style.display='none'" style="flex:1;padding:0.5rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);cursor:pointer;">取消</button>
-        </div>
-      </div>
-    </div>
-
-  </div>
 
     </div><!-- end signalPanel -->
 
@@ -878,9 +715,7 @@
         <button class="gift-cat-btn" data-gcat="3c"      onclick="setGiftCat(this,'3c')">📱 3C</button>
         <button class="gift-cat-btn" data-gcat="other"   onclick="setGiftCat(this,'other')">其他</button>
         <div style="display:flex;align-items:center;gap:0.5rem;margin-left:auto;flex-wrap:wrap;">
-          <label class="gifts-past-toggle"><input type="checkbox" id="giftShowEgift" onchange="reRenderGifts()">
-            <span style="color:#6366f1;font-weight:600;">⚡ 僅 eGift</span>
-          </label>
+          <label class="gifts-past-toggle"><input type="checkbox" id="giftShowEgift" onchange="reRenderGifts()"><span style="color:#6366f1;font-weight:600;">⚡ 僅 eGift</span></label>
           <label class="gifts-past-toggle"><input type="checkbox" id="giftShowPast" onchange="reRenderGifts()"> 顯示已截止</label>
           <button class="gifts-sort-btn gs-active" id="gsortDeadline" onclick="setGiftSort('deadline')">截止日 <span class="sort-arr">↑</span></button>
           <button class="gifts-sort-btn" id="gsortCP" onclick="setGiftSort('cp')">CP值 <span class="sort-arr">↓</span></button>
@@ -890,13 +725,12 @@
       <div class="gifts-grid" id="giftsGrid">
         <div class="gifts-empty"><div class="gifts-empty-icon">⏳</div>載入中…</div>
       </div>
-    </div><!-- end giftsPanel -->
+    </div>
 
     <button class="load-more" id="loadMoreBtn" style="display:none" onclick="loadMore()">載入更多 ↓</button>
-  </div><!-- end left column -->
+  </div>
 
   <aside class="sidebar">
-    
     <div class="sidebar-section">
       <div class="sidebar-header">🇺🇸 美股簡報 <span>◆ Groq AI</span></div>
       <div class="daily-brief">
@@ -974,7 +808,7 @@
       </div>
     </div>
 
-    <!-- VIX 波動率儀表板 -->
+    <!-- VIX -->
     <div class="sidebar-section" id="vixSection">
       <div class="sidebar-header">📊 VIX 波動率 <span style="font-size:0.6rem;opacity:0.7;">· CBOE</span></div>
       <div class="sb-body">
@@ -985,7 +819,6 @@
             <div id="vixChange" class="hero-stat-chg"></div>
           </div>
           <div id="vixLabel" class="hero-stat-label"></div>
-          <!-- Term structure -->
           <div class="vix-term-label">波動率期限結構</div>
           <div id="vixTermStructure" style="display:flex;flex-direction:column;gap:0.2rem;"></div>
           <div id="vixContango" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;margin-top:0.6rem;padding:0.3rem 0.5rem;border-radius:4px;text-align:center;"></div>
@@ -994,14 +827,12 @@
       </div>
     </div>
 
-    <!-- 台指選擇權分析 -->
+    <!-- 台指選擇權（sidebar）-->
     <div class="sidebar-section" id="optSection">
       <div class="sidebar-header">🎯 台指選擇權 <span style="font-size:0.6rem;opacity:0.7;">· FinMind</span></div>
       <div class="sb-body">
         <div id="optLoading" class="sb-loading">載入中…</div>
         <div id="optContent" style="display:none;">
-
-          <!-- P/C Ratio -->
           <div style="margin-bottom:0.9rem;">
             <div class="opt-section-label">PUT / CALL RATIO</div>
             <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.2rem;">
@@ -1018,19 +849,15 @@
                 <div id="pcPutOI" class="opt-oi-val opt-oi-put"></div>
               </div>
             </div>
-            <!-- 分合約類型 OI -->
             <div style="margin-top:0.6rem;padding:0.5rem 0.6rem;background:var(--bg);border-radius:8px;">
               <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem;">依合約分類 P/C · Call OI · Put OI</div>
               <div id="optByContract"></div>
             </div>
           </div>
-
-          <!-- 三大法人 -->
           <div style="margin-bottom:0.9rem;">
             <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem;">三大法人選擇權淨部位（口）</div>
             <div id="instRows" style="display:flex;flex-direction:column;gap:0.25rem;"></div>
           </div>
-
           <!-- Max Pain -->
           <div style="margin-bottom:0.5rem;">
             <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem;">MAX PAIN 最大痛點</div>
@@ -1039,8 +866,9 @@
               <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">點（賣方獲利最大）</div>
             </div>
             <div id="maxPainNote" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:0.2rem;"></div>
+            <!-- ✅ Max Pain 近5日趨勢圖（側欄選擇權）-->
+            <div id="maxPainTrendChart"></div>
           </div>
-
           <div id="optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);text-align:right;margin-top:0.4rem;"></div>
         </div>
       </div>
@@ -1053,8 +881,6 @@
   </aside>
 </main>
 
-<!-- ── 個股歷史走勢圖 Modal ── -->
-
 <!-- 選股篩選 Modal -->
 <div id="screenerModal" onclick="if(event.target===this)closeScreener()">
   <div id="screenerBox">
@@ -1063,57 +889,30 @@
       <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);margin-left:0.6rem;">· 台股全市場</span>
       <button onclick="closeScreener()" style="margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
-    <!-- 條件區 -->
     <div class="scr-row">
-      <div class="scr-field">
-        <label>PE 本益比 ≤</label>
-        <input type="number" id="scrPeMax" placeholder="不限" step="0.5" min="0">
-      </div>
-      <div class="scr-field">
-        <label>PB 股價淨值比 ≤</label>
-        <input type="number" id="scrPbMax" placeholder="不限" step="0.1" min="0">
-      </div>
+      <div class="scr-field"><label>PE 本益比 ≤</label><input type="number" id="scrPeMax" placeholder="不限" step="0.5" min="0"></div>
+      <div class="scr-field"><label>PB 股價淨值比 ≤</label><input type="number" id="scrPbMax" placeholder="不限" step="0.1" min="0"></div>
     </div>
     <div class="scr-row">
-      <div class="scr-field">
-        <label>殖利率 ≥ (%)</label>
-        <input type="number" id="scrYieldMin" placeholder="不限" step="0.1" min="0">
-      </div>
-      <div class="scr-field">
-        <label>成交量 ≥ (千股)</label>
-        <input type="number" id="scrVolMin" placeholder="不限" step="100" min="0">
-      </div>
+      <div class="scr-field"><label>殖利率 ≥ (%)</label><input type="number" id="scrYieldMin" placeholder="不限" step="0.1" min="0"></div>
+      <div class="scr-field"><label>成交量 ≥ (千股)</label><input type="number" id="scrVolMin" placeholder="不限" step="100" min="0"></div>
     </div>
     <div class="scr-row">
-      <div class="scr-field">
-        <label>漲跌幅 ≥ (%)</label>
-        <input type="number" id="scrChgMin" placeholder="不限" step="0.1">
-      </div>
-      <div class="scr-field">
-        <label>漲跌幅 ≤ (%)</label>
-        <input type="number" id="scrChgMax" placeholder="不限" step="0.1">
-      </div>
+      <div class="scr-field"><label>漲跌幅 ≥ (%)</label><input type="number" id="scrChgMin" placeholder="不限" step="0.1"></div>
+      <div class="scr-field"><label>漲跌幅 ≤ (%)</label><input type="number" id="scrChgMax" placeholder="不限" step="0.1"></div>
     </div>
     <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
       <button onclick="runScreener()" style="padding:0.4rem 1.2rem;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:700;">▶ 篩選</button>
       <button onclick="clearScreener()" style="padding:0.4rem 0.8rem;border-radius:6px;background:var(--surface);color:var(--muted);border:1px solid var(--border);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;">清除條件</button>
       <span id="scrCount" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);align-self:center;"></span>
     </div>
-    <!-- 結果列表 -->
-    <div id="scrLoading" style="display:none;text-align:center;padding:1.5rem;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);">
-      <div class="spinner" style="margin:0 auto 0.5rem;"></div>篩選中…
-    </div>
-    <div id="scrResults">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);padding:0.5rem;text-align:center;">
-        設定條件後點擊「篩選」
-      </div>
-    </div>
-    <div style="margin-top:0.8rem;font-size:0.6rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">
-      ※ 資料源自 Supabase 每日收盤，僅供參考，不構成投資建議
-    </div>
+    <div id="scrLoading" style="display:none;text-align:center;padding:1.5rem;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);"><div class="spinner" style="margin:0 auto 0.5rem;"></div>篩選中…</div>
+    <div id="scrResults"><div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);padding:0.5rem;text-align:center;">設定條件後點擊「篩選」</div></div>
+    <div style="margin-top:0.8rem;font-size:0.6rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">※ 資料源自 Supabase 每日收盤，僅供參考，不構成投資建議</div>
   </div>
 </div>
 
+<!-- 個股 Modal -->
 <div id="stockModal" onclick="if(event.target===this)closeStockModal()">
   <div id="stockModalBox">
     <div class="modal-header">
@@ -1123,11 +922,7 @@
       </div>
       <button class="modal-close" onclick="closeStockModal()">✕</button>
     </div>
-
-    <!-- 今日數據 -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:1rem;" id="modalTodayStats"></div>
-
-    <!-- 歷史走勢圖 -->
     <div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.4rem;">
         收盤走勢（近 <span id="modalDays">—</span> 個交易日）
@@ -1137,24 +932,22 @@
         <div id="modalLoading" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:2rem 0;text-align:center;">
           <div class="spinner" style="margin:0 auto 8px;"></div>載入歷史資料中…
         </div>
+        <!-- ✅ K線 iframe 容器（signals.js 偵測此元素決定是否嵌入 iframe）-->
+        <div id="modalChartIframe" style="display:none;"></div>
+        <!-- 原有 bar chart（iframe 不可用時的 fallback）-->
         <div id="modalChart" style="display:none;">
           <div class="chart-bar-wrap" id="modalBars"></div>
           <div id="modalBarDates" style="overflow-x:auto;overflow-y:hidden;"></div>
-          <!-- 統計摘要 -->
           <div id="modalStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:0.9rem;"></div>
         </div>
         <div id="modalNoData" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--muted);padding:2rem;text-align:center;border-radius:8px;background:var(--surface);box-shadow:0 0 0 1px var(--border);">
           <div style="font-size:1.5rem;margin-bottom:0.5rem;">📊</div>
           <div>歷史資料累積中</div>
           <div style="font-size:0.62rem;margin-top:0.3rem;opacity:0.7;">每日盤後自動收集，建議 5 個交易日後再查看</div>
-          <div style="margin-top:0.8rem;">
-            <a id="modalTVLink" href="#" target="_blank" style="font-size:0.65rem;color:var(--accent2);text-decoration:none;">→ 前往 TradingView 查看</a>
-          </div>
+          <div style="margin-top:0.8rem;"><a id="modalTVLink" href="#" target="_blank" style="font-size:0.65rem;color:var(--accent2);text-decoration:none;">→ 前往 TradingView 查看</a></div>
         </div>
       </div>
     </div>
-
-    <!-- AI 個股研究（Owner 限定）-->
     <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border);">
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.6rem;">◆ AI 個股快速研究</div>
       <button id="modalAiBtn" onclick="requireOwner(()=>runStockAI())"
@@ -1169,8 +962,6 @@
         box-shadow:0 0 0 1px var(--border);font-size:0.72rem;line-height:1.75;
         color:var(--text);font-family:'Noto Sans TC',sans-serif;white-space:pre-line;"></div>
     </div>
-
-    <!-- 快速連結 -->
     <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);">
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:0.3rem;">快速連結</div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -1182,59 +973,29 @@
   </div>
 </div>
 
-
-<!-- ══════════════════════════════════════════
-     PWA：Service Worker 註冊 + iOS 安裝提示
-     ══════════════════════════════════════════ -->
-<div id="pwaInstallBanner" style="
-  display:none; position:fixed; bottom:0; left:0; right:0; z-index:9999;
-  background:linear-gradient(135deg,#1a1a2e,#0c0c18);
-  border-top:1px solid #6366f1;
-  padding:12px 16px 20px;
-  font-family:'IBM Plex Mono',monospace;
-  color:#e2e2ec;
-  box-shadow:0 -4px 24px rgba(99,102,241,0.25);
-">
+<!-- PWA -->
+<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#1a1a2e,#0c0c18);border-top:1px solid #6366f1;padding:12px 16px 20px;font-family:'IBM Plex Mono',monospace;color:#e2e2ec;box-shadow:0 -4px 24px rgba(99,102,241,0.25);">
   <div style="display:flex;align-items:center;gap:12px;max-width:480px;margin:0 auto;">
     <img src="/icons/icon-72x72.png" style="width:44px;height:44px;border-radius:10px;flex-shrink:0;">
     <div style="flex:1;min-width:0;">
       <div style="font-size:0.75rem;font-weight:700;color:#818cf8;margin-bottom:2px;">安裝 AlphaScope APP</div>
-      <div style="font-size:0.62rem;color:#6e6e7e;line-height:1.4;">
-        點擊瀏覽器底部 <span style="color:#0ea5e9;">分享 → 加入主畫面</span>，即可像 APP 一樣使用
-      </div>
+      <div style="font-size:0.62rem;color:#6e6e7e;line-height:1.4;">點擊瀏覽器底部 <span style="color:#0ea5e9;">分享 → 加入主畫面</span>，即可像 APP 一樣使用</div>
     </div>
-    <button onclick="document.getElementById('pwaInstallBanner').style.display='none';localStorage.setItem('pwaPromptDismissed','1');"
-      style="background:none;border:none;color:#6e6e7e;font-size:1.2rem;cursor:pointer;padding:4px;flex-shrink:0;">✕</button>
+    <button onclick="document.getElementById('pwaInstallBanner').style.display='none';localStorage.setItem('pwaPromptDismissed','1');" style="background:none;border:none;color:#6e6e7e;font-size:1.2rem;cursor:pointer;padding:4px;flex-shrink:0;">✕</button>
   </div>
 </div>
-
-<!-- Android Chrome 安裝按鈕（beforeinstallprompt） -->
-<div id="pwaAndroidBanner" style="
-  display:none; position:fixed; bottom:0; left:0; right:0; z-index:9999;
-  background:linear-gradient(135deg,#1a1a2e,#0c0c18);
-  border-top:1px solid #6366f1;
-  padding:12px 16px 20px;
-  font-family:'IBM Plex Mono',monospace;
-  color:#e2e2ec;
-  box-shadow:0 -4px 24px rgba(99,102,241,0.25);
-">
+<div id="pwaAndroidBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#1a1a2e,#0c0c18);border-top:1px solid #6366f1;padding:12px 16px 20px;font-family:'IBM Plex Mono',monospace;color:#e2e2ec;box-shadow:0 -4px 24px rgba(99,102,241,0.25);">
   <div style="display:flex;align-items:center;gap:12px;max-width:480px;margin:0 auto;">
     <img src="/icons/icon-72x72.png" style="width:44px;height:44px;border-radius:10px;flex-shrink:0;">
     <div style="flex:1;">
       <div style="font-size:0.75rem;font-weight:700;color:#818cf8;margin-bottom:2px;">安裝 AlphaScope APP</div>
       <div style="font-size:0.62rem;color:#6e6e7e;">加入主畫面，全螢幕快速啟動</div>
     </div>
-    <button id="pwaAndroidInstall"
-      style="background:#6366f1;border:none;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;font-weight:700;padding:7px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">
-      安裝
-    </button>
-    <button onclick="document.getElementById('pwaAndroidBanner').style.display='none';localStorage.setItem('pwaPromptDismissed','1');"
-      style="background:none;border:none;color:#6e6e7e;font-size:1.2rem;cursor:pointer;padding:4px;flex-shrink:0;">✕</button>
+    <button id="pwaAndroidInstall" style="background:#6366f1;border:none;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;font-weight:700;padding:7px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">安裝</button>
+    <button onclick="document.getElementById('pwaAndroidBanner').style.display='none';localStorage.setItem('pwaPromptDismissed','1');" style="background:none;border:none;color:#6e6e7e;font-size:1.2rem;cursor:pointer;padding:4px;flex-shrink:0;">✕</button>
   </div>
 </div>
 
-
-<!-- ── Scripts ── -->
 <script src="/js/api.js"></script>
 <script src="/js/news_feed.js"></script>
 <script src="/js/sentiment.js"></script>
