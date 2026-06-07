@@ -9,9 +9,10 @@
 ## 🔴 Claude 操作規則（必讀）
 
 1. **檔案做好後，一律先用 `present_files` 生成下載連結，詢問是否 push，不可自行 push。**
-2. 每次對話結束前，更新 CLAUDE.md + CHANGELOG.md，同樣生成檔案後詢問。
+2. 每次對話結束前，更新 CLAUDE.md + CHANGELOG.md，**同樣必須先 `present_files`，等使用者確認後才 push。**
 3. CLAUDE.md 只記錄當前狀態；歷史改動寫入 CHANGELOG.md。
 4. Push 時使用 `GitHub MCP:create_or_update_file`，一次 push 一個檔案。
+5. ⚠️ **任何情況下都不可跳過 present_files 步驟直接 push，包含文件更新。**
 
 -----
 
