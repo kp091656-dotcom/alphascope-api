@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-06
+> 更新日期：2026-06-07
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 CHANGELOG.md。
 
@@ -59,7 +59,7 @@
 | 社群情緒 | `/home/claude/alphascope/js/sentiment.js` | `js/sentiment.js` |
 | 股東紀念品 | `/home/claude/alphascope/js/gifts.js` | `js/gifts.js` |
 | 台股熱圖 | `/home/claude/alphascope/js/heatmap.js` | `js/heatmap.js` |
-| 多空訊號 | `/home/claude/alphascope/js/signals.js` | `js/signals.js` |
+| 多空訊號 + Max Pain趨勢 + K線iframe + 部位風險 | `/home/claude/alphascope/js/signals.js` | `js/signals.js` |
 | 個股 Modal | `/home/claude/alphascope/js/stock_modal.js` | `js/stock_modal.js` |
 | Alpha 交易室 | `/home/claude/alphascope/js/alpha.js` | `js/alpha.js` |
 | 估值/回測 | `/home/claude/alphascope/js/valuation.js` | `js/valuation.js` |
@@ -94,6 +94,20 @@
 <script src="/js/watchlist.js"></script>
 <script src="/js/utils.js"></script>
 ```
+
+### signals.js 內含函式（2026-06-07 更新）
+
+| 函式 | 說明 |
+|------|------|
+| `loadMktSignals()` | 多空訊號儀表板主函式 |
+| `loadOptions()` | 選擇權面板（側欄）|
+| `openStockModal()` | 個股 Modal（含 K線 iframe 嵌入）|
+| `_loadModalBarChart()` | K線 fallback bar chart |
+| `_loadModalStats()` | 歷史統計摘要（非同步）|
+| `closeStockModal()` | 關閉並清空 iframe |
+| `runStockAI()` | AI 個股快速研究 |
+| `renderMaxPainTrend(id)` | Max Pain 近5日趨勢圖（共用）|
+| `renderRiskOverview(positions)` | Alpha 部位風險總覽 + 個別進度條 |
 
 ### 全域變數定義位置（全在 api.js）
 
