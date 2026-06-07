@@ -54,7 +54,6 @@ async function loadAlphaDailyReport() {
     const res = await fetch(`${API_BASE}?endpoint=alpha_report&_t=${Date.now()}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    // 快取供 signals.js 殖利率曲線等總經資料使用
     try { sessionStorage.setItem('alpha_report_cache', JSON.stringify(data)); } catch { }
     const today   = _alphaTodayStr();
     const isToday = data.report_date === today;
@@ -124,23 +123,19 @@ async function alphaAnalyze() {
 }
 
 async function renderAlphaResult(data) {
-  // ── 市場情緒 badge ──
   const mood = data.market_mood || '中性';
   const ms   = MOOD_STYLE[mood] || MOOD_STYLE['中性'];
   const moodBadge = document.getElementById('alphaMoodBadge');
   moodBadge.textContent = mood;
   moodBadge.style.cssText = `font-size:0.7rem;padding:2px 9px;border-radius:99px;font-weight:600;background:${ms.bg};color:${ms.color};border:1px solid ${ms.border};`;
 
-  // 生成時間
   const genTime = document.getElementById('alphaGenTime');
   genTime.textContent = data.generated_at
     ? new Date(data.generated_at).toLocaleString('zh-TW', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })
     : '';
 
-  // 市場摘要（支援段落換行）
   document.getElementById('alphaMarketText').textContent = data.market_summary || '';
 
-  // ── 新增：主導者 / 散戶訊號 / 空手建議 / 融資警示 ──
   const metaBar = document.getElementById('alphaMetaBar');
   if (metaBar) {
     const dominant = data.dominant_player || '';
@@ -160,7 +155,6 @@ async function renderAlphaResult(data) {
     ].filter(Boolean).join('');
     metaBar.style.display = metaBar.innerHTML ? 'flex' : 'none';
 
-    // 空手建議橫幅
     const cashBar = document.getElementById('alphaCashBar');
     if (cashBar) {
       if (cashSug) {
@@ -172,7 +166,6 @@ async function renderAlphaResult(data) {
     }
   }
 
-  // Alpha 警語
   const noteEl = document.getElementById('alphaNote');
   if (data.alpha_note) {
     noteEl.textContent = `💬 ${data.alpha_note}`;
@@ -181,9 +174,7 @@ async function renderAlphaResult(data) {
     noteEl.style.display = 'none';
   }
 
-  // ── Fear & Greed + 總經指標 ──
   let macroEl = document.getElementById('alphaMacroBar');
-  // 若 index.html 尚未加入此元素，動態建立並插在 alphaNote 之後
   if (!macroEl) {
     macroEl = document.createElement('div');
     macroEl.id = 'alphaMacroBar';
@@ -193,8 +184,6 @@ async function renderAlphaResult(data) {
   }
   if (macroEl) {
     let macroHtml = '';
-
-    // Fear & Greed
     const fg = data.fear_greed;
     if (fg?.score != null) {
       const score   = fg.score;
@@ -212,18 +201,14 @@ async function renderAlphaResult(data) {
         ${trendStr}
       </div>`;
     }
-
-    // 總經指標（macro_data）
     const macro = data.macro_data;
     if (macro && Object.keys(macro).length) {
-      // 挑最重要的幾個顯示
       const KEY_ORDER = ['SOX費城半導體','DXY美元指數','美債10Y殖利率','美債2Y殖利率','台幣USD/TWD','聯準會利率','S&P500'];
       const items = KEY_ORDER.filter(k => macro[k]?.close != null).map(k => {
         const d     = macro[k];
         const chg   = d.chg;
         const chgColor = chg > 0 ? '#dc2626' : chg < 0 ? '#16a34a' : 'var(--muted)';
         const chgStr   = chg != null ? `<span style="font-size:0.55rem;color:${chgColor};margin-left:2px;">${chg > 0 ? '+' : ''}${chg}%</span>` : '';
-        // 聯準會利率顯示絕對值
         const valStr = k === '聯準會利率' ? `${d.close}%` : d.close;
         return `<div style="display:flex;flex-direction:column;align-items:center;padding:0.35rem 0.5rem;background:var(--surface);border-radius:6px;border:1px solid var(--border);min-width:0;">
           <span style="font-size:0.5rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px;text-align:center;">${k.replace('殖利率','').replace('費城半導體','').replace('美元指數','').replace('USD/TWD','匯率')}</span>
@@ -231,13 +216,8 @@ async function renderAlphaResult(data) {
           ${chgStr}
         </div>`;
       });
-
       if (items.length) {
-        macroHtml += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:0.35rem;margin-top:0.4rem;">
-          ${items.join('')}
-        </div>`;
-
-        // 殖利率曲線倒掛提示
+        macroHtml += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:0.35rem;margin-top:0.4rem;">${items.join('')}</div>`;
         const y2  = macro['美債2Y殖利率']?.close;
         const y10 = macro['美債10Y殖利率']?.close;
         if (y2 != null && y10 != null) {
@@ -250,16 +230,10 @@ async function renderAlphaResult(data) {
         }
       }
     }
-
-    if (macroHtml) {
-      macroEl.innerHTML = macroHtml;
-      macroEl.style.display = 'block';
-    } else {
-      macroEl.style.display = 'none';
-    }
+    if (macroHtml) { macroEl.innerHTML = macroHtml; macroEl.style.display = 'block'; }
+    else macroEl.style.display = 'none';
   }
 
-  // 資料來源 badge
   const src = data.data_sources || {};
   const srcEl = document.getElementById('alphaDataSources');
   const srcParts = [];
@@ -270,11 +244,9 @@ async function renderAlphaResult(data) {
 
   document.getElementById('alphaMarketSummary').style.display = 'block';
 
-  // ── 抓最新收盤（買進個股）──
   const buyIds = (data.recommendations || []).filter(r => r.action === '買進').map(r => r.stock_id);
   const priceMap = await _alphaFetchLatestPrices(buyIds);
 
-  // ── 推薦個股卡片 ──
   const container = document.getElementById('alphaRecommendations');
   container.innerHTML = '';
   for (const rec of (data.recommendations || [])) {
@@ -282,7 +254,6 @@ async function renderAlphaResult(data) {
     const isBuy = rec.action === '買進';
     const latest = priceMap[rec.stock_id];
 
-    // 浮動損益進度條（僅買進）
     let floatHtml = '';
     if (isBuy && latest && rec.entry_price) {
       const close     = latest.close;
@@ -292,7 +263,7 @@ async function renderAlphaResult(data) {
       const lo  = rec.stop_loss    || (rec.entry_price * 0.94);
       const hi  = rec.target_price || (rec.entry_price * 1.10);
       const range = hi - lo;
-      const barPct  = range > 0 ? Math.max(0, Math.min(100, (close - lo) / range * 100)) : 50;
+      const barPct   = range > 0 ? Math.max(0, Math.min(100, (close - lo) / range * 100)) : 50;
       const entryPct = range > 0 ? Math.max(0, Math.min(100, (rec.entry_price - lo) / range * 100)) : 50;
       floatHtml = `
         <div style="margin:0.55rem 0 0.3rem;padding:0.5rem 0.7rem;background:rgba(0,0,0,0.03);border-radius:8px;">
@@ -404,11 +375,12 @@ async function showAlphaReport() {
     const open   = (await openRes.json()).data   || [];
     const closed = (await closedRes.json()).data || [];
 
-    // ── 最新收盤（open positions）──
     const openIds = open.map(p => p.stock_id);
     const latestPrices = await _alphaFetchLatestPrices(openIds);
 
-    // ── 統計 ──
+    // ── 部位風險總覽（新功能）──
+    renderRiskOverview(open);
+
     const wins     = closed.filter(p => (p.pnl||0) > 0).length;
     const losses   = closed.filter(p => (p.pnl||0) <= 0).length;
     const totalPnl = closed.reduce((s,p) => s+(p.pnl||0), 0);
@@ -417,7 +389,6 @@ async function showAlphaReport() {
     const maxWin   = closed.length ? Math.max(...closed.map(p=>p.pnl||0)) : 0;
     const maxLoss  = closed.length ? Math.min(...closed.map(p=>p.pnl||0)) : 0;
 
-    // 最大連勝/連敗
     let maxStreak = 0, maxLoseStreak = 0, curW = 0, curL = 0;
     const sortedClosed = [...closed].sort((a,b) => new Date(a.closed_at)-new Date(b.closed_at));
     for (const p of sortedClosed) {
@@ -425,11 +396,8 @@ async function showAlphaReport() {
       else { curL++; curW=0; maxLoseStreak=Math.max(maxLoseStreak,curL); }
     }
 
-    // 累積損益曲線
     let cum = 0;
     const cumData = sortedClosed.map(p => { cum += (p.pnl||0); return { date: p.closed_at?.slice(0,10), pnl: cum, label: p.stock_id }; });
-
-    // 個別損益排序（按 pnl_pct 高→低）
     const sortedByPct = [...closed].sort((a,b) => (b.pnl_pct||0)-(a.pnl_pct||0));
 
     const renderOpenRow = (p) => {
@@ -551,7 +519,6 @@ async function showAlphaReport() {
       <div style="font-size:0.62rem;color:var(--muted);margin-top:1.2rem;text-align:center;padding-top:0.8rem;border-top:1px solid var(--border);">⚠️ 以上為 AI 模擬交易紀錄，不構成投資建議</div>
     `;
 
-    // ── 繪製圖表 ──
     if (closed.length >= 2) {
       if (!window.Chart) {
         await new Promise((res, rej) => {
@@ -565,7 +532,6 @@ async function showAlphaReport() {
       const gridC = 'rgba(0,0,0,0.06)';
       const ax    = { ticks: { color: muted, font: { size: 9 } }, grid: { color: gridC } };
 
-      // 累積損益曲線（含 0 基準線）
       new window.Chart(document.getElementById('alphaCumChart'), {
         type: 'line',
         data: {
@@ -601,7 +567,6 @@ async function showAlphaReport() {
         },
       });
 
-      // 個別損益（按 pnl_pct 排序）
       new window.Chart(document.getElementById('alphaBarChart'), {
         type: 'bar',
         data: {
@@ -617,7 +582,6 @@ async function showAlphaReport() {
         scales: { x: ax, y: { ...ax, ticks: { ...ax.ticks, callback: v => `${v>=0?'+':''}${v}%` } } } },
       });
 
-      // 勝率圓餅
       new window.Chart(document.getElementById('alphaWinChart'), {
         type: 'doughnut',
         data: { labels: ['獲利','虧損'], datasets: [{ data: [wins, losses],
@@ -642,5 +606,3 @@ function toggleAlphaBacktest() {
 }
 
 // ════════ 多空訊號回測（Supabase）════════
-
-
