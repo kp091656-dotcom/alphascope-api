@@ -103,7 +103,6 @@ async function collectSectorIndex() {
     if (!raw.length) throw new Error('API 回傳空陣列');
     console.log(`  🔍 欄位：${Object.keys(raw[0]).join(', ')}`);
     const tradeDate = lastTradingDay();
-    // 從 log 已知欄位：日期, 指數, 收盤指數, 漲跌, 漲跌點數, 漲跌百分比
     const rows = raw
       .filter(r => {
         const name = r['指數'] || '';
@@ -192,32 +191,84 @@ async function collectInstitutional() {
     for (const r of data) {
       const dt = r.date?.slice(0, 10);
       if (!dt) continue;
-      if (!byDate[dt]) byDate[dt] = { date: dt, foreign_net: 0, trust_net: 0, dealer_net: 0, total_net: 0 };
-      const net = (parseInt(r.buy) || 0) - (parseInt(r.sell) || 0);
+      if (!byDate[dt]) byDate[dt] = { date: dt, foreign_net: 0, foreign_buy: 0, foreign_sell: 0, trust_net: 0, trust_buy: 0, trust_sell: 0, dealer_net: 0, dealer_buy: 0, dealer_sell: 0, total_net: 0 };
+      const buy  = parseInt(r.buy)  || 0;
+      const sell = parseInt(r.sell) || 0;
+      const net  = buy - sell;
       const name = r.name || '';
-      if (name.includes('外資'))    byDate[dt].foreign_net += net;
-      else if (name.includes('投信'))  byDate[dt].trust_net  += net;
-      else if (name.includes('自營商')) byDate[dt].dealer_net += net;
+      if (name.includes('外資'))    { byDate[dt].foreign_net += net; byDate[dt].foreign_buy += buy; byDate[dt].foreign_sell += sell; }
+      else if (name.includes('投信'))  { byDate[dt].trust_net  += net; byDate[dt].trust_buy  += buy; byDate[dt].trust_sell  += sell; }
+      else if (name.includes('自營商')) { byDate[dt].dealer_net += net; byDate[dt].dealer_buy += buy; byDate[dt].dealer_sell += sell; }
       byDate[dt].total_net += net;
     }
     const rows = Object.values(byDate);
+
     // 雙寫：institutional_daily（舊）
     try {
-      await sbUpsert('institutional_daily', rows, 'date');
-    } catch(e) { console.warn(`  ⚠️  institutional_daily：${e.message}`); }
-    // 同步現貨欄位到 market_chips_daily（ON CONFLICT UPDATE）
-    // FinMind 單位：元，需除以 100,000,000 轉億元
-    try {
-      const chipRows = rows.map(r => ({
-        date:             r.date,
-        spot_foreign_net: r.foreign_net != null ? parseFloat((r.foreign_net / 100_000_000).toFixed(2)) : null,
-        spot_trust_net:   r.trust_net   != null ? parseFloat((r.trust_net   / 100_000_000).toFixed(2)) : null,
-        spot_dealer_net:  r.dealer_net  != null ? parseFloat((r.dealer_net  / 100_000_000).toFixed(2)) : null,
-        spot_total_net:   r.total_net   != null ? parseFloat((r.total_net   / 100_000_000).toFixed(2)) : null,
+      const instRows = rows.map(r => ({
+        date:        r.date,
+        foreign_net: r.foreign_net,
+        trust_net:   r.trust_net,
+        dealer_net:  r.dealer_net,
+        total_net:   r.total_net,
       }));
-      await sbUpsert('market_chips_daily', chipRows, 'date');
-      console.log(`  ✅ institutional_daily + market_chips_daily 同步：${rows.length} 筆`);
+      await sbUpsert('institutional_daily', instRows, 'date');
+    } catch(e) { console.warn(`  ⚠️  institutional_daily：${e.message}`); }
+
+    // ── 同步現貨欄位到 market_chips_daily ──
+    // FinMind 單位：元，需除以 100,000,000 轉億元
+    // ⚠️ 只更新 spot_ 欄位，不碰 fut_ 欄位（避免覆蓋 collectChips 寫的期貨資料）
+    // ⚠️ 使用 PATCH 逐筆更新，確保只改現貨欄位
+    try {
+      for (const r of rows) {
+        const toB = (v) => v != null ? parseFloat((v / 100_000_000).toFixed(2)) : null;
+        const spotRow = {
+          spot_foreign_buy:  toB(r.foreign_buy),
+          spot_foreign_sell: toB(r.foreign_sell),
+          spot_foreign_net:  toB(r.foreign_net),
+          spot_trust_buy:    toB(r.trust_buy),
+          spot_trust_sell:   toB(r.trust_sell),
+          spot_trust_net:    toB(r.trust_net),
+          spot_dealer_buy:   toB(r.dealer_buy),
+          spot_dealer_sell:  toB(r.dealer_sell),
+          spot_dealer_net:   toB(r.dealer_net),
+          spot_total_net:    toB(r.total_net),
+        };
+        // 先嘗試 INSERT（建立骨架），再 PATCH 更新現貨欄位
+        // 使用 upsert + on_conflict=date，只有 spot 欄位
+        const patchRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/market_chips_daily?date=eq.${r.date}`,
+          {
+            method: 'PATCH',
+            headers: {
+              apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify(spotRow),
+          }
+        );
+        if (!patchRes.ok) {
+          const txt = await patchRes.text();
+          // 若 PATCH 失敗（通常是該日還沒有列），改用 POST 插入
+          if (patchRes.status === 404 || txt.includes('0 rows')) {
+            await fetch(`${SUPABASE_URL}/rest/v1/market_chips_daily?on_conflict=date`, {
+              method: 'POST',
+              headers: {
+                apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
+                'Content-Type': 'application/json',
+                Prefer: 'resolution=merge-duplicates,return=minimal',
+              },
+              body: JSON.stringify({ date: r.date, ...spotRow }),
+            });
+          } else {
+            console.warn(`  ⚠️  market_chips_daily PATCH ${r.date} 失敗 ${patchRes.status}: ${txt.slice(0,100)}`);
+          }
+        }
+        console.log(`  ✅ market_chips_daily 現貨欄位更新（${r.date}）：外資 ${spotRow.spot_foreign_net} 億，投信 ${spotRow.spot_trust_net} 億，自營 ${spotRow.spot_dealer_net} 億`);
+      }
     } catch(e) { console.warn(`  ⚠️  market_chips_daily 現貨同步失敗：${e.message}`); }
+
     return { ok: true, count: rows.length };
   } catch (e) { console.error(`  ❌ 三大法人 失敗：${e.message}`); return { ok: false, error: e.message }; }
 }
@@ -256,7 +307,6 @@ async function collectOptions() {
   console.log('🎯 台指選擇權（FinMind TaiwanOptionDaily）...');
   try {
     // ── 1. 找最近有「日盤」資料的交易日 ──
-    // FinMind trading_session: 'after_market'=夜盤；日盤資料收盤後才有，當天早上只有夜盤
     let allOptData = [], tradeDate = '';
     for (let i = 0; i <= 7; i++) {
       const d = new Date(Date.now() - i * 86_400_000);
@@ -274,27 +324,19 @@ async function collectOptions() {
     }
     if (!allOptData.length) throw new Error('找不到日盤選擇權資料（近 7 個交易日）');
 
-    // ── 2. contract_date 格式（已確認）──
-    // 月選：YYYYMM（e.g. 202606）
-    // 週三：YYYYMMWx（e.g. 202606W1）
-    // 週五：YYYYMMFx（e.g. 202606F1）
     const optData = allOptData;
     const contractDates = [...new Set(optData.map(r => r.contract_date || ''))].sort();
     console.log(`  📅 日期：${tradeDate}，日盤 ${optData.length} 筆`);
     console.log(`  🔍 contract_date 種類（前10）：${contractDates.slice(0, 10).join(', ')}`);
 
-    // ── 3. 依合約類型分類 ──
-    const isMonthly = (cd) => /^[0-9]{6}$/.test(cd);           // YYYYMM（月選）
-    const isWed     = (cd) => /^[0-9]{6}W[1245]$/.test(cd);    // YYYYMMWx（週三）
-    const isFri     = (cd) => /^[0-9]{6}F[1-5]$/.test(cd);     // YYYYMMFx（週五）
+    const isMonthly = (cd) => /^[0-9]{6}$/.test(cd);
+    const isWed     = (cd) => /^[0-9]{6}W[1245]$/.test(cd);
+    const isFri     = (cd) => /^[0-9]{6}F[1-5]$/.test(cd);
 
-    // 找近月合約（字串排序取最小 = 最近的月份）
     const monthlyCDs = contractDates.filter(isMonthly).sort();
     const nearMonthCD = monthlyCDs[0] || null;
     console.log(`  📌 近月合約：${nearMonthCD}，週三合約：${contractDates.filter(isWed).join('/')}，週五合約：${contractDates.filter(isFri).join('/')}`);
 
-    // 聚合函式：給定篩選條件，計算 callOI/putOI/callVol/putVol
-    // FinMind TaiwanOptionDaily call_put 實際值為中文「買權」/「賣權」
     const isCallCP = (v) => { const s = (v||'').trim(); return s === '買權' || s.toUpperCase() === 'C' || s.toUpperCase() === 'CALL'; };
     const isPutCP  = (v) => { const s = (v||'').trim(); return s === '賣權' || s.toUpperCase() === 'P' || s.toUpperCase() === 'PUT';  };
 
@@ -317,15 +359,11 @@ async function collectOptions() {
       return { callOI, putOI, callVol, putVol, byStrike };
     };
 
-    // 全部合約
     const all      = aggregate(() => true);
-    // 近月合約
     const monthly  = nearMonthCD ? aggregate(cd => cd === nearMonthCD) : { callOI: 0, putOI: 0, callVol: 0, putVol: 0, byStrike: {} };
-    // 近週三合約（取第一個 W 合約）
     const wedCDs   = contractDates.filter(isWed);
     const nearWedCD = wedCDs[0] || null;
     const wed      = nearWedCD ? aggregate(cd => cd === nearWedCD) : { callOI: 0, putOI: 0, byStrike: {} };
-    // 近週五合約（取第一個 F 合約）
     const friCDs   = contractDates.filter(isFri);
     const nearFriCD = friCDs[0] || null;
     const fri      = nearFriCD ? aggregate(cd => cd === nearFriCD) : { callOI: 0, putOI: 0, byStrike: {} };
@@ -335,15 +373,9 @@ async function collectOptions() {
     if (nearWedCD) console.log(`  📊 近週三（${nearWedCD}）：Call OI=${wed.callOI} Put OI=${wed.putOI}`);
     if (nearFriCD) console.log(`  📊 近週五（${nearFriCD}）：Call OI=${fri.callOI} Put OI=${fri.putOI}`);
 
-    // ── 4. Max Pain：取距今最近到期的合約計算（月/週三/週五，誰最快到期用誰）──
-    // 推算各合約的到期日：
-    //   月選（YYYY-MM）→ 該月第三個週三
-    //   近週三（W1）   → 從 tradeDate 起算，最近一個週三（含當天）
-    //   近週五（F1）   → 從 tradeDate 起算，最近一個週五（含當天）
     const tradeDateObj = new Date(tradeDate + 'T00:00:00Z');
 
     const getMonthlyExpiry = (cd) => {
-      // cd = "YYYY-MM"，找該月第三個週三
       const [y, m] = cd.split('-').map(Number);
       let count = 0;
       for (let day = 1; day <= 31; day++) {
@@ -355,7 +387,6 @@ async function collectOptions() {
     };
 
     const getNextWeekday = (targetDay) => {
-      // 從 tradeDate 起，找最近（含當天）的 targetDay（3=週三, 5=週五）
       const d = new Date(tradeDateObj);
       for (let i = 0; i < 7; i++) {
         if (d.getDay() === targetDay) return d;
@@ -364,7 +395,6 @@ async function collectOptions() {
       return null;
     };
 
-    // 各合約候選（label, byStrike, expiry）
     const mpCandidates = [];
     if (nearMonthCD) {
       const exp = getMonthlyExpiry(nearMonthCD);
@@ -379,7 +409,6 @@ async function collectOptions() {
       if (exp) mpCandidates.push({ label: `近週五 ${nearFriCD}`, byStrike: fri.byStrike, expiry: exp });
     }
 
-    // 取到期日最近（>= tradeDate）的那個；若全部已過期 fallback 到近月
     const validCandidates = mpCandidates.filter(c => c.expiry >= tradeDateObj);
     validCandidates.sort((a, b) => a.expiry - b.expiry);
     const mpCandidate = validCandidates[0] || mpCandidates[0] || null;
@@ -401,7 +430,6 @@ async function collectOptions() {
       }
     }
 
-    // ── 5. 三大法人選擇權淨部位（外資/投信/自營商 × CALL/PUT）──
     let callForeignNet = null, callTrustNet = null, callDealerNet = null;
     let putForeignNet  = null, putTrustNet  = null, putDealerNet  = null;
     try {
@@ -413,7 +441,6 @@ async function collectOptions() {
       for (const r of (inst || [])) {
         const inv  = (r.institutional_investors || r.name || '').trim();
         const cpRaw = (r.call_put || '').trim();
-        // FinMind 實際值為中文「買權」/「賣權」
         const isCall = cpRaw === '買權' || cpRaw.toUpperCase() === 'C' || cpRaw.toUpperCase() === 'CALL';
         const isPut  = cpRaw === '賣權' || cpRaw.toUpperCase() === 'P' || cpRaw.toUpperCase() === 'PUT';
         const lBal = parseInt(r.long_open_interest_balance_volume)  || 0;
@@ -434,28 +461,21 @@ async function collectOptions() {
       console.log(`  ✅ PUT  法人淨口：外資 ${putForeignNet}  投信 ${putTrustNet}  自營 ${putDealerNet}`);
     } catch (e) { console.warn(`  ⚠️ 法人選擇權資料失敗：${e.message}`); }
 
-    // ── 6. 組合寫入 ──
     const row = {
       date:                   tradeDate,
-      // 全部合約
       pc_ratio_oi:            all.callOI > 0 ? parseFloat((all.putOI / all.callOI).toFixed(4)) : null,
       call_oi:                all.callOI || null,
       put_oi:                 all.putOI  || null,
-      // 近月合約
       pc_ratio_oi_monthly:    monthly.callOI > 0 ? parseFloat((monthly.putOI / monthly.callOI).toFixed(4)) : null,
       call_oi_monthly:        monthly.callOI || null,
       put_oi_monthly:         monthly.putOI  || null,
-      // 近週三合約
       pc_ratio_oi_wed:        wed.callOI > 0 ? parseFloat((wed.putOI / wed.callOI).toFixed(4)) : null,
       call_oi_wed:            wed.callOI || null,
       put_oi_wed:             wed.putOI  || null,
-      // 近週五合約（F1）
       pc_ratio_oi_fri:        fri.callOI > 0 ? parseFloat((fri.putOI / fri.callOI).toFixed(4)) : null,
       call_oi_fri:            fri.callOI || null,
       put_oi_fri:             fri.putOI  || null,
-      // Max Pain（最近到期合約）
       max_pain:               maxPain || null,
-      // 法人淨口
       call_foreign_net:       callForeignNet,
       call_trust_net:         callTrustNet,
       call_dealer_net:        callDealerNet,
@@ -463,7 +483,6 @@ async function collectOptions() {
       put_trust_net:          putTrustNet,
       put_dealer_net:         putDealerNet,
     };
-    // 雙寫：options_daily（舊，保留過渡期）
     try {
       await sbUpsert('options_daily', [row], 'date');
       console.log('  ✅ options_daily（舊表）寫入完成');
@@ -471,10 +490,7 @@ async function collectOptions() {
       console.warn(`  ⚠️  options_daily 寫入失敗：${e.message}`);
     }
 
-    // 寫入新表 options_analytics_daily（3 列：monthly / weekly_wed / weekly_fri）
     const analyticsRows = [];
-
-    // monthly
     analyticsRows.push({
       date:             tradeDate,
       contract_type:    'monthly',
@@ -491,7 +507,6 @@ async function collectOptions() {
       put_dealer_net:   putDealerNet,
     });
 
-    // weekly_wed
     if (nearWedCD) analyticsRows.push({
       date:             tradeDate,
       contract_type:    'weekly_wed',
@@ -500,15 +515,10 @@ async function collectOptions() {
       put_oi:           wed.putOI  || null,
       pc_ratio_oi:      wed.callOI > 0 ? parseFloat((wed.putOI / wed.callOI).toFixed(4)) : null,
       max_pain:         (mpCandidate?.label || '').includes('週三') ? maxPain : null,
-      call_foreign_net: null,
-      call_trust_net:   null,
-      call_dealer_net:  null,
-      put_foreign_net:  null,
-      put_trust_net:    null,
-      put_dealer_net:   null,
+      call_foreign_net: null, call_trust_net: null, call_dealer_net: null,
+      put_foreign_net:  null, put_trust_net: null,  put_dealer_net:  null,
     });
 
-    // weekly_fri
     if (nearFriCD) analyticsRows.push({
       date:             tradeDate,
       contract_type:    'weekly_fri',
@@ -517,12 +527,8 @@ async function collectOptions() {
       put_oi:           fri.putOI  || null,
       pc_ratio_oi:      fri.callOI > 0 ? parseFloat((fri.putOI / fri.callOI).toFixed(4)) : null,
       max_pain:         (mpCandidate?.label || '').includes('週五') ? maxPain : null,
-      call_foreign_net: null,
-      call_trust_net:   null,
-      call_dealer_net:  null,
-      put_foreign_net:  null,
-      put_trust_net:    null,
-      put_dealer_net:   null,
+      call_foreign_net: null, call_trust_net: null, call_dealer_net: null,
+      put_foreign_net:  null, put_trust_net: null,  put_dealer_net:  null,
     });
 
     try {
@@ -536,11 +542,8 @@ async function collectOptions() {
 }
 
 async function collectFutures() {
-  // ⚠️ stooq 已完全棄用（不穩定、常被限速封鎖）
-  // 資料來源：FinMind（美股/SOX/VIX/商品/台幣/美債）+ Yahoo Finance（DXY — FinMind 無）
   console.log('🌍 全球商品/指數（FinMind + Yahoo Finance）...');
   try {
-    // Yahoo Finance helper（只用於 FinMind 沒有的資料，目前僅 DXY）
     async function yahooQuote(symbol, label, cat) {
       try {
         const r = await fetch(
@@ -604,7 +607,6 @@ async function collectFutures() {
       } catch(e) { console.log(`  ⚠️  ${s.name}(${s.ds}) 失敗：${e.message}`); return null; }
     }))).filter(Boolean) : [];
 
-    // DXY — FinMind 無此資料，唯一使用 Yahoo Finance 的項目
     const dxyRow = await yahooQuote('DX-Y.NYB', 'DXY美元指數', '外匯');
     const allRows = [...fmRows, ...(dxyRow ? [dxyRow] : [])];
 
@@ -643,30 +645,39 @@ async function collectChips() {
     opt_put_foreign_long: null, opt_put_foreign_short: null, opt_put_foreign_net: null,
   };
 
-  // ── 1. 現貨三大法人（多 endpoint 嘗試）──
-  // 嘗試順序：MI_INST → BFIA01 → FinMind（若有 token）
+  // ── 1. 現貨三大法人 ──
+  // ⚠️ 修正：toB() 在 n===0 時回傳 null，避免以 0 覆蓋後續 FinMind 寫入的正確值
   try {
     const toB = (str) => {
       const n = parseFloat((str || '').replace(/,/g, ''));
-      return isNaN(n) ? null : parseFloat((n / 100000).toFixed(2)); // 千元 → 億元
+      if (isNaN(n) || n === 0) return null; // ← 修正：0 視為無效值，回傳 null
+      return parseFloat((n / 100000).toFixed(2)); // 千元 → 億元
     };
+
     const parseSpot = (raw, keyMap) => {
-      // keyMap: { typeKey, buyKey, sellKey, netKey }
       for (const row of raw) {
         const type = (row[keyMap.typeKey] || '').trim();
         const buy  = toB(row[keyMap.buyKey]  || '');
         const sell = toB(row[keyMap.sellKey] || '');
         const net  = toB(row[keyMap.netKey]  || '');
-        if (type.includes('自營商') && (type.includes('自行') || !type.includes('避險'))) {
+
+        // ⚠️ 修正：只有 buy/sell/net 都不為 null 時才寫入，避免用 null/0 覆蓋已有的資料
+        const isDealer = type.includes('自營商') && (type.includes('自行') || !type.includes('避險'));
+        const isTrust  = type.includes('投信');
+        const isForeign = type.includes('外資') && !type.includes('自營');
+        const isTotal  = type.includes('合計') || type.includes('三大法人');
+
+        if (isDealer && buy !== null && sell !== null && net !== null) {
           result.spot_dealer_buy = buy; result.spot_dealer_sell = sell; result.spot_dealer_net = net;
-        } else if (type.includes('投信')) {
+        } else if (isTrust && buy !== null && sell !== null && net !== null) {
           result.spot_trust_buy  = buy; result.spot_trust_sell  = sell; result.spot_trust_net  = net;
-        } else if (type.includes('外資') && !type.includes('自營')) {
+        } else if (isForeign && buy !== null && sell !== null && net !== null) {
           result.spot_foreign_buy = buy; result.spot_foreign_sell = sell; result.spot_foreign_net = net;
-        } else if (type.includes('合計') || type.includes('三大法人')) {
+        } else if (isTotal && net !== null) {
           result.spot_total_net = net;
         }
       }
+      // 若合計為 null 但三個分項都有值，自動計算
       if (result.spot_total_net === null &&
           result.spot_dealer_net !== null && result.spot_trust_net !== null && result.spot_foreign_net !== null) {
         result.spot_total_net = parseFloat((result.spot_dealer_net + result.spot_trust_net + result.spot_foreign_net).toFixed(2));
@@ -686,8 +697,13 @@ async function collectChips() {
           if (raw.length > 0) {
             console.log(`  🔍 MI_INST 欄位：${Object.keys(raw[0]).join(', ')}`);
             parseSpot(raw, { typeKey: '買賣別', buyKey: '買進金額', sellKey: '賣出金額', netKey: '買賣超額' });
-            spotOK = true;
-            console.log(`  ✅ 現貨（MI_INST）：外資 ${result.spot_foreign_net?.toFixed(2)} 億，投信 ${result.spot_trust_net?.toFixed(2)} 億，自營 ${result.spot_dealer_net?.toFixed(2)} 億`);
+            // ⚠️ 修正：只有真正解析到值才標記 OK
+            spotOK = result.spot_foreign_net !== null || result.spot_trust_net !== null;
+            if (spotOK) {
+              console.log(`  ✅ 現貨（MI_INST）：外資 ${result.spot_foreign_net?.toFixed(2)} 億，投信 ${result.spot_trust_net?.toFixed(2)} 億，自營 ${result.spot_dealer_net?.toFixed(2)} 億`);
+            } else {
+              console.log(`  ⚠️  MI_INST 有資料但解析到 null（欄位名稱可能已改變），嘗試下一來源`);
+            }
           }
         }
       } catch(e) { console.log(`  ℹ️  MI_INST 失敗（${e.message}）`); }
@@ -704,25 +720,26 @@ async function collectChips() {
           if (raw.length > 0) {
             console.log(`  🔍 BFIA01 欄位：${Object.keys(raw[0]).join(', ')}`);
             parseSpot(raw, { typeKey: '買賣別', buyKey: '買進金額', sellKey: '賣出金額', netKey: '買賣超額' });
-            spotOK = true;
-            console.log(`  ✅ 現貨（BFIA01）：外資 ${result.spot_foreign_net?.toFixed(2)} 億，投信 ${result.spot_trust_net?.toFixed(2)} 億，自營 ${result.spot_dealer_net?.toFixed(2)} 億`);
+            spotOK = result.spot_foreign_net !== null || result.spot_trust_net !== null;
+            if (spotOK) {
+              console.log(`  ✅ 現貨（BFIA01）：外資 ${result.spot_foreign_net?.toFixed(2)} 億，投信 ${result.spot_trust_net?.toFixed(2)} 億，自營 ${result.spot_dealer_net?.toFixed(2)} 億`);
+            } else {
+              console.log(`  ⚠️  BFIA01 有資料但解析到 null，嘗試 FinMind fallback`);
+            }
           }
         }
       } catch(e) { console.log(`  ℹ️  BFIA01 失敗（${e.message}）`); }
     }
 
-    // 嘗試 FinMind（需要 FM_TOKEN，MODE=finmind 或 all 時才有）
+    // 嘗試 FinMind（需要 FM_TOKEN）
     if (!spotOK && FM_TOKEN) {
       try {
         const data = await fmFetch('TaiwanStockTotalInstitutionalInvestors', { start_date: daysAgo(3) });
         if (data.length > 0) {
           console.log(`  🔍 FinMind 欄位：${Object.keys(data[0]).join(', ')}`);
-          // FinMind 欄位：date, name, buy, sell（單位：千元）
           const latest = data.sort((a,b) => b.date.localeCompare(a.date))[0].date.slice(0,10);
           for (const r of data.filter(r => r.date?.slice(0,10) === latest)) {
             const name = (r.name || '').trim();
-            // FinMind buy/sell 單位是元，除以 100,000,000 = 億元
-            // 驗算：Foreign_Investor buy=407,598,284,294 元 ÷ 100,000,000 = 4,075.98 億 ✅
             const buyRaw  = parseFloat(String(r.buy  ?? 0).replace(/,/g, ''));
             const sellRaw = parseFloat(String(r.sell ?? 0).replace(/,/g, ''));
             if (isNaN(buyRaw) || isNaN(sellRaw)) continue;
@@ -730,8 +747,6 @@ async function collectChips() {
             const sell = parseFloat((sellRaw / 100_000_000).toFixed(2));
             const net  = parseFloat((buy - sell).toFixed(2));
             console.log(`    ${name}：買${buy.toFixed(2)} 賣${sell.toFixed(2)} 超${net.toFixed(2)} 億`);
-            // FinMind name 值（英文，從 log 確認）：
-            // Dealer_self=自營商(自行買賣), Investment_Trust=投信, Foreign_Investor=外資及陸資(不含外資自營商)
             if (name === 'Dealer_self') {
               result.spot_dealer_buy = buy; result.spot_dealer_sell = sell; result.spot_dealer_net = net;
             } else if (name === 'Investment_Trust') {
@@ -744,45 +759,38 @@ async function collectChips() {
           }
           if (result.spot_dealer_net !== null && result.spot_trust_net !== null && result.spot_foreign_net !== null)
             result.spot_total_net = parseFloat((result.spot_dealer_net + result.spot_trust_net + result.spot_foreign_net).toFixed(2));
-          spotOK = true;
-          console.log(`  ✅ 現貨（FinMind ${latest}）：外資 ${result.spot_foreign_net?.toFixed(2)} 億，投信 ${result.spot_trust_net?.toFixed(2)} 億`);
+          spotOK = result.spot_foreign_net !== null || result.spot_trust_net !== null;
+          if (spotOK)
+            console.log(`  ✅ 現貨（FinMind ${latest}）：外資 ${result.spot_foreign_net?.toFixed(2)} 億，投信 ${result.spot_trust_net?.toFixed(2)} 億`);
         }
       } catch(e) { console.log(`  ℹ️  FinMind 現貨失敗（${e.message}）`); }
     }
 
-    if (!spotOK) console.warn('  ⚠️  現貨三大法人：所有來源均失敗，欄位保持 null');
+    if (!spotOK) console.warn('  ⚠️  現貨三大法人：所有來源均失敗，現貨欄位保持 null（等待 collectInstitutional 15:30 寫入）');
   } catch (e) {
     console.error(`  ❌ 現貨三大法人 失敗：${e.message}`);
   }
 
   // ── 2. TAIFEX 期貨三大法人（TX / MTX / TMF）──
-  // 策略：一次取全部資料，記憶體內 filter 各商品（contractCode 參數無效）
-  // 真實欄位（log 確認）：Date, ContractCode, Item（身份別）
-  //   OpenInterest(Long/Short/Net) = 未平倉多方/空方/淨額口數
   try {
     const dateStr = tradeDate.replace(/-/g, '');
     const toInt   = (v) => { const n = parseInt((String(v||'')).replace(/,/g,'')); return isNaN(n) ? null : n; };
 
-    // 一次取全部期貨商品資料
     const futUrl = `https://openapi.taifex.com.tw/v1/MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate?queryDate=${dateStr}`;
     const futRes = await fetch(futUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(20_000) });
     if (!futRes.ok) throw new Error(`HTTP ${futRes.status}`);
     const allFut = await futRes.json();
     if (!Array.isArray(allFut) || !allFut.length) throw new Error('無資料');
 
-    // Debug：印出欄位和所有商品代碼
     console.log(`  🔍 TAIFEX 期貨欄位：${Object.keys(allFut[0]).join(', ')}`);
-    // ContractCode 是中文商品名稱（臺股期貨/小型臺指期貨/微型臺指期貨）
     const getCode  = (r) => (r.ContractCode || r.commodity_id || '').trim();
     const getIdent = (r) => (r.Item || r.institutional_traders_name || r['身份別'] || '').trim();
     const allCodes = [...new Set(allFut.map(getCode))];
     console.log(`  📊 商品代碼：${allCodes.slice(0,6).join(', ')}，共 ${allFut.length} 筆`);
 
-    // 印出臺股期貨外資那筆確認欄位
     const txForeignRaw = allFut.find(r => r.ContractCode === '臺股期貨' && getIdent(r).includes('外資'));
     if (txForeignRaw) console.log(`  🔍 臺股期貨外資原始：${JSON.stringify(txForeignRaw)}`);
 
-    // netOnly=true：只寫 _net 欄位（MTX/TMF 表結構無 long/short 欄位）
     const parseFut = (rows, prefix, netOnly = false) => {
       let totalNet = 0;
       for (const row of rows) {
@@ -810,38 +818,29 @@ async function collectChips() {
         result[`${prefix}_total_net`] = totalNet;
     };
 
-    // TX 台指期
-    // ContractCode 是中文名稱，用中文過濾
     const txRows  = allFut.filter(r => r.ContractCode === '臺股期貨');
     const mtxRows = allFut.filter(r => r.ContractCode === '小型臺指期貨');
     const tmfRows = allFut.filter(r => r.ContractCode === '微型臺指期貨');
 
-    // TX 台指期（臺股期貨）
     if (txRows.length) {
       parseFut(txRows, 'fut_tx');
       console.log(`  ✅ TX（臺股期貨）：外資 多${result.fut_tx_foreign_long}/空${result.fut_tx_foreign_short}/淨${result.fut_tx_foreign_net} 口，投信淨${result.fut_tx_trust_net}，自營淨${result.fut_tx_dealer_net}`);
     } else console.warn('  ⚠️  TX（臺股期貨）無資料');
 
-    // MTX 小型台指（market_chips_daily 只有 net 欄位，無 long/short）
     if (mtxRows.length) {
       parseFut(mtxRows, 'fut_mtx', true);
       console.log(`  ✅ MTX（小型臺指期貨）：外資淨 ${result.fut_mtx_foreign_net} 口，投信淨 ${result.fut_mtx_trust_net}，自營淨 ${result.fut_mtx_dealer_net}`);
     } else console.warn('  ⚠️  MTX（小型臺指期貨）無資料');
 
-    // TMF 微型台指（market_chips_daily 只有 net 欄位，無 long/short）
     if (tmfRows.length) {
       parseFut(tmfRows, 'fut_tmf', true);
       console.log(`  ✅ TMF（微型臺指期貨）：外資淨 ${result.fut_tmf_foreign_net} 口，投信淨 ${result.fut_tmf_trust_net}，自營淨 ${result.fut_tmf_dealer_net}`);
     } else console.warn('  ⚠️  TMF（微型臺指期貨）無資料');
 
     // TMF 全體未平倉量
-    // 策略1：TAIFEX OpenAPI /DailyMarketReportFut（JSON，最乾淨）
-    //   Contract='TMF', TradingSession='一般', OpenInterest 非 '-'，加總各月份
-    // 策略2：Fallback HTML（從小計列數字序列取最後一個）
     try {
       let tmfOI = null;
 
-      // ── 策略1：TAIFEX OpenAPI DailyMarketReportFut ──
       try {
         const apiRes = await fetch('https://openapi.taifex.com.tw/v1/DailyMarketReportFut', {
           headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
@@ -850,23 +849,21 @@ async function collectChips() {
         if (!apiRes.ok) throw new Error('OpenAPI HTTP ' + apiRes.status);
         const allFutDaily = await apiRes.json();
         if (!Array.isArray(allFutDaily) || !allFutDaily.length) throw new Error('OpenAPI 回傳空陣列');
-        // 篩選 TMF 一般時段、OI 有效值，加總各月份
-        const tmfRows = allFutDaily.filter(r =>
+        const tmfDailyRows = allFutDaily.filter(r =>
           r.Contract === 'TMF' &&
           r['TradingSession'] === '一般' &&
           r['OpenInterest'] && r['OpenInterest'] !== '-'
         );
-        if (!tmfRows.length) throw new Error('OpenAPI 無 TMF 一般時段資料');
-        const total = tmfRows.reduce((sum, r) => {
+        if (!tmfDailyRows.length) throw new Error('OpenAPI 無 TMF 一般時段資料');
+        const total = tmfDailyRows.reduce((sum, r) => {
           const n = parseInt((r['OpenInterest'] || '').replace(/,/g, ''));
           return sum + (isNaN(n) ? 0 : n);
         }, 0);
         if (total <= 0) throw new Error('OpenAPI TMF OI 加總為 0');
         tmfOI = total;
-        console.log(`  ✅ TMF 全體未平倉（OpenAPI）：${total} 口（${tmfRows.length} 個月份）`);
+        console.log(`  ✅ TMF 全體未平倉（OpenAPI）：${total} 口（${tmfDailyRows.length} 個月份）`);
       } catch(e1) { console.log('  ℹ️  OpenAPI 策略失敗：' + e1.message + '，切換 HTML fallback'); }
 
-      // ── 策略2：HTML fallback ──
       if (!tmfOI) {
         const eUrl = 'https://www.taifex.com.tw/cht/3/futDailyMarketExcel?commodity_id=TMF';
         const eRes = await fetch(eUrl, {
@@ -898,8 +895,6 @@ async function collectChips() {
   }
 
   // ── 3. TAIFEX 選擇權三大法人（TXO CALL / PUT）──
-  // 使用 FinMind TaiwanOptionInstitutionalInvestors（有 call_put 欄位）
-  // TAIFEX OpenAPI 的選擇權 endpoint 不提供 CALL/PUT 分開資料
   try {
     if (!FM_TOKEN) throw new Error('FINMIND_TOKEN 未設定，選擇權略過');
     const toInt2 = (v) => { const n = parseInt(String(v ?? 0).replace(/,/g,'')); return isNaN(n) ? null : n; };
@@ -910,17 +905,15 @@ async function collectChips() {
 
     console.log(`  🔍 FinMind TXO 欄位：${Object.keys(optData[0]).join(', ')}`);
 
-    // 取最近交易日
     const latestOptDate = optData.map(r => r.date?.slice(0,10)).filter(Boolean).sort().reverse()[0];
     const latestOpt = optData.filter(r => r.date?.slice(0,10) === latestOptDate);
     console.log(`  📊 TXO ${latestOptDate}：${latestOpt.length} 筆，樣本：${JSON.stringify(latestOpt[0])}`);
 
-    // FinMind 欄位：call_put（C/P）, institutional_investors（身份別）
-    //   long_open_interest_balance_volume, short_open_interest_balance_volume
+    const getCP = (r) => r.call_put || '';
+
     const parseOptFM = (rows, prefix) => {
       for (const row of rows) {
         const ident    = (row.institutional_investors || row.name || '').trim();
-        // 欄位從 log 確認：long_open_interest_balance_volume / short_open_interest_balance_volume
         const longVol  = toInt2(row.long_open_interest_balance_volume  || 0);
         const shortVol = toInt2(row.short_open_interest_balance_volume || 0);
         const net = longVol - shortVol;
@@ -934,8 +927,6 @@ async function collectChips() {
       }
     };
 
-    // FinMind call_put 值（從 log 確認）：'買權' 或 '賣權'（繁體中文）
-    // institutional_investors 欄位：'自營商', '投信', '外資及陸資'
     const callRows = latestOpt.filter(r => r.call_put === '買權');
     const putRows  = latestOpt.filter(r => r.call_put === '賣權');
 
@@ -946,7 +937,6 @@ async function collectChips() {
 
   } catch (e) {
     console.warn(`  ⚠️  選擇權（FinMind）失敗：${e.message}，嘗試 TAIFEX OpenAPI...`);
-    // Fallback：TAIFEX OpenAPI 選擇權（無 CALL/PUT 分開，只能取整體 OI）
     try {
       const dateStr = tradeDate.replace(/-/g, '');
       const toInt2  = (v) => { const n = parseInt((String(v||'')).replace(/,/g,'')); return isNaN(n) ? null : n; };
@@ -956,8 +946,7 @@ async function collectChips() {
       if (optText.includes('<!')) throw new Error('回傳 HTML');
       const allOpt  = JSON.parse(optText);
       const txoRows = (Array.isArray(allOpt) ? allOpt : []).filter(r => r.ContractCode === '臺指選擇權');
-      console.log(`  📊 TAIFEX 臺指選擇權：${txoRows.length} 筆，Item 樣本：${[...new Set(txoRows.map(r=>r.Item||''))].join(', ')}`);
-      // TAIFEX 選擇權 3 筆無 CALL/PUT 分開，印出整體 OI 供參考
+      console.log(`  📊 TAIFEX 臺指選擇權：${txoRows.length} 筆`);
       for (const row of txoRows) {
         const ident = (row.Item || '').trim();
         const loI   = toInt2(row['OpenInterest(Long)'] || 0);
@@ -968,15 +957,41 @@ async function collectChips() {
     } catch(e2) { console.error(`  ❌ TAIFEX 選擇權 fallback 失敗：${e2.message}`); }
   }
 
-    // ── 4. 雙寫：chips_daily（舊，保留過渡期）+ market_chips_daily（新）──
+  // ── 4. 雙寫：chips_daily（舊）+ market_chips_daily（新）──
+  // ⚠️ 修正：市場現貨欄位若全為 null（TWSE 解析失敗），則 market_chips_daily 只寫期貨欄位
+  // 讓 collectInstitutional（15:30）的 PATCH 負責填入正確的現貨欄位，不用 null 覆蓋
   try {
     await sbUpsert('chips_daily', [result], 'date');
     console.log('  ✅ chips_daily（舊表）寫入完成');
   } catch (e) {
     console.warn(`  ⚠️  chips_daily 寫入失敗：${e.message}`);
   }
+
   try {
-    await sbUpsert('market_chips_daily', [result], 'date');
+    const spotAllNull = result.spot_foreign_net === null && result.spot_trust_net === null && result.spot_dealer_net === null;
+    let mcdRow;
+    if (spotAllNull) {
+      // 只寫期貨/選擇權欄位，不寫 spot_ 欄位（避免以 null 覆蓋 collectInstitutional 的正確值）
+      mcdRow = {
+        date:               result.date,
+        fut_tx_dealer_long: result.fut_tx_dealer_long, fut_tx_dealer_short: result.fut_tx_dealer_short, fut_tx_dealer_net: result.fut_tx_dealer_net,
+        fut_tx_trust_long:  result.fut_tx_trust_long,  fut_tx_trust_short:  result.fut_tx_trust_short,  fut_tx_trust_net:  result.fut_tx_trust_net,
+        fut_tx_foreign_long:result.fut_tx_foreign_long,fut_tx_foreign_short:result.fut_tx_foreign_short,fut_tx_foreign_net:result.fut_tx_foreign_net,
+        fut_tx_total_net:   result.fut_tx_total_net,
+        fut_mtx_dealer_net: result.fut_mtx_dealer_net, fut_mtx_trust_net:   result.fut_mtx_trust_net,   fut_mtx_foreign_net: result.fut_mtx_foreign_net, fut_mtx_total_net: result.fut_mtx_total_net,
+        fut_tmf_dealer_net: result.fut_tmf_dealer_net, fut_tmf_trust_net:   result.fut_tmf_trust_net,   fut_tmf_foreign_net: result.fut_tmf_foreign_net, fut_tmf_total_net: result.fut_tmf_total_net, fut_tmf_total_oi: result.fut_tmf_total_oi,
+        opt_call_dealer_long: result.opt_call_dealer_long, opt_call_dealer_short: result.opt_call_dealer_short, opt_call_dealer_net: result.opt_call_dealer_net,
+        opt_call_trust_long:  result.opt_call_trust_long,  opt_call_trust_short:  result.opt_call_trust_short,  opt_call_trust_net:  result.opt_call_trust_net,
+        opt_call_foreign_long:result.opt_call_foreign_long,opt_call_foreign_short:result.opt_call_foreign_short,opt_call_foreign_net:result.opt_call_foreign_net,
+        opt_put_dealer_long:  result.opt_put_dealer_long,  opt_put_dealer_short:  result.opt_put_dealer_short,  opt_put_dealer_net:  result.opt_put_dealer_net,
+        opt_put_trust_long:   result.opt_put_trust_long,   opt_put_trust_short:   result.opt_put_trust_short,   opt_put_trust_net:   result.opt_put_trust_net,
+        opt_put_foreign_long: result.opt_put_foreign_long, opt_put_foreign_short: result.opt_put_foreign_short, opt_put_foreign_net: result.opt_put_foreign_net,
+      };
+      console.log('  ℹ️  現貨欄位全為 null，market_chips_daily 只寫期貨欄位，待 collectInstitutional 補填現貨');
+    } else {
+      mcdRow = { ...result };
+    }
+    await sbUpsert('market_chips_daily', [mcdRow], 'date');
     console.log('  ✅ market_chips_daily（新表）寫入完成');
     return { ok: true, date: tradeDate };
   } catch (e) {
@@ -1189,7 +1204,6 @@ async function collectAlphaReport() {
   if (!GROQ_KEY) { console.warn('  ⚠️  GROQ_API_KEY 未設定'); return { ok: false, error: 'no groq key' }; }
 
   try {
-    // ⚠️ 使用台灣時間（UTC+8），避免 UTC 22:xx 跑時寫入前一天日期
     const today = todayTW();
 
     const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/alpha_daily_report?report_date=eq.${today}&select=id,market_context`, {
@@ -1197,7 +1211,6 @@ async function collectAlphaReport() {
     });
     const existing = await checkRes.json();
     if (Array.isArray(existing) && existing.length > 0) {
-      // 若 market_context 已有內容才跳過，否則重新產生（補齊新欄位）
       const hasContext = existing[0]?.market_context && existing[0].market_context.trim().length > 0;
       if (hasContext) {
         console.log(`  ℹ️  今日報告已存在（${today}），跳過`);
@@ -1206,7 +1219,6 @@ async function collectAlphaReport() {
       console.log(`  ⚠️  今日報告存在但 market_context 為空，重新產生…`);
     }
 
-    // ── 1. 抓最新日期股價 ──
     const dateRes = await fetch(`${SUPABASE_URL}/rest/v1/stock_daily_twse?order=date.desc&limit=1&select=date`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
     });
@@ -1227,13 +1239,11 @@ async function collectAlphaReport() {
       valuation = Array.isArray(vRes) ? vRes : [];
     }
 
-    // ── 2. 抓最新新聞 ──
     const newsRes = await fetch(`${SUPABASE_URL}/rest/v1/news_daily?order=published_at.desc&limit=40&select=title,source,lang`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
     });
     const news = await newsRes.json().catch(() => []);
 
-    // ── 3. 抓 PTT（JSON API，比 HTML 解析更穩定）──
     let pttTitles = '';
     try {
       const pttRes = await fetch('https://www.ptt.cc/api/board/Stock/index', {
@@ -1253,7 +1263,6 @@ async function collectAlphaReport() {
       }
       pttTitles = items.length ? items.join('\n') : '無熱門討論';
     } catch (e) {
-      // JSON API 失敗時 fallback 到 HTML 解析
       console.warn(`  ⚠️  PTT JSON API 失敗（${e.message}），fallback 到 HTML 解析`);
       try {
         const pttRes = await fetch('https://www.ptt.cc/bbs/Stock/index.html', {
@@ -1278,16 +1287,16 @@ async function collectAlphaReport() {
       } catch { pttTitles = '無法取得'; }
     }
 
-    // ── 4. 抓最新籌碼資料（chips_daily）──
+    // ── 抓最新籌碼資料（market_chips_daily，新表）──
     let chips = null;
     try {
       const chipsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chips_daily?order=date.desc&limit=1&select=date,inst_foreign_net,inst_trust_net,inst_dealer_net,margin_balance,margin_change,short_balance,fut_tmf_total_net,fut_tmf_total_oi,fut_tmf_foreign_net,fut_tmf_dealer_net`,
+        `${SUPABASE_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,spot_total_net,fut_tmf_total_net,fut_tmf_total_oi,fut_tmf_foreign_net,fut_tmf_dealer_net`,
         { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
       );
       const chipsJson = await chipsRes.json();
       chips = Array.isArray(chipsJson) && chipsJson[0] ? chipsJson[0] : null;
-    } catch(e) { console.warn('  ⚠️  chips_daily 抓取失敗：' + e.message); }
+    } catch(e) { console.warn('  ⚠️  market_chips_daily 抓取失敗：' + e.message); }
 
     // 計算散戶多空比
     let retailRatio = null;
@@ -1295,7 +1304,7 @@ async function collectAlphaReport() {
       retailRatio = (-1 * chips.fut_tmf_total_net / chips.fut_tmf_total_oi * 100).toFixed(2);
     }
 
-    // ── 4b. 選擇權 P/C Ratio + Max Pain ──
+    // ── 選擇權 P/C Ratio + Max Pain ──
     let optBlock = '【選擇權市場】（資料暫無）';
     try {
       const opt = (await fetch(
@@ -1316,11 +1325,11 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
       }
     } catch(e) { console.warn('  ⚠️  options_daily：' + e.message); }
 
-    // ── 4c. 大台期貨（TX）三大法人淨口 ──
+    // ── 大台期貨（TX）三大法人淨口 ──
     let txBlock = '';
     try {
       const tx = (await fetch(
-        `${SUPABASE_URL}/rest/v1/chips_daily?order=date.desc&limit=1&select=date,fut_tx_foreign_net,fut_tx_trust_net,fut_tx_dealer_net,fut_tx_total_net`,
+        `${SUPABASE_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,fut_tx_foreign_net,fut_tx_trust_net,fut_tx_dealer_net,fut_tx_total_net`,
         { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
       ).then(r => r.json()))?.[0] || null;
       if (tx?.fut_tx_foreign_net != null) {
@@ -1330,7 +1339,7 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
       }
     } catch(e) { console.warn('  ⚠️  TX期貨：' + e.message); }
 
-    // ── 4d. 產業指數 Top5 / Bottom5 ──
+    // ── 產業指數 Top5 / Bottom5 ──
     let sectorBlock = '【產業指數】（資料暫無）';
     try {
       const [topRes, botRes] = await Promise.all([
@@ -1350,9 +1359,7 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
       }
     } catch(e) { console.warn('  ⚠️  sector_index_daily：' + e.message); }
 
-    // ── 4e. 總體經濟指標 ──
-    // 來源：FinMind（SOX/台幣/美債2Y+10Y/聯準會利率）+ Yahoo Finance（DXY — FinMind 無）
-    // ⚠️ stooq 已完全棄用（不穩定）
+    // ── 總體經濟指標 ──
     let macroBlock = '【總體經濟指標】（資料暫無）';
     let macroData  = {};
     try {
@@ -1367,7 +1374,6 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
 
       const fmMacroRows = FM_TOKEN ? (await Promise.all(fmMacroItems.map(async s => {
         try {
-          // 聯準會利率變動少，抓近 90 天確保取到最新值
           const startDate = s.ds === 'InterestRate' ? daysAgo(90) : daysAgo(7);
           const rows = await fmFetch(s.ds, { data_id: s.id, start_date: startDate });
           const sorted = (rows||[]).filter(r => {
@@ -1381,13 +1387,11 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
           const close  = getV(curr);
           const pClose = getV(prev);
           const chg    = pClose ? parseFloat(((close - pClose) / pClose * 100).toFixed(2)) : null;
-          // 聯準會利率顯示絕對值更有意義
           const display = s.ds === 'InterestRate' ? { label: s.name, close, chg, date: curr.date } : { label: s.name, close, chg };
           return display;
         } catch { return { label: s.name, close: null, chg: null }; }
       }))).filter(Boolean) : [];
 
-      // DXY — FinMind 無此資料，用 Yahoo Finance
       let dxyRow = { label: 'DXY美元指數', close: null, chg: null };
       try {
         const r = await fetch(
@@ -1409,7 +1413,6 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
 
       const macroRows = [...fmMacroRows, dxyRow];
 
-      // 計算 2Y-10Y 利差（殖利率曲線）
       const y2  = fmMacroRows.find(r => r.label === '美債2Y殖利率')?.close;
       const y10 = fmMacroRows.find(r => r.label === '美債10Y殖利率')?.close;
       let yieldCurveNote = '';
@@ -1419,7 +1422,6 @@ Max Pain（近月）：${opt.max_pain ?? 'N/A'}　全部 Call OI：${opt.call_oi
         yieldCurveNote = `\n10Y-2Y 利差：${spread > 0 ? '+' : ''}${spread}%（${status}）`;
       }
 
-      // 聯準會利率補充說明
       const fedRow = fmMacroRows.find(r => r.label === '聯準會利率');
       let fedNote = '';
       if (fedRow?.close != null) {
@@ -1443,7 +1445,7 @@ ${macroRows.map(fmt).join('\n')}${yieldCurveNote}`;
       if (yieldCurveNote) console.log(`  📐 ${yieldCurveNote.trim()}`);
     } catch(e) { console.warn('  ⚠️  總經指標：' + e.message); }
 
-    // ── 4f. CNN Fear & Greed Index ──
+    // ── CNN Fear & Greed Index ──
     let fearGreedBlock = '【市場情緒 Fear & Greed】（資料暫無）';
     let fearGreedData  = null;
     try {
@@ -1467,7 +1469,6 @@ ${macroRows.map(fmt).join('\n')}${yieldCurveNote}`;
       }
     } catch(e) { console.warn('  ⚠️  Fear & Greed：' + e.message); }
 
-    // ── 5. 整理資料 ──
     const valMap = {};
     for (const v of valuation) valMap[v.stock_id] = v;
 
@@ -1479,7 +1480,6 @@ ${macroRows.map(fmt).join('\n')}${yieldCurveNote}`;
     const newsTitles = (Array.isArray(news) ? news : []).slice(0, 30)
       .map(n => `[${n.source}] ${n.title}`).join('\n');
 
-    // ── 5. 呼叫 Groq ──
     const systemPrompt = `你是 Alpha，一位台股專業交易員兼市場分析師，思維框架來自機構級研究邏輯。
 今天是 ${today}，台股將於 09:00 開盤。
 
@@ -1572,21 +1572,17 @@ market_context 必須填寫，提及聯準會利率與殖利率曲線狀態。
 key_risks 必須 2-3 項，每項 15 字以上。
 sector_focus 必須 2-3 個產業。`;
 
-    // 整理籌碼摘要給 AI
     let chipsBlock = '【今日籌碼面板】\n（資料暫無）';
     if (chips) {
-      const fNet = chips.inst_foreign_net != null ? (chips.inst_foreign_net / 1e8).toFixed(1) : '—';
-      const tNet = chips.inst_trust_net   != null ? (chips.inst_trust_net   / 1e8).toFixed(1) : '—';
-      const dNet = chips.inst_dealer_net  != null ? (chips.inst_dealer_net  / 1e8).toFixed(1) : '—';
-      const mChg = chips.margin_change    != null ? chips.margin_change.toLocaleString() : '—';
-      const mBal = chips.margin_balance   != null ? chips.margin_balance.toLocaleString() : '—';
+      const fNet = chips.spot_foreign_net != null ? chips.spot_foreign_net.toFixed(2) : '—';
+      const tNet = chips.spot_trust_net   != null ? chips.spot_trust_net.toFixed(2)   : '—';
+      const dNet = chips.spot_dealer_net  != null ? chips.spot_dealer_net.toFixed(2)  : '—';
       const tmfNet = chips.fut_tmf_total_net != null ? chips.fut_tmf_total_net.toLocaleString() : '—';
       const tmfOI  = chips.fut_tmf_total_oi  != null ? chips.fut_tmf_total_oi.toLocaleString()  : '—';
       const tmfFor = chips.fut_tmf_foreign_net != null ? chips.fut_tmf_foreign_net.toLocaleString() : '—';
       const tmfDlr = chips.fut_tmf_dealer_net  != null ? chips.fut_tmf_dealer_net.toLocaleString()  : '—';
       chipsBlock = `【今日籌碼面板（${chips.date}）】
 三大法人現貨：外資 ${fNet} 億 ／ 投信 ${tNet} 億 ／ 自營商 ${dNet} 億
-融資餘額：${mBal} 張（變化 ${mChg} 張）
 微台指 TMF：三大法人淨額 ${tmfNet} 口（外資 ${tmfFor} ／自營 ${tmfDlr}） ／ 全體 OI ${tmfOI} 口
 散戶多空比：${retailRatio != null ? retailRatio + '%（正=散戶偏多，負=散戶偏空）' : '資料不足'}`;
     }
@@ -1646,7 +1642,7 @@ ${pttTitles}
       throw new Error(`JSON 解析失敗：${parseErr.message}`);
     }
 
-    // ── 6. 校正價格 ──
+    // ── 校正價格 ──
     const priceMap = {};
     for (const s of stocks) priceMap[s.stock_id] = s.close;
     for (const rec of (result.recommendations || [])) {
@@ -1665,7 +1661,7 @@ ${pttTitles}
       }
     }
 
-    // ── 7. 存入 Supabase alpha_daily_report ──
+    // ── 存入 Supabase alpha_daily_report ──
     const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/alpha_daily_report?on_conflict=report_date`, {
       method: 'POST',
       headers: {
@@ -1696,7 +1692,7 @@ ${pttTitles}
 
     if (!upsertRes.ok) throw new Error(`Supabase upsert HTTP ${upsertRes.status}`);
 
-    // ── 7.5 清理 180 天前的舊報告（節省 Supabase 空間）──
+    // ── 清理 180 天前舊報告 ──
     try {
       const cutoffDate = new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10);
       const delRes = await fetch(
@@ -1706,7 +1702,7 @@ ${pttTitles}
       if (delRes.ok) console.log(`  🗑️  已清理 ${cutoffDate} 前的舊 Alpha 報告`);
     } catch { /* 清理失敗不中斷主流程 */ }
 
-    // ── 8. 自動建立買進持倉（重複建倉防護 + 當日平倉防護）──
+    // ── 自動建立買進持倉 ──
     const buyRecs = (result.recommendations || []).filter(r => r.action === '買進');
     if (buyRecs.length > 0) {
       const todayStr = today;
@@ -1788,9 +1784,6 @@ async function main() {
   const isFinMind = MODE === 'finmind' || MODE === 'all';
   const isNews    = MODE === 'news'    || MODE === 'all';
   const isAlpha   = MODE === 'alpha'   || MODE === 'all';
-  // 新 domain mode（直接指定時執行，all 也包含）
-  // chips = twse 模式中的籌碼部分（collectChips 已含雙寫）
-  // options-analytics = finmind 模式中的選擇權部分（collectOptions 已含雙寫）
   console.log('═══════════════════════════════════════');
   console.log('  AlphaScope — 每日資料收集 v3');
   console.log(`  執行時間：${new Date().toISOString()}`);
