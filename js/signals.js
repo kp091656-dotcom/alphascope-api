@@ -733,15 +733,26 @@ async function renderMaxPainTrend(containerId) {
   if (!el) return;
   el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 趨勢載入中…</span>';
   try {
-    // ── 依優先序找最近有 max_pain 的合約：weekly_fri → weekly_wed → monthly ──
+    // ── 每天取最高優先有值的合約：weekly_fri → weekly_wed → monthly ──
     const contractPriority = ['weekly_fri', 'weekly_wed', 'monthly'];
-    let rows = [], usedContract = '';
-    for (const ct of contractPriority) {
-      const r = await sbFetch('options_analytics_daily',
-        `contract_type=eq.${ct}&order=date.desc&limit=7&select=date,max_pain,contract_type`);
-      const valid = (r || []).filter(d => d.max_pain != null && d.max_pain > 0);
-      if (valid.length >= 2) { rows = valid.slice(0, 5); usedContract = ct; break; }
-    }
+    const allRows = await sbFetch('options_analytics_daily',
+      `order=date.desc&limit=21&select=date,max_pain,contract_type`);
+    // 按日期分組，每天只取優先序最高且有值的那筆
+    const byDate = {};
+    (allRows || []).forEach(d => {
+      if (d.max_pain == null || d.max_pain <= 0) return;
+      const pri = contractPriority.indexOf(d.contract_type);
+      if (pri === -1) return;
+      if (!byDate[d.date] || pri < byDate[d.date].pri) {
+        byDate[d.date] = { ...d, pri };
+      }
+    });
+    // 取最近 5 天有值的資料
+    const rows = Object.values(byDate)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+    // usedContract 取最新那天的合約類型（用於標籤）
+    let usedContract = rows.length ? rows[0].contract_type : '';
     if (rows.length < 2) {
       el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 資料累積中…</span>';
       return;
