@@ -1521,6 +1521,36 @@ ${redditTitles || '無'}
         institution[key].net = (call || 0) - (put || 0);
     }
 
+    // ── 法人全 null → fallback Supabase options_analytics_daily ──
+    const instAllNull = Object.values(institution).every(v => v.net === null);
+    if (instAllNull) {
+      try {
+        const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fdxedcwtmlurumfjmlys.supabase.co';
+        const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'sb_publishable_BAaZB86ibYZSvTFkFGkeQA_GspDNdf0';
+        const sbRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/options_analytics_daily?order=date.desc&limit=3&select=date,call_foreign_net,put_foreign_net,call_trust_net,put_trust_net,call_dealer_net,put_dealer_net`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(4000) }
+        );
+        const sbRows = await sbRes.json();
+        const sbRow = Array.isArray(sbRows) && sbRows.find(r =>
+          r.call_foreign_net != null || r.put_foreign_net != null
+        );
+        if (sbRow) {
+          const fill = (callNet, putNet) => {
+            if (callNet == null && putNet == null) return { call: null, put: null, net: null };
+            const c = callNet ?? 0, p = putNet ?? 0;
+            return { call: c, put: p, net: c - p };
+          };
+          institution['外資']  = fill(sbRow.call_foreign_net, sbRow.put_foreign_net);
+          institution['投信']  = fill(sbRow.call_trust_net,   sbRow.put_trust_net);
+          institution['自營商'] = fill(sbRow.call_dealer_net,  sbRow.put_dealer_net);
+          console.log('[options] institution fallback Supabase:', sbRow.date);
+        }
+      } catch(e) {
+        console.warn('[options] institution Supabase fallback 失敗:', e.message);
+      }
+    }
+
     const pcOI = (all.callOI > 0) ? +(all.putOI / all.callOI).toFixed(3) : null;
 
     const optPayload = {
