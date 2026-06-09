@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-07
+> 更新日期：2026-06-09
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 CHANGELOG.md。
 
@@ -9,10 +9,11 @@
 ## 🔴 Claude 操作規則（必讀）
 
 1. **檔案做好後，一律先用 `present_files` 生成下載連結，詢問是否 push，不可自行 push。**
-2. 每次對話結束前，更新 CLAUDE.md + CHANGELOG.md，**同樣必須先 `present_files`，等使用者確認後才 push。**
+2. 每次對話結束前（使用者主動要求），更新 CLAUDE.md + CHANGELOG.md，**先 `present_files`，等使用者確認後才 push。**
 3. CLAUDE.md 只記錄當前狀態；歷史改動寫入 CHANGELOG.md。
 4. Push 時使用 `GitHub MCP:create_or_update_file`，一次 push 一個檔案。
 5. ⚠️ **任何情況下都不可跳過 present_files 步驟直接 push，包含文件更新。**
+6. ⚠️ **文件更新（CLAUDE.md / CHANGELOG.md）只在使用者主動要求切換新對話時才執行，平時不主動生成。**
 
 -----
 
@@ -60,7 +61,7 @@
 | 社群情緒 | `/home/claude/alphascope/js/sentiment.js` | `js/sentiment.js` |
 | 股東紀念品 | `/home/claude/alphascope/js/gifts.js` | `js/gifts.js` |
 | 台股熱圖 | `/home/claude/alphascope/js/heatmap.js` | `js/heatmap.js` |
-| 多空訊號 + Max Pain趨勢 + K線iframe + 部位風險 | `/home/claude/alphascope/js/signals.js` | `js/signals.js` |
+| 多空訊號 + Max Pain趨勢 + 部位風險 | `/home/claude/alphascope/js/signals.js` | `js/signals.js` |
 | 個股 Modal | `/home/claude/alphascope/js/stock_modal.js` | `js/stock_modal.js` |
 | Alpha 交易室 | `/home/claude/alphascope/js/alpha.js` | `js/alpha.js` |
 | 估值/回測 | `/home/claude/alphascope/js/valuation.js` | `js/valuation.js` |
@@ -68,7 +69,7 @@
 | 自選股 | `/home/claude/alphascope/js/watchlist.js` | `js/watchlist.js` |
 | SW/PWA | `/home/claude/alphascope/js/utils.js` | `js/utils.js` |
 | Vercel API | `/home/claude/news.js` | `api/news.js` |
-| K 線圖 | `/home/claude/chart.html` | `chart.html` |
+| K 線圖 | `/home/claude/chart.html` | `chart.html`（獨立頁面）|
 | 每日收集腳本 | `/home/claude/collect_market_data.js` | `.github/scripts/collect_market_data.js` |
 | 備份腳本 | `/home/claude/backup.js` | `.github/scripts/backup.js` |
 | 紀念品爬蟲 | `/home/claude/scrape_gifts.js` | `.github/scripts/scrape_gifts.js` |
@@ -96,19 +97,23 @@
 <script src="/js/utils.js"></script>
 ```
 
-### signals.js 內含函式（2026-06-07 更新）
+### signals.js 內含函式（2026-06-09 更新）
 
 | 函式 | 說明 |
 |------|------|
 | `loadMktSignals()` | 多空訊號儀表板主函式 |
 | `loadOptions()` | 選擇權面板（側欄）|
-| `openStockModal()` | 個股 Modal（含 K線 iframe 嵌入）|
-| `_loadModalBarChart()` | K線 fallback bar chart |
+| `openStockModal()` | 個股 Modal（bar chart，已移除 iframe）|
+| `_loadModalBarChart()` | K線 bar chart（Supabase 收盤走勢）|
 | `_loadModalStats()` | 歷史統計摘要（非同步）|
-| `closeStockModal()` | 關閉並清空 iframe |
+| `closeStockModal()` | 關閉 Modal |
 | `runStockAI()` | AI 個股快速研究 |
-| `renderMaxPainTrend(id)` | Max Pain 近5日趨勢圖（共用）|
+| `renderMaxPainTrend(id)` | Max Pain 近5日趨勢圖（weekly_fri→weekly_wed→monthly 優先序）|
 | `renderRiskOverview(positions)` | Alpha 部位風險總覽 + 個別進度條 |
+
+### chips.js 重要邏輯（2026-06-09 更新）
+
+- 三大法人合計：直接加總 `spot_foreign_net + spot_trust_net + spot_dealer_net`（不用 `spot_total_net`，避免含陸資子項導致落差）
 
 ### 全域變數定義位置（全在 api.js）
 
@@ -197,10 +202,11 @@ market_chips_daily    : date（PK）,
                         CALL(口): opt_call_foreign/trust/dealer_long/short/net,
                         PUT(口):  opt_put_foreign/trust/dealer_long/short/net
 
-options_analytics_daily : date, contract_type('monthly'|'wed'|'fri'),
+options_analytics_daily : date, contract_type('monthly'|'weekly_wed'|'weekly_fri'),
                           pc_ratio_oi, call_oi, put_oi, max_pain,
                           call/put_foreign/trust/dealer_net
                           PK: (date, contract_type)
+                          ⚠️ renderMaxPainTrend() 查優先序：weekly_fri → weekly_wed → monthly
 
 shareholder_gifts     : id, stock_id, stock_name, year, gift_type, gift_desc,
                         record_date, ex_date, is_egift, source_url, created_at
@@ -208,14 +214,18 @@ shareholder_gifts     : id, stock_id, stock_name, year, gift_type, gift_desc,
 futures_daily         : date, symbol, name, close, chg, chg_pct, source
 ```
 
+### market_chips_daily 資料修正紀錄（2026-06-08）
+
+5/29～6/5 的 `spot_foreign_net / trust_net / dealer_net` 曾因 TWSE MI_INST 欄位解析失敗被寫成 0，已用 SQL `buy-sell` 反算補正。`spot_total_net` 和 `buy/sell` 欄位本來就正確。
+
 -----
 
 ## GitHub Actions Workflows
 
 | 檔案 | 觸發 | 功能 | 狀態 |
 |------|------|------|------|
-| `collect-twse.yml` | 週一~五 14:30 | TWSE 股價/估值/產業指數 | ✅ |
-| `collect-finmind.yml` | 週一~五 15:30 | FinMind 籌碼/選擇權/期貨 | ✅ |
+| `collect-twse.yml` | 週一~五 14:30 | TWSE 股價/估值/產業指數 + `collectChips()`（現貨失敗不覆蓋，只寫期貨）| ✅ |
+| `collect-finmind.yml` | 週一~五 15:30 | FinMind 籌碼/選擇權/期貨；`collectInstitutional()` PATCH 現貨欄位 | ✅ |
 | `collect-alpha.yml` | 週一~五 16:00 | Alpha 每日報告 | ✅ |
 | `collect-news.yml` | 每小時 | 財經新聞 RSS | ✅ |
 | `backup.yml` | 週日 09:00 + push main | Supabase + pCloud 備份 | ✅ |
@@ -236,12 +246,18 @@ futures_daily         : date, symbol, name, close, chg, chg_pct, source
 2. Max Pain：最近到期合約
 3. 移除：`pc_ratio_vol`、`foreign_opt_net`
 
+### collectChips() 現貨欄位策略（2026-06-08 修正）
+- `toB(n)` 解析到 n===0 → 回傳 null，避免覆蓋後續 FinMind 正確值
+- TWSE MI_INST / BFIA01 失敗 → spotOK=false → fallback FinMind
+- 全失敗時：`market_chips_daily` 只寫期貨欄位，不寫 spot_ 欄位
+- `collectInstitutional()`（15:30）用 PATCH 逐筆補填現貨欄位，不覆蓋 fut_ 欄位
+
 ### Schema 雙寫過渡期
 | 函式 | 舊表（保留）| 新表 |
 |------|-----------|------|
 | `collectChips()` | `chips_daily` | `market_chips_daily` |
 | `collectOptions()` | `options_daily` | `options_analytics_daily` |
-| `collectInstitutional()` | `institutional_daily` | `market_chips_daily`（現貨欄位）|
+| `collectInstitutional()` | `institutional_daily` | `market_chips_daily`（PATCH 現貨欄位）|
 
 `sbUpsert()` 支援陣列 onConflict：`['date','contract_type']` 自動轉逗號。
 
