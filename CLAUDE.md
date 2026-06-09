@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-09（規則更新）
+> 更新日期：2026-06-09
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 CHANGELOG.md。
 
@@ -19,6 +19,10 @@
 ## ⚠️ 已知問題
 
 > 目前無已知問題。
+
+### options endpoint 法人資料備註
+- FinMind `TaiwanOptionInstitutionalInvestors` 盤後才更新，盤中法人欄位全 null
+- `api/news.js` 已加 Supabase fallback：法人全 null 時自動從 `options_analytics_daily` 撈最近有值的一筆
 
 -----
 

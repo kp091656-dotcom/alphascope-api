@@ -2,34 +2,28 @@
 
 ## 2026-06-09
 
-### 修正：三大法人合計數字錯誤（chips.js）
-- 合計欄位改用 `spot_foreign_net + spot_trust_net + spot_dealer_net` 加總
-- 不再使用 `spot_total_net`（該欄位含陸資子項，與分項加總不一致）
+### 工作流程變更
+- 移除 GitHub MCP push 功能，改為 Claude 生成檔案、使用者手動上傳 GitHub
 
-### 修正：K線 iframe 退回 bar chart（signals.js）
-- `openStockModal()` 移除 iframe 邏輯，直接呼叫 `_loadModalBarChart(stock)`
-- `closeStockModal()` 移除 `iframeWrap.innerHTML = ''` 清理（已不需要）
-- `chart.html` 保留為獨立頁面，不做 modal 嵌入
+### signals.js
+- **修正 `renderMaxPainTrend()`**：改為每天取最高優先有值的合約（weekly_fri → weekly_wed → monthly），而非固定用同一合約類型，解決走勢圖日期跳空問題
+- **新增 Max Pain 走勢 hover tooltip**：滑鼠移到點上顯示日期 + 數值，支援觸控
 
-### 修正：Max Pain 趨勢圖顯示「資料不足」（signals.js）
-- `renderMaxPainTrend()` 改依優先序查合約：`weekly_fri → weekly_wed → monthly`
-- 原本只查 `contract_type=eq.monthly`，但近週五/週三合約的 max_pain 資料較充足
-- 圖表標題自動標示使用的合約類型（近週五 / 近週三 / 月選）
-- 資料不足時顯示「Max Pain 資料累積中…」而非「歷史資料不足」
+### api/news.js
+- **options endpoint 三大法人 Supabase fallback**：FinMind `TaiwanOptionInstitutionalInvestors` 盤中尚未更新時（法人全 null），自動從 `options_analytics_daily` 撈最近有值的一筆補填
 
 ---
 
 ## 2026-06-08
 
-### 修正：買賣超顯示 0.00 + 5/28 後資料不變
+### collect_market_data.js / market_chips_daily
+- `toB(n)` 解析到 n===0 → 回傳 null，避免覆蓋後續 FinMind 正確值
+- TWSE MI_INST / BFIA01 失敗 → spotOK=false → fallback FinMind
+- 全失敗時只寫期貨欄位，不寫 spot_ 欄位
+- `collectInstitutional()`（15:30）用 PATCH 逐筆補填現貨欄位
 
-**`collect_market_data.js`（已 push）**
-- `toB()` 解析到 n===0 時改回傳 null，避免用 0 覆蓋後續 FinMind 正確值
-- `parseSpot()` 只在 buy/sell/net 均不為 null 時才寫入 result
-- `collectChips()` upsert `market_chips_daily` 時：現貨欄位全為 null → 只寫期貨欄位
-- `collectInstitutional()` 改用逐筆 PATCH 更新 `market_chips_daily` 現貨欄位，不覆蓋 fut_ 欄位
-- 新增 `spot_foreign_buy/sell`、`spot_trust_buy/sell`、`spot_dealer_buy/sell` 欄位寫入
+### 資料修正
+- 5/29～6/5 的 `spot_foreign_net / trust_net / dealer_net` 因 TWSE MI_INST 欄位解析失敗被寫成 0，已用 SQL `buy-sell` 反算補正
 
-**Supabase 直接修正（SQL UPDATE）**
-- `market_chips_daily` 5/29～6/5 的 `spot_foreign_net / trust_net / dealer_net` 從 buy-sell 反算補正
-- `institutional_daily` 分項 foreign_net / trust_net / dealer_net 同步補正
+### chips.js
+- 三大法人合計改為直接加總 `spot_foreign_net + spot_trust_net + spot_dealer_net`（不用 `spot_total_net`，避免含陸資子項導致落差）
