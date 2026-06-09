@@ -1849,7 +1849,7 @@ ${redditTitles || '無'}
       const rows = await r.json();
       if (!rows.length) throw new Error('market_chips_daily 無 TMF 資料');
 
-      const history = rows.map(d => {
+      const history = rows.filter(d => d.fut_tmf_total_oi != null).map(d => {
         const total_oi  = d.fut_tmf_total_oi  || 1;
         const total_net = d.fut_tmf_total_net  || 0;
         const retail_ratio = parseFloat((-total_net / total_oi * 100).toFixed(2));
