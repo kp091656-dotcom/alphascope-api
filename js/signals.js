@@ -838,7 +838,62 @@ async function renderMaxPainTrend(containerId) {
     label.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:4px;";
     label.textContent = `近 ${data.length} 日 Max Pain 走勢（${ctLabel}）`;
     wrapper.appendChild(label);
-    wrapper.appendChild(canvas);
+
+    // ── canvas 容器（relative，用來放 tooltip）──
+    const canvasWrap = document.createElement('div');
+    canvasWrap.style.cssText = 'position:relative;display:inline-block;width:' + W + 'px;';
+    canvasWrap.appendChild(canvas);
+
+    // ── tooltip DOM ──
+    const tip = document.createElement('div');
+    tip.style.cssText = [
+      'position:absolute;pointer-events:none;display:none;',
+      "font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;",
+      'color:#818cf8;background:var(--surface);border:1px solid var(--border);',
+      'border-radius:5px;padding:2px 6px;white-space:nowrap;',
+      'transform:translate(-50%,-100%);margin-top:-6px;z-index:10;',
+    ].join('');
+    canvasWrap.appendChild(tip);
+
+    // ── hover 事件 ──
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left);
+      // 找最近的點
+      let closest = null, minDist = Infinity;
+      pts.forEach(p => {
+        const d = Math.abs(p.x - mx);
+        if (d < minDist) { minDist = d; closest = p; }
+      });
+      if (!closest || minDist > iW / pts.length * 0.8) { tip.style.display = 'none'; return; }
+      tip.textContent = closest.date.slice(5) + '  ' + closest.v.toLocaleString();
+      tip.style.display = 'block';
+      // 水平位置：跟點對齊，但避免超出左右邊界
+      const tipHalfW = 50;
+      const clampedX = Math.max(tipHalfW, Math.min(W - tipHalfW, closest.x));
+      tip.style.left = clampedX + 'px';
+      tip.style.top  = closest.y + 'px';
+    });
+    canvas.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
+    // touch 支援
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.touches[0].clientX - rect.left);
+      let closest = null, minDist = Infinity;
+      pts.forEach(p => { const d = Math.abs(p.x - mx); if (d < minDist) { minDist = d; closest = p; } });
+      if (!closest) return;
+      tip.textContent = closest.date.slice(5) + '  ' + closest.v.toLocaleString();
+      tip.style.display = 'block';
+      const tipHalfW = 50;
+      const clampedX = Math.max(tipHalfW, Math.min(W - tipHalfW, closest.x));
+      tip.style.left = clampedX + 'px';
+      tip.style.top  = closest.y + 'px';
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { tip.style.display = 'none'; });
+
+    wrapper.appendChild(canvasWrap);
 
     const summary = document.createElement('div');
     summary.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-top:4px;';
