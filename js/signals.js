@@ -27,53 +27,44 @@ function setGroqStatus(msg, type) {
 }
 
 function saveGroqKey() {
-  // Groq key 存於 Vercel 環境變數，前端無需設定
   setGroqStatus('✓ 已啟用（已記住）', 'ok');
 }
 
 function loadSavedKeys() {
-  // Groq key 存在 Vercel 環境變數
-
 }
 
-// ── Sticky offset calculator ──
 function updateStickyOffsets() {
   const header   = document.querySelector('header');
   const apiBar   = document.querySelector('.api-config-bar');
   const catBar   = document.querySelector('.category-bar');
   if (!header || !apiBar || !catBar) return;
-  const hH = header.offsetHeight;       // 60px
-  const aH = apiBar.offsetHeight;       // variable
+  const hH = header.offsetHeight;
+  const aH = apiBar.offsetHeight;
   apiBar.style.top = hH + 'px';
   catBar.style.top = (hH + aH) + 'px';
 }
-// Run on load and resize
 updateStickyOffsets();
 window.addEventListener('resize', updateStickyOffsets);
-// ════════ 台指多空訊號儀表板 ════════
+
 async function loadMktSignals() {
   if (loadMktSignals._busy) return;
   loadMktSignals._busy = true;
   try {
-  // 同時抓取選擇權、三大法人現貨、融資融券
   const [optData, instData, marginData] = await Promise.allSettled([
     fetch(API_BASE + '?endpoint=options').then(r => r.json()),
-    fetch(API_BASE + '?endpoint=institutional').then(r => r.json()), // 仍用於籌碼子分數
+    fetch(API_BASE + '?endpoint=institutional').then(r => r.json()),
     fetch(API_BASE + '?endpoint=margin').then(r => r.json()),
   ]);
 
-  let score = 0; // 多空得分：正=多、負=空
-  let oiScore = 0, vScore = 0; // 子分數（提升到外層 scope）
+  let score = 0;
+  let oiScore = 0, vScore = 0;
 
-  // ── 解出各 API 資料（提升到外層 scope，供子分數區塊使用）──
   const opt  = optData.status  === 'fulfilled' ? optData.value  : null;
   const inst = instData.status === 'fulfilled' ? instData.value : null;
 
-  // ── ① 填入選擇權資料 ──
   if (opt && opt.pcRatio) {
     const pcOI  = opt.pcRatio.oi;
 
-    // P/C OI
     const oiEl = document.getElementById('ms_pcOI');
     const oiLbl = document.getElementById('ms_pcOILabel');
     oiEl.textContent = pcOI != null ? pcOI.toFixed(2) : '—';
@@ -90,15 +81,12 @@ async function loadMktSignals() {
     oiLbl.style.color = oiColor;
     score += oiScore;
 
-    // Max Pain
     const mp = opt.maxPain;
     document.getElementById('ms_maxPain').textContent = mp ? mp.toLocaleString() + ' 點' : '—';
 
-    // Max Pain 趨勢圖（多空訊號儀表板）
     const msTrendEl = document.getElementById('ms_maxPainTrend');
     if (msTrendEl) renderMaxPainTrend('ms_maxPainTrend');
 
-    // 法人選擇權部位（institution[name] = { net, call, put }）
     const instRows = document.getElementById('ms_instRows');
     const inst = opt.institution || {};
     instRows.innerHTML = ['外資','自營商','投信'].map(name => {
@@ -131,7 +119,6 @@ async function loadMktSignals() {
     document.getElementById('ms_optTs').textContent = optDate ? `資料日期：${optDate}` : '';
   }
 
-  // ── ② 填入微台指散戶多空比 ──
   (async () => {
     try {
       const tmf = await fetch(API_BASE + '?endpoint=tmf').then(r => r.json());
@@ -206,7 +193,6 @@ async function loadMktSignals() {
     }
   })();
 
-  // ── ③ 填入融資融券 ──
   const margin = marginData.status === 'fulfilled' ? marginData.value : null;
   document.getElementById('ms_marginLoading').style.display = 'none';
   document.getElementById('ms_marginContent').style.display = margin ? 'block' : 'none';
@@ -249,7 +235,6 @@ async function loadMktSignals() {
     document.getElementById('ms_marginLoading').style.display = 'block';
   }
 
-  // ── ④ VIX ──
   const vixPriceEl = document.getElementById('vixPrice');
   const vixVal = vixPriceEl ? parseFloat(vixPriceEl.textContent) : NaN;
   let vixAdj = 0, vixNote = '';
@@ -261,7 +246,6 @@ async function loadMktSignals() {
     score += vixAdj;
   }
 
-  // ── 計算綜合多空得分 ──
   const totalScore = Math.round(score * 10) / 10;
   const scoreEl = document.getElementById('mktSignalScore');
   const dotEl   = document.getElementById('mktSignalDot');
@@ -303,7 +287,6 @@ async function loadMktSignals() {
     }
   } catch { /* 靜默 */ }
 
-  // ── 圓形儀表盤 ──
   const gaugeVal = Math.round(Math.max(0, Math.min(100, (totalScore + 8) / 16 * 100)));
   const arcTotal = 331;
   const arcFill  = (gaugeVal / 100 * arcTotal).toFixed(1);
@@ -323,7 +306,6 @@ async function loadMktSignals() {
   titleEl.style.color      = signalColor;
   descEl.textContent       = signalDesc;
 
-  // ── 子分數 ──
   function _setSubGauge(arcId, txtId, lblId, rawScore, maxRaw, labelText, color) {
     const pct  = Math.max(0, Math.min(100, (rawScore + maxRaw) / (maxRaw * 2) * 100));
     const circ = 88;
@@ -373,7 +355,6 @@ async function loadMktSignals() {
   }
 }
 
-// ── 台指選擇權：P/C Ratio + 三大法人 + Max Pain ──
 async function loadOptions() {
   const renderOptions = (data) => {
     document.getElementById('optLoading').style.display = 'none';
@@ -447,7 +428,6 @@ async function loadOptions() {
       </div>`;
     }).join('');
 
-    // ── Max Pain ──
     const mp = data.maxPain;
     document.getElementById('maxPainVal').textContent = mp ? mp.toLocaleString() : '—';
     const today = new Date();
@@ -459,7 +439,6 @@ async function loadOptions() {
     document.getElementById('maxPainNote').textContent =
       `距最近結算（${nearestDay}）${nearestDays} 天 · 賣方（法人）獲利最大點`;
 
-    // ── Max Pain 近5日趨勢圖 ──
     const trendEl = document.getElementById('maxPainTrendChart');
     if (trendEl) renderMaxPainTrend('maxPainTrendChart');
 
@@ -597,21 +576,8 @@ async function openStockModal(stock) {
   document.getElementById('modalNoData').style.display  = 'none';
   document.getElementById('modalTVLink').style.display  = 'inline';
 
-  // ── K線 iframe（若 DOM 存在）否則 fallback bar chart ──
-  const iframeWrap = document.getElementById('modalChartIframe');
-  if (iframeWrap) {
-    iframeWrap.innerHTML = '';
-    const iframe = document.createElement('iframe');
-    iframe.src = `/chart.html?id=${stock.id}&name=${encodeURIComponent(stock.name)}&embed=1`;
-    iframe.style.cssText = 'width:100%;height:460px;border:none;border-radius:0 0 12px 12px;display:block;';
-    iframe.onload = () => { document.getElementById('modalLoading').style.display = 'none'; };
-    iframeWrap.appendChild(iframe);
-    iframeWrap.style.display = 'block';
-    document.getElementById('modalChart').style.display = 'none';
-    _loadModalStats(stock);
-  } else {
-    await _loadModalBarChart(stock);
-  }
+  // ── bar chart（Supabase 收盤走勢）──
+  await _loadModalBarChart(stock);
 }
 
 async function _loadModalBarChart(stock) {
@@ -697,8 +663,6 @@ async function _loadModalStats(stock) {
 function closeStockModal() {
   document.getElementById('stockModal').classList.remove('open');
   document.body.classList.remove('modal-open');
-  const iframeWrap = document.getElementById('modalChartIframe');
-  if (iframeWrap) iframeWrap.innerHTML = ''; // 釋放 iframe 資源
   const aiBtn = document.getElementById('modalAiBtn');
   if (aiBtn) aiBtn.disabled = false;
 }
@@ -769,10 +733,17 @@ async function renderMaxPainTrend(containerId) {
   if (!el) return;
   el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 趨勢載入中…</span>';
   try {
-    const rows = await sbFetch('options_analytics_daily',
-      'contract_type=eq.monthly&order=date.desc&limit=5&select=date,max_pain');
-    if (!rows || rows.length < 2) {
-      el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 歷史資料不足</span>';
+    // ── 依優先序找最近有 max_pain 的合約：weekly_fri → weekly_wed → monthly ──
+    const contractPriority = ['weekly_fri', 'weekly_wed', 'monthly'];
+    let rows = [], usedContract = '';
+    for (const ct of contractPriority) {
+      const r = await sbFetch('options_analytics_daily',
+        `contract_type=eq.${ct}&order=date.desc&limit=7&select=date,max_pain,contract_type`);
+      const valid = (r || []).filter(d => d.max_pain != null && d.max_pain > 0);
+      if (valid.length >= 2) { rows = valid.slice(0, 5); usedContract = ct; break; }
+    }
+    if (rows.length < 2) {
+      el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 資料累積中…</span>';
       return;
     }
     const data = [...rows].reverse();
@@ -850,9 +821,11 @@ async function renderMaxPainTrend(containerId) {
     const wrapper = document.createElement('div');
     wrapper.style.cssText = 'margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--border);';
 
+    // ── 合約類型標籤 ──
+    const ctLabel = usedContract === 'weekly_fri' ? '近週五' : usedContract === 'weekly_wed' ? '近週三' : '月選';
     const label = document.createElement('div');
     label.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:4px;";
-    label.textContent = `近 ${data.length} 日 Max Pain 走勢（月選）`;
+    label.textContent = `近 ${data.length} 日 Max Pain 走勢（${ctLabel}）`;
     wrapper.appendChild(label);
     wrapper.appendChild(canvas);
 

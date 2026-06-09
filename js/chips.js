@@ -58,8 +58,18 @@ async function loadChipsPanel() {
       tr4('外資及陸資', fmtGray(d.spot_foreign_buy,false), fmtGray(d.spot_foreign_sell,false), fmtBil(d.spot_foreign_net), true) +
       tr4('投信',       fmtGray(d.spot_trust_buy,  false), fmtGray(d.spot_trust_sell,  false), fmtBil(d.spot_trust_net)) +
       tr4('自營商',     fmtGray(d.spot_dealer_buy, false), fmtGray(d.spot_dealer_sell, false), fmtBil(d.spot_dealer_net));
+
+    // ── 合計：直接加總三個分項（避免 spot_total_net 含陸資子項造成落差）──
     const st = document.getElementById('chips-spot-total');
-    if (st) st.innerHTML = fmtBil(d.spot_total_net) + `<span style="font-size:0.55rem;color:var(--muted);margin-left:3px;">億</span>`;
+    if (st) {
+      const fNet = parseFloat(d.spot_foreign_net ?? 0);
+      const tNet = parseFloat(d.spot_trust_net   ?? 0);
+      const dNet = parseFloat(d.spot_dealer_net  ?? 0);
+      const sum  = (fNet || tNet || dNet)
+        ? parseFloat((fNet + tNet + dNet).toFixed(2))
+        : null;
+      st.innerHTML = fmtBil(sum) + `<span style="font-size:0.55rem;color:var(--muted);margin-left:3px;">億</span>`;
+    }
 
     // TX 台指期
     const tb = document.getElementById('chips-tx-body');
@@ -122,7 +132,6 @@ async function loadChipsPanel() {
       chartEl.appendChild(_trendHeader);
 
       async function loadTrendCharts(days) {
-        // 清除舊圖表卡片，保留 header
         Array.from(chartEl.children).forEach(el => { if (el !== _trendHeader) el.remove(); });
 
         const histRes  = await fetch(`/api/news?endpoint=chips&limit=${days}&order=date.desc`);
@@ -187,7 +196,7 @@ async function loadChipsPanel() {
           const absMax = Math.max(...allVals.map(Math.abs), 1);
           const vMax = absMax, vMin = -absMax, vRange = vMax - vMin;
 
-          let cssW = 0; // 💡 初始 0，等 ResizeObserver 給真實寬度才畫
+          let cssW = 0;
 
           function xPos(i, w) { return PL + (i / Math.max(n - 1, 1)) * (w - PL - PR); }
           function yPos(v)    { return PT + (CSS_H - PT - PB) - ((v - vMin) / vRange) * (CSS_H - PT - PB); }
@@ -447,8 +456,6 @@ async function loadChipsPanel() {
           return { wrap, resize };
         }
 
-        // 💡 先掛圖表卡片（header 已在外部建立，不重建）
-
         const charts = [
           makeCumulativeChart('🏢 三大法人現貨買賣超'),
           makeCanvasChart('📈 台指期 TX 三大法人淨口', '口數', [
@@ -468,10 +475,8 @@ async function loadChipsPanel() {
           ]),
         ];
 
-        // 💡 先掛到畫面，卡片寬度生效，Canvas 仍空白
         charts.forEach(c => chartEl.appendChild(c.wrap));
 
-        // 🔒 ResizeObserver：第一次拿到真實寬度才畫，之後 < 4px 變化不觸發
         let lastW = 0;
         let rafId = null;
         const roTarget = chartEl;
