@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-09
+> 更新日期：2026-06-09（規則更新）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 CHANGELOG.md。
 
@@ -8,12 +8,11 @@
 
 ## 🔴 Claude 操作規則（必讀）
 
-1. **檔案做好後，一律先用 `present_files` 生成下載連結，詢問是否 push，不可自行 push。**
-2. 每次對話結束前（使用者主動要求），更新 CLAUDE.md + CHANGELOG.md，**先 `present_files`，等使用者確認後才 push。**
+1. **使用者傳原始檔案給 Claude，Claude 修改後用 `present_files` 生成下載連結，由使用者自行上傳 GitHub。**
+2. 每次對話結束前（使用者主動要求），更新 CLAUDE.md + CHANGELOG.md，用 `present_files` 生成下載連結，由使用者自行上傳。
 3. CLAUDE.md 只記錄當前狀態；歷史改動寫入 CHANGELOG.md。
-4. Push 時使用 `GitHub MCP:create_or_update_file`，一次 push 一個檔案。
-5. ⚠️ **任何情況下都不可跳過 present_files 步驟直接 push，包含文件更新。**
-6. ⚠️ **文件更新（CLAUDE.md / CHANGELOG.md）只在使用者主動要求切換新對話時才執行，平時不主動生成。**
+4. ⚠️ **Claude 不使用任何 MCP push 功能，一律生成檔案讓使用者手動上傳。**
+5. ⚠️ **文件更新（CLAUDE.md / CHANGELOG.md）只在使用者主動要求切換新對話時才執行，平時不主動生成。**
 
 -----
 
@@ -41,10 +40,9 @@
 
 ## 開發工作流程
 
-1. 告訴 Claude 要改什麼
-2. Claude 用 `GitHub MCP:get_file_contents` 讀取 repo 檔案
-3. 修改完成後，**先 `present_files` 生成檔案，詢問是否 push**
-4. 確認後才 push
+1. 告訴 Claude 要改什麼，並傳原始檔案
+2. Claude 修改完成後用 `present_files` 生成下載連結
+3. 使用者下載後自行上傳到 GitHub
 
 -----
 
