@@ -172,14 +172,43 @@ async function loadMktSignals() {
 
       const bars = (tmf.history || []).slice(0, 15).reverse();
       const maxR = Math.max(...bars.map(d => Math.abs(d.retail_ratio || 0)), 1);
-      document.getElementById('ms_tmfBars').innerHTML = bars.map(d => {
+      const barsEl = document.getElementById('ms_tmfBars');
+      barsEl.style.position = 'relative';
+      barsEl.innerHTML = bars.map((d, i) => {
         const r   = d.retail_ratio || 0;
         const h   = Math.abs(r / maxR * 36);
         const col = r > 0 ? 'var(--up)' : 'var(--down)';
-        return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:38px;">
-          <div style="height:${h.toFixed(1)}px;background:${col};border-radius:2px 2px 0 0;"></div>
+        return `<div data-idx="${i}" style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:38px;cursor:pointer;position:relative;">
+          <div style="height:${h.toFixed(1)}px;background:${col};border-radius:2px 2px 0 0;transition:opacity 0.15s;"></div>
         </div>`;
       }).join('');
+
+      // Tooltip
+      const tmfTip = document.createElement('div');
+      tmfTip.style.cssText = 'position:fixed;background:rgba(12,12,24,0.95);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:6px 10px;font-family:"IBM Plex Mono",monospace;font-size:0.6rem;line-height:1.6;color:var(--text);pointer-events:none;display:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+      document.body.appendChild(tmfTip);
+
+      barsEl.querySelectorAll('[data-idx]').forEach(el => {
+        const d = bars[+el.dataset.idx];
+        const r = d.retail_ratio || 0;
+        const col = r > 0 ? 'var(--up)' : 'var(--down)';
+        el.addEventListener('mouseenter', e => {
+          el.querySelector('div').style.opacity = '0.7';
+          tmfTip.innerHTML = `<div style="color:var(--muted);margin-bottom:2px;">${d.date}</div>` +
+            `<div>散戶多空比 <span style="color:${col};font-weight:700;">${r >= 0 ? '+' : ''}${r.toFixed(2)}%</span></div>` +
+            `<div style="color:var(--muted);font-size:0.55rem;">法人淨口 ${d.total_net >= 0 ? '+' : ''}${(d.total_net||0).toLocaleString()} ／ OI ${(d.total_oi||0).toLocaleString()}</div>`;
+          tmfTip.style.display = 'block';
+        });
+        el.addEventListener('mousemove', e => {
+          tmfTip.style.left = (e.clientX + 14) + 'px';
+          tmfTip.style.top  = (e.clientY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', () => {
+          el.querySelector('div').style.opacity = '1';
+          tmfTip.style.display = 'none';
+        });
+      });
+
       document.getElementById('ms_tmfDates').innerHTML = bars.map(d =>
         `<div style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.42rem;color:var(--muted);text-align:center;overflow:hidden;">${d.date.slice(5)}</div>`
       ).join('');

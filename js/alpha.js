@@ -598,7 +598,14 @@ async function showAlphaReport() {
   }
 }
 
-function initAlphaIfNeeded() { if (!window._alphaLoaded) { window._alphaLoaded = true; loadAlphaDailyReport(); } }
+function initAlphaIfNeeded() {
+  if (!window._alphaLoaded) {
+    window._alphaLoaded = true;
+    loadAlphaDailyReport();
+    loadAlphaThoughts();
+    _startAlphaThoughtsTimer();
+  }
+}
 
 function toggleAlphaBacktest() {
   const p = document.getElementById('alphaBacktestPanel');
@@ -606,3 +613,79 @@ function toggleAlphaBacktest() {
 }
 
 // ════════ 多空訊號回測（Supabase）════════
+
+// ════════════════════════════════════════
+// 📝 Alpha 隨筆專欄
+// ════════════════════════════════════════
+
+const MOOD_COLOR = {
+  bullish:  { text: '看多', color: 'var(--up)',   bg: 'rgba(220,38,38,0.08)',  border: 'rgba(220,38,38,0.2)' },
+  bearish:  { text: '看空', color: 'var(--down)', bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.2)' },
+  cautious: { text: '謹慎', color: '#d97706',     bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.25)' },
+  neutral:  { text: '中性', color: 'var(--muted)', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)' },
+};
+
+function _alphaTimeAgo(isoStr) {
+  const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (diff < 60)   return '剛剛';
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分鐘前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小時前`;
+  return `${Math.floor(diff / 86400)} 天前`;
+}
+
+async function loadAlphaThoughts() {
+  const el = document.getElementById('alphaThoughtsFeed');
+  if (!el) return;
+
+  try {
+    const res  = await fetch(`${API_BASE}?endpoint=alpha_thought&_t=${Date.now()}`);
+    const data = await res.json();
+    const list = data.thoughts || [];
+
+    if (!list.length) {
+      el.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1.5rem 0;">Alpha 還沒說話…</div>`;
+      return;
+    }
+
+    el.innerHTML = list.map((t, i) => {
+      const m   = MOOD_COLOR[t.mood] || MOOD_COLOR.neutral;
+      const ago = _alphaTimeAgo(t.created_at);
+      const isFirst = i === 0;
+      return `<div style="
+        padding: 0.9rem 1rem;
+        border-radius: 12px;
+        background: ${isFirst ? 'rgba(99,102,241,0.06)' : 'var(--surface)'};
+        border: 1px solid ${isFirst ? 'rgba(99,102,241,0.25)' : 'var(--border-dark)'};
+        margin-bottom: 0.65rem;
+        position: relative;
+      ">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+          <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Alpha</span>
+          <span style="
+            font-size:0.58rem;padding:1px 7px;border-radius:99px;
+            background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;
+          ">${m.text}</span>
+          ${isFirst ? '<span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);font-weight:600;">最新</span>' : ''}
+          <span style="font-size:0.58rem;color:var(--muted);margin-left:auto;">${ago}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text);line-height:1.7;white-space:pre-line;">${t.content}</div>
+        ${t.angle ? `<div style="font-size:0.55rem;color:var(--muted);margin-top:0.4rem;opacity:0.6;">話題：${t.angle}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    // 更新最後刷新時間
+    const tsEl = document.getElementById('alphaThoughtsTs');
+    if (tsEl) tsEl.textContent = `上次更新：${_alphaTimeAgo(list[0].created_at)}`;
+
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1rem;">載入失敗</div>`;
+  }
+}
+
+// 每小時自動重新整理顯示（不呼叫生成，只重撈已有資料更新時間顯示）
+function _startAlphaThoughtsTimer() {
+  setInterval(() => {
+    loadAlphaThoughts();
+  }, 60 * 60 * 1000); // 每 60 分鐘刷新一次前端
+}
+
