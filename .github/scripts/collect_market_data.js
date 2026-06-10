@@ -234,6 +234,14 @@ async function collectInstitutional() {
           spot_dealer_net:   toB(r.dealer_net),
           spot_total_net:    toB(r.total_net),
         };
+        // ⚠️ 防呆：若外資、投信、自營買賣都是 0，代表 FinMind 資料尚未就緒，略過不寫入
+        // 避免用 0 蓋掉其他路徑（TWSE）已正確寫入的數字
+        if (r.foreign_buy === 0 && r.foreign_sell === 0 &&
+            r.trust_buy   === 0 && r.trust_sell   === 0 &&
+            r.dealer_buy  === 0 && r.dealer_sell  === 0) {
+          console.warn(`  ⚠️  market_chips_daily 略過 ${r.date}：FinMind 現貨資料全為 0，疑似尚未更新`);
+          continue;
+        }
         // 先嘗試 INSERT（建立骨架），再 PATCH 更新現貨欄位
         // 使用 upsert + on_conflict=date，只有 spot 欄位
         const patchRes = await fetch(
