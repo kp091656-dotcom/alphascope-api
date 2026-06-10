@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-10（對話四）
+> 更新日期：2026-06-10（對話五）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -160,13 +160,14 @@ let futuresData, futuresSortKey
 |`options_analytics_daily`|FinMind          |選擇權分析                         |3        |🆕 雙寫中|
 |`shareholder_gifts`      |scrape_egift + 手動|股東紀念品                         |年度       |     |
 |`gift_scrape_log`        |scrape_gifts.js  |爬蟲進度追蹤                        |年度       |     |
-|`alpha_thoughts`         |Groq AI          |Alpha 隨筆專欄                    |每交易日約 6 筆|🆕    |
+|`alpha_thoughts`         |Groq AI          |Alpha 隨筆專欄                    |每交易日約 6 筆|🆕 含預測/準確率|
+|`alpha_profile`          |系統自動更新         |Alpha 成長檔案（頭銜/準確率/風格備忘）      |單列（id=1）  |🆕    |
 
 ### RLS 政策
 
 所有可讀表統一：`CREATE POLICY "anon read" ON {table} FOR SELECT TO anon, authenticated USING (true);`
 
-已修正表：alpha_daily_report, alpha_thoughts, chips_daily, futures_daily, institutional_daily, margin_daily, news_daily, options_daily, sector_index_daily, shareholder_gifts, stock_daily_twse, stock_valuation_daily, trader_positions, market_chips_daily, options_analytics_daily
+已修正表：alpha_daily_report, alpha_thoughts, alpha_profile, chips_daily, futures_daily, institutional_daily, margin_daily, news_daily, options_daily, sector_index_daily, shareholder_gifts, stock_daily_twse, stock_valuation_daily, trader_positions, market_chips_daily, options_analytics_daily
 
 ### 各表實際欄位
 
@@ -221,7 +222,12 @@ shareholder_gifts     : id, stock_id, stock_name, year, gift_type, gift_desc,
 
 futures_daily         : date, symbol, name, close, chg, chg_pct, source
 
-alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cautious), angle, created_at
+alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cautious), angle, created_at,
+                        prediction(bullish|bearish|neutral), pred_date(date), pred_result(pending|correct|wrong),
+                        rank_at_post(text)
+
+alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total_calls,
+                        rank(text), style_memo(text), updated_at
 ```
 
 ### market_chips_daily 資料修正紀錄
@@ -243,6 +249,40 @@ alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cau
 |`scrape_gifts.yml`   |手動                  |爬股東紀念品                                               |✅（停用自動）|
 |`scrape_egift.yml`   |每週日 09:30           |爬 eGift                                              |✅      |
 |`alpha_thought.yml`  |週一~五 09:00~14:00 每整點|Alpha 隨筆生成（POST endpoint=alpha_thought）              |🆕      |
+
+-----
+
+## Alpha 成長系統（2026-06-10 新增）
+
+### 頭銜規則（篇數 × 準確率雙維度）
+
+| 頭銜        | 條件                        |
+|-----------|---------------------------|
+| 菜鳥交易員 🐣  | 初始                        |
+| 盤中觀察者 👁️ | ≥10 篇                     |
+| 資深操盤手 📊  | ≥30 篇                     |
+| 市場老狐狸 🦊  | ≥100 篇                    |
+| Alpha 傳奇 👑 | ≥300 篇                   |
+| 精準狙擊手 🎯  | 準確率 ≥55%（≥10次預測）          |
+| 市場預言家 🔮  | 準確率 ≥70%                  |
+| 鐵血操盤手 ⚔️  | ≥100 篇 + 準確率 ≥55%         |
+| 傳奇預言家 🌟  | ≥300 篇 + 準確率 ≥55%         |
+
+### 後端邏輯（api/news.js）
+
+- 每次 POST 觸發時：
+  1. 撈 `alpha_profile` 取得當前狀態
+  2. 撈最近 24 篇隨筆
+  3. 每 10 篇做一次風格自我分析（Groq），結果存 `style_memo`，下次帶入 system prompt
+  4. 自動補跑「評分昨日預測」：比對 `stock_daily_twse` 加權指數漲跌，更新 `pred_result`
+  5. AI 輸出 JSON：`{ content, prediction }`，漲跌 >0.3% 判定方向
+  6. 寫入 `alpha_thoughts`（含 prediction/pred_date/pred_result/rank_at_post）
+  7. 更新 `alpha_profile`
+
+### 前端顯示（js/alpha.js）
+
+- 頂部頭銜卡片：頭銜圖示、總篇數、命中率、進度條、下一頭銜距離、style_memo
+- 每篇顯示：情緒標籤 + 預測方向（↑↓→）+ 命中/失誤/待驗證 + 發文時頭銜
 
 -----
 
@@ -268,9 +308,11 @@ alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cau
 - `collectInstitutional()`（15:30）用 PATCH 逐筆補填現貨欄位，不覆蓋 fut_ 欄位
 - ⚠️ 防呆：FinMind 回傳全零時略過不寫入（避免蓋掉 TWSE 正確值）
 
-### Schema 雙寫過渡期
+### alpha_thought 背景資料（2026-06-10 擴充）
 
-|函式                      |舊表（保留）               |新表                              |
+每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。
+
+### Schema 雙寫過渡期                      |舊表（保留）               |新表                              |
 |------------------------|---------------------|--------------------------------|
 |`collectChips()`        |`chips_daily`        |`market_chips_daily`            |
 |`collectOptions()`      |`options_daily`      |`options_analytics_daily`       |
