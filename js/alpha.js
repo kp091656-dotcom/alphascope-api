@@ -625,6 +625,30 @@ const MOOD_COLOR = {
   neutral:  { text: '中性', color: 'var(--muted)', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)' },
 };
 
+const PRED_COLOR = {
+  bullish: { text: '預測↑', color: 'var(--up)',   bg: 'rgba(220,38,38,0.07)',  border: 'rgba(220,38,38,0.18)' },
+  bearish: { text: '預測↓', color: 'var(--down)', bg: 'rgba(22,163,74,0.07)', border: 'rgba(22,163,74,0.18)' },
+  neutral: { text: '預測→', color: 'var(--muted)', bg: 'rgba(148,163,184,0.07)', border: 'rgba(148,163,184,0.18)' },
+};
+
+const RESULT_STYLE = {
+  correct: { text: '✓ 命中', color: 'var(--up)' },
+  wrong:   { text: '✗ 失誤', color: 'var(--down)' },
+  pending: { text: '待驗證', color: 'var(--muted)' },
+};
+
+const RANK_ICON = {
+  '菜鳥交易員': '🐣',
+  '盤中觀察者': '👁️',
+  '資深操盤手': '📊',
+  '市場老狐狸': '🦊',
+  'Alpha 傳奇': '👑',
+  '精準狙擊手': '🎯',
+  '市場預言家': '🔮',
+  '鐵血操盤手': '⚔️',
+  '傳奇預言家': '🌟',
+};
+
 function _alphaTimeAgo(isoStr) {
   const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
   if (diff < 60)   return '剛剛';
@@ -638,42 +662,90 @@ async function loadAlphaThoughts() {
   if (!el) return;
 
   try {
-    const res  = await fetch(`${API_BASE}?endpoint=alpha_thought&_t=${Date.now()}`);
-    const data = await res.json();
-    const list = data.thoughts || [];
+    // 並行抓隨筆 + profile
+    const [thoughtsRes, profileRes] = await Promise.all([
+      fetch(`${API_BASE}?endpoint=alpha_thought&_t=${Date.now()}`),
+      fetch(`${SUPABASE_URL}/rest/v1/alpha_profile?id=eq.1&select=*`, {
+        headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }
+      }),
+    ]);
+    const data    = await thoughtsRes.json();
+    const profArr = await profileRes.json();
+    const profile = profArr[0] || {};
+    const list    = data.thoughts || [];
+
+    // ── 頭銜卡片 ──
+    const rank     = profile.rank || '菜鳥交易員';
+    const icon     = RANK_ICON[rank] || '📈';
+    const total    = profile.total_posts || 0;
+    const correct  = profile.correct_calls || 0;
+    const calls    = profile.total_calls || 0;
+    const accPct   = calls >= 5 ? Math.round(correct / calls * 100) : null;
+    const accStr   = accPct !== null ? `${accPct}%` : '累計中';
+    const styleMemo = profile.style_memo || '';
+
+    // 下一個頭銜進度
+    const RANK_THRESHOLDS = [10, 30, 100, 300, Infinity];
+    const nextThresh = RANK_THRESHOLDS.find(t => t > total) || Infinity;
+    const prevThresh = RANK_THRESHOLDS[RANK_THRESHOLDS.indexOf(nextThresh) - 1] || 0;
+    const progress   = nextThresh === Infinity ? 100 : Math.min(100, Math.round((total - prevThresh) / (nextThresh - prevThresh) * 100));
+    const nextLabel  = nextThresh === Infinity ? '已達頂峰' : `距下一頭銜 ${nextThresh - total} 篇`;
+
+    const profileCard = `
+      <div style="
+        padding:1rem 1.1rem;border-radius:14px;
+        background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(99,102,241,0.03));
+        border:1px solid rgba(99,102,241,0.2);margin-bottom:1rem;
+      ">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.55rem;">
+          <span style="font-size:1.3rem;">${icon}</span>
+          <div>
+            <div style="font-size:0.85rem;font-weight:700;color:var(--text);">${rank}</div>
+            <div style="font-size:0.6rem;color:var(--muted);">共 ${total} 篇 ｜ 預測命中率 ${accStr}</div>
+          </div>
+          ${accPct !== null ? `<div style="margin-left:auto;font-size:0.75rem;font-weight:700;color:${accPct>=55?'var(--up)':accPct>=40?'#d97706':'var(--down)'};">${accPct}%</div>` : ''}
+        </div>
+        <div style="background:var(--border-dark);border-radius:99px;height:4px;overflow:hidden;">
+          <div style="width:${progress}%;height:100%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:99px;transition:width 0.6s;"></div>
+        </div>
+        <div style="font-size:0.58rem;color:var(--muted);margin-top:0.3rem;">${nextLabel}</div>
+        ${styleMemo ? `<div style="font-size:0.65rem;color:var(--muted);margin-top:0.55rem;padding-top:0.5rem;border-top:1px solid var(--border-dark);opacity:0.75;font-style:italic;">「${styleMemo}」</div>` : ''}
+      </div>`;
 
     if (!list.length) {
-      el.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1.5rem 0;">Alpha 還沒說話…</div>`;
+      el.innerHTML = profileCard + `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1.5rem 0;">Alpha 還沒說話…</div>`;
       return;
     }
 
-    el.innerHTML = list.map((t, i) => {
-      const m   = MOOD_COLOR[t.mood] || MOOD_COLOR.neutral;
-      const ago = _alphaTimeAgo(t.created_at);
+    const cards = list.map((t, i) => {
+      const m      = MOOD_COLOR[t.mood] || MOOD_COLOR.neutral;
+      const p      = PRED_COLOR[t.prediction] || PRED_COLOR.neutral;
+      const rs     = RESULT_STYLE[t.pred_result] || RESULT_STYLE.pending;
+      const ago    = _alphaTimeAgo(t.created_at);
       const isFirst = i === 0;
+      const rankBadge = t.rank_at_post ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.2);">${RANK_ICON[t.rank_at_post]||''}${t.rank_at_post}</span>` : '';
       return `<div style="
-        padding: 0.9rem 1rem;
-        border-radius: 12px;
-        background: ${isFirst ? 'rgba(99,102,241,0.06)' : 'var(--surface)'};
-        border: 1px solid ${isFirst ? 'rgba(99,102,241,0.25)' : 'var(--border-dark)'};
-        margin-bottom: 0.65rem;
-        position: relative;
+        padding:0.9rem 1rem;border-radius:12px;
+        background:${isFirst?'rgba(99,102,241,0.06)':'var(--surface)'};
+        border:1px solid ${isFirst?'rgba(99,102,241,0.25)':'var(--border-dark)'};
+        margin-bottom:0.65rem;
       ">
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;flex-wrap:wrap;">
           <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Alpha</span>
-          <span style="
-            font-size:0.58rem;padding:1px 7px;border-radius:99px;
-            background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;
-          ">${m.text}</span>
-          ${isFirst ? '<span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);font-weight:600;">最新</span>' : ''}
+          <span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
+          <span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:${p.bg};color:${p.color};border:1px solid ${p.border};font-weight:600;">${p.text}</span>
+          <span style="font-size:0.58rem;color:${rs.color};font-weight:600;">${rs.text}</span>
+          ${isFirst?'<span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);font-weight:600;">最新</span>':''}
+          ${rankBadge}
           <span style="font-size:0.58rem;color:var(--muted);margin-left:auto;">${ago}</span>
         </div>
         <div style="font-size:0.82rem;color:var(--text);line-height:1.7;white-space:pre-line;">${t.content}</div>
-        ${t.angle ? `<div style="font-size:0.55rem;color:var(--muted);margin-top:0.4rem;opacity:0.6;">話題：${t.angle}</div>` : ''}
+        ${t.angle?`<div style="font-size:0.55rem;color:var(--muted);margin-top:0.4rem;opacity:0.6;">話題：${t.angle}</div>`:''}
       </div>`;
     }).join('');
 
-    // 更新最後刷新時間
+    el.innerHTML = profileCard + cards;
+
     const tsEl = document.getElementById('alphaThoughtsTs');
     if (tsEl) tsEl.textContent = `上次更新：${_alphaTimeAgo(list[0].created_at)}`;
 
@@ -688,4 +760,5 @@ function _startAlphaThoughtsTimer() {
     loadAlphaThoughts();
   }, 60 * 60 * 1000); // 每 60 分鐘刷新一次前端
 }
+
 
