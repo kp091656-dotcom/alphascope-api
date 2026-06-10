@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-09（對話三）
+> 更新日期：2026-06-10（對話四）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -18,7 +18,7 @@
 
 ## ⚠️ 已知問題
 
-> 目前無已知問題。
+- **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
 
 ### options endpoint 法人資料備註
 
@@ -33,7 +33,7 @@
 
 ## 待辦
 
-- [ ] 確認新表資料穩定 3～5 天後刪舊表（`chips_daily`、`options_daily`、`institutional_daily`）
+- [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表資料，不可提前刪除）
 
 -----
 
@@ -224,9 +224,10 @@ futures_daily         : date, symbol, name, close, chg, chg_pct, source
 alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cautious), angle, created_at
 ```
 
-### market_chips_daily 資料修正紀錄（2026-06-08）
+### market_chips_daily 資料修正紀錄
 
-5/29～6/5 的 `spot_foreign_net / trust_net / dealer_net` 曾因 TWSE MI_INST 欄位解析失敗被寫成 0，已用 SQL `buy-sell` 反算補正。`spot_total_net` 和 `buy/sell` 欄位本來就正確。
+- **2026-06-08**：5/29～6/5 的 `spot_foreign_net / trust_net / dealer_net` 曾因 TWSE MI_INST 欄位解析失敗被寫成 0，已用 SQL `buy-sell` 反算補正。
+- **2026-06-10**：6/3～6/8 的 spot 欄位因 FinMind 資料延遲回傳 0，已用 SQL 從 `chips_daily` 舊表複製補正。
 
 -----
 
@@ -265,6 +266,7 @@ alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cau
 - TWSE MI_INST / BFIA01 失敗 → spotOK=false → fallback FinMind
 - 全失敗時：`market_chips_daily` 只寫期貨欄位，不寫 spot_ 欄位
 - `collectInstitutional()`（15:30）用 PATCH 逐筆補填現貨欄位，不覆蓋 fut_ 欄位
+- ⚠️ 防呆：FinMind 回傳全零時略過不寫入（避免蓋掉 TWSE 正確值）
 
 ### Schema 雙寫過渡期
 
