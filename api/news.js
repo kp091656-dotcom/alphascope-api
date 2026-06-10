@@ -533,29 +533,97 @@ ${redditTitles || '無'}
       if (ownerToken !== process.env.OWNER_TOKEN)
         return res.status(403).json({ error: 'Forbidden' });
 
-      // 撈最新市場資料作為背景
+      // 撈最新市場資料作為背景（並行抓取）
       let contextLines = [];
       try {
-        const taiexRes = await fetch(
-          `${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=1&select=date,close,chg_pct`,
-          { headers: hdrs }
-        );
-        const taiex = (await taiexRes.json())[0];
-        if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
+        const [
+          taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData,
+        ] = await Promise.allSettled([
+          // 加權指數
+          fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=1&select=date,close,chg_pct`, { headers: hdrs }),
+          // 籌碼（現貨 + 期貨 + TMF散戶）
+          fetch(`${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,fut_tx_foreign_net,fut_tx_foreign_long,fut_tx_foreign_short,fut_tmf_total_oi,fut_tmf_foreign_net`, { headers: hdrs }),
+          // 新聞（8則）
+          fetch(`${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=8&select=title_zh,source`, { headers: hdrs }),
+          // 融資融券
+          fetch(`${SB_URL}/rest/v1/margin_daily?order=date.desc&limit=2&select=date,margin_balance,margin_chg,short_balance,short_chg`, { headers: hdrs }),
+          // 選擇權（優先週五→週三→月）
+          fetch(`${SB_URL}/rest/v1/options_analytics_daily?order=date.desc&limit=3&select=date,contract_type,pc_ratio_oi,max_pain,call_foreign_net,put_foreign_net`, { headers: hdrs }),
+          // 熱門股前5（成交量）
+          (async () => {
+            const dateRes = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?order=date.desc&limit=1&select=date`, { headers: hdrs });
+            const dateJson = await dateRes.json();
+            const latestDate = dateJson[0]?.date;
+            if (!latestDate) return null;
+            return fetch(`${SB_URL}/rest/v1/stock_daily_twse?date=eq.${latestDate}&stock_id=neq.TAIEX&order=volume.desc&limit=5&select=stock_id,name,close,chg_pct,volume`, { headers: hdrs });
+          })(),
+          // Fear & Greed
+          fetchFGI().catch(() => null),
+          // VIX
+          fetchVIX().catch(() => null),
+        ]);
 
-        const chipsRes = await fetch(
-          `${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,fut_tx_foreign_net`,
-          { headers: hdrs }
-        );
-        const chips = (await chipsRes.json())[0];
-        if (chips) contextLines.push(`外資現貨：${chips.spot_foreign_net}億 投信：${chips.spot_trust_net}億 自營：${chips.spot_dealer_net}億 外資台指期：${chips.fut_tx_foreign_net}口`);
+        // 加權指數
+        if (taiexRes.status === 'fulfilled') {
+          const taiex = (await taiexRes.value.json())[0];
+          if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
+        }
 
-        const newsRes = await fetch(
-          `${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=3&select=title_zh`,
-          { headers: hdrs }
-        );
-        const newsRows = await newsRes.json();
-        if (newsRows.length) contextLines.push(`近期新聞：${newsRows.map(n => n.title_zh).join('；')}`);
+        // 籌碼
+        if (chipsRes.status === 'fulfilled') {
+          const chips = (await chipsRes.value.json())[0];
+          if (chips) {
+            contextLines.push(`法人現貨｜外資：${chips.spot_foreign_net}億 投信：${chips.spot_trust_net}億 自營：${chips.spot_dealer_net}億`);
+            contextLines.push(`台指期｜外資淨口：${chips.fut_tx_foreign_net}口（多${chips.fut_tx_foreign_long}口／空${chips.fut_tx_foreign_short}口）`);
+            if (chips.fut_tmf_total_oi != null) contextLines.push(`散戶台指微（TMF）｜外資淨：${chips.fut_tmf_foreign_net}口 散戶未平倉：${chips.fut_tmf_total_oi}口`);
+          }
+        }
+
+        // 融資融券
+        if (marginRes.status === 'fulfilled') {
+          const rows = await marginRes.value.json();
+          if (rows.length) {
+            const m = rows[0];
+            contextLines.push(`融資餘額：${(m.margin_balance/1e8).toFixed(0)}億（${m.margin_chg >= 0 ? '+' : ''}${(m.margin_chg/1e8).toFixed(0)}億） 融券：${(m.short_balance/1e3).toFixed(0)}千張（${m.short_chg >= 0 ? '+' : ''}${(m.short_chg/1e3).toFixed(0)}千張）`);
+          }
+        }
+
+        // 選擇權
+        if (optionsRes.status === 'fulfilled') {
+          const rows = await optionsRes.value.json();
+          const priority = ['weekly_fri','weekly_wed','monthly'];
+          const opt = priority.map(t => rows.find(r => r.contract_type === t)).find(Boolean);
+          if (opt) contextLines.push(`選擇權（${opt.contract_type}）｜PC Ratio：${opt.pc_ratio_oi} Max Pain：${opt.max_pain} 外資CALL淨：${opt.call_foreign_net}口 PUT淨：${opt.put_foreign_net}口`);
+        }
+
+        // Fear & Greed + VIX
+        const fgi = fgiData.status === 'fulfilled' ? fgiData.value : null;
+        const vix = vixData.status === 'fulfilled' ? vixData.value : null;
+        const fgiScore = fgi?.fear_and_greed?.score ?? fgi?.score ?? null;
+        const fgiLabel = fgi?.fear_and_greed?.rating ?? '';
+        const vixNow = vix?.data?.find(v => v.symbol === '^VIX')?.price ?? null;
+        if (fgiScore !== null || vixNow !== null) {
+          const parts = [];
+          if (fgiScore !== null) parts.push(`Fear & Greed：${fgiScore}（${fgiLabel}）`);
+          if (vixNow !== null) parts.push(`VIX：${vixNow}`);
+          contextLines.push(`市場情緒｜${parts.join(' ')}`);
+        }
+
+        // 熱門股
+        if (topStocksRes.status === 'fulfilled' && topStocksRes.value) {
+          const stocksJson = await topStocksRes.value.json();
+          if (Array.isArray(stocksJson) && stocksJson.length) {
+            const list = stocksJson.map(s => `${s.name}(${s.stock_id}) ${s.close}（${s.chg_pct >= 0 ? '+' : ''}${s.chg_pct}%）`).join('、');
+            contextLines.push(`成交量前5大：${list}`);
+          }
+        }
+
+        // 新聞
+        if (newsRes.status === 'fulfilled') {
+          const newsRows = await newsRes.value.json();
+          if (newsRows.length) contextLines.push(`近期新聞：${newsRows.map(n => n.title_zh || '').filter(Boolean).join('；')}`);
+        }
+
       } catch(e) {
         contextLines.push('（市場資料暫時無法取得）');
       }
