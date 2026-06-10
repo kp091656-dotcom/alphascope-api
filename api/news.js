@@ -507,6 +507,121 @@ ${redditTitles || '無'}
     }
   }
 
+
+  // ── Alpha 隨筆專欄 ──
+  if (endpoint === 'alpha_thought') {
+    const SB_URL  = process.env.SUPABASE_URL || 'https://fdxedcwtmlurumfjmlys.supabase.co';
+    const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
+    const GROQ_KEY = process.env.GROQ_API_KEY;
+    if (!SB_KEY)   return res.status(500).json({ error: 'SUPABASE_SERVICE_KEY not configured' });
+    if (!GROQ_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
+    const hdrs = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+
+    // GET：撈近 24 筆（前端顯示用）
+    if (req.method === 'GET') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24`,
+        { headers: hdrs }
+      );
+      const rows = await r.json();
+      return res.status(200).json({ thoughts: rows });
+    }
+
+    // POST：生成新想法並存入 Supabase（由 GitHub Action 或 owner 呼叫）
+    if (req.method === 'POST') {
+      const ownerToken = req.headers['x-owner-token'];
+      if (ownerToken !== process.env.OWNER_TOKEN)
+        return res.status(403).json({ error: 'Forbidden' });
+
+      // 撈最新市場資料作為背景
+      let contextLines = [];
+      try {
+        const taiexRes = await fetch(
+          `${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=1&select=date,close,chg_pct`,
+          { headers: hdrs }
+        );
+        const taiex = (await taiexRes.json())[0];
+        if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
+
+        const chipsRes = await fetch(
+          `${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,fut_tx_foreign_net`,
+          { headers: hdrs }
+        );
+        const chips = (await chipsRes.json())[0];
+        if (chips) contextLines.push(`外資現貨：${chips.spot_foreign_net}億 投信：${chips.spot_trust_net}億 自營：${chips.spot_dealer_net}億 外資台指期：${chips.fut_tx_foreign_net}口`);
+
+        const newsRes = await fetch(
+          `${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=3&select=title_zh`,
+          { headers: hdrs }
+        );
+        const newsRows = await newsRes.json();
+        if (newsRows.length) contextLines.push(`近期新聞：${newsRows.map(n => n.title_zh).join('；')}`);
+      } catch(e) {
+        contextLines.push('（市場資料暫時無法取得）');
+      }
+
+      const context = contextLines.join('\n');
+      const angles = [
+        '對今日盤面的直覺感受',
+        '你注意到的一個市場異常現象',
+        '對近期法人動向的解讀',
+        '一個散戶常犯的錯誤，你想提醒大家',
+        '你對目前市場情緒的看法',
+        '你現在的交易心態',
+        '一個你從市場學到的教訓',
+        '對當前台股風險的觀察',
+      ];
+      const angle = angles[Math.floor(Math.random() * angles.length)];
+
+      const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。
+個性：直接、有點毒舌、偶爾自嘲，但永遠誠實。你不講廢話，不給模糊建議，說話像在跟老朋友講話。
+你有自己的觀點，不怕跟主流唱反調，但判斷永遠基於數據和盤面。
+語氣：口語、台灣用語，偶爾用點俚語或比喻，但不失專業。
+字數限制：100~180字，不多不少。
+輸出格式：純文字，不要條列式，不要標題，就是一段話。`;
+
+      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法。`;
+
+      try {
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user',   content: userPrompt },
+            ],
+            max_tokens: 300,
+            temperature: 0.85,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
+        const groqData = await groqRes.json();
+        const content = groqData.choices?.[0]?.message?.content?.trim() || '';
+        if (!content) throw new Error('Groq 回傳空內容');
+
+        let mood = 'neutral';
+        if (/風險|小心|注意|警惕|危險|謹慎|跌|空|崩/.test(content)) mood = 'cautious';
+        else if (/機會|看好|多頭|突破|強勢|買|漲/.test(content))     mood = 'bullish';
+        else if (/悲觀|出清|跑路|慘|崩盤/.test(content))             mood = 'bearish';
+
+        const insertRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
+          method: 'POST',
+          headers: { ...hdrs, Prefer: 'return=representation' },
+          body: JSON.stringify({ content, mood, angle }),
+        });
+        const inserted = await insertRes.json();
+        return res.status(200).json({ ok: true, thought: inserted[0] || { content, mood, angle } });
+      } catch(e) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   // ── Alpha 交易紀錄 CRUD ──
   if (endpoint === 'alpha_positions') {
     const SUPABASE_URL = process.env.SUPABASE_URL  || 'https://fdxedcwtmlurumfjmlys.supabase.co';
@@ -1849,7 +1964,7 @@ ${redditTitles || '無'}
       const rows = await r.json();
       if (!rows.length) throw new Error('market_chips_daily 無 TMF 資料');
 
-      const history = rows.filter(d => d.fut_tmf_total_oi != null).map(d => {
+      const history = rows.map(d => {
         const total_oi  = d.fut_tmf_total_oi  || 1;
         const total_net = d.fut_tmf_total_net  || 0;
         const retail_ratio = parseFloat((-total_net / total_oi * 100).toFixed(2));
