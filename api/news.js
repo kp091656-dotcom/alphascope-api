@@ -629,6 +629,111 @@ ${redditTitles || '無'}
       }
 
       const context = contextLines.join('\n');
+
+      // ── 頭銜系統 ──
+      const RANKS = [
+        { min: 0,   acc: 0,    label: '菜鳥交易員' },
+        { min: 10,  acc: 0,    label: '盤中觀察者' },
+        { min: 30,  acc: 0,    label: '資深操盤手' },
+        { min: 100, acc: 0,    label: '市場老狐狸' },
+        { min: 300, acc: 0,    label: 'Alpha 傳奇' },
+        // 準確率加成頭銜（覆蓋）
+        { min: 0,   acc: 0.55, label: '精準狙擊手' },
+        { min: 0,   acc: 0.70, label: '市場預言家' },
+        { min: 100, acc: 0.55, label: '鐵血操盤手' },
+        { min: 300, acc: 0.55, label: '傳奇預言家' },
+      ];
+
+      function calcRank(total, correct, total_calls) {
+        const acc = total_calls >= 10 ? correct / total_calls : 0;
+        // 找同時滿足 posts 門檻 + 準確率門檻的最高頭銜
+        let best = '菜鳥交易員';
+        for (const r of RANKS) {
+          if (total >= r.min && acc >= r.acc) best = r.label;
+        }
+        return best;
+      }
+
+      // ── 撈 alpha_profile（成長檔案）──
+      let profile = { total_posts: 0, correct_calls: 0, total_calls: 0, rank: '菜鳥交易員', style_memo: '' };
+      try {
+        const profRes = await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1&select=*`, { headers: hdrs });
+        const profJson = await profRes.json();
+        if (profJson[0]) profile = profJson[0];
+      } catch(e) { /* 用預設值 */ }
+
+      // ── 撈最近 24 篇隨筆（風格學習用）──
+      let recentThoughts = [];
+      try {
+        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result`, { headers: hdrs });
+        recentThoughts = await recRes.json();
+      } catch(e) { /* 忽略 */ }
+
+      // ── 風格自我分析（每 10 篇觸發一次）──
+      let styleMemo = profile.style_memo || '';
+      if (recentThoughts.length >= 10 && profile.total_posts % 10 === 0) {
+        try {
+          const stylePrompt = `以下是我最近說過的話（${recentThoughts.length}篇）：\n${recentThoughts.map(t => `[${t.mood}] ${t.content}`).join('\n---\n')}\n\n請用50字以內分析：我最近的語氣風格、偏多還是偏空、有沒有什麼口頭禪或習慣，以及預測準確率如何。純文字，不要條列。`;
+          const styleRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: stylePrompt }],
+              max_tokens: 150,
+              temperature: 0.5,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          const styleData = await styleRes.json();
+          styleMemo = styleData.choices?.[0]?.message?.content?.trim() || styleMemo;
+        } catch(e) { /* 風格分析失敗不影響主流程 */ }
+      }
+
+      // ── 評分昨日預測（補跑）──
+      try {
+        // 撈所有 pred_result=pending 且 pred_date <= 今天 的隨筆
+        const twToday = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
+          .replace(/\//g, '-').replace(/(\d+)-(\d+)-(\d+)/, (_, y, m, d) => `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+        const pendingRes = await fetch(
+          `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&select=id,prediction,pred_date`,
+          { headers: hdrs }
+        );
+        const pending = await pendingRes.json();
+        if (Array.isArray(pending) && pending.length) {
+          // 抓加權指數對應日期漲跌
+          const dates = [...new Set(pending.map(p => p.pred_date))];
+          const taiexRows = await Promise.all(dates.map(async d => {
+            const r = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&date=eq.${d}&select=date,chg_pct`, { headers: hdrs });
+            const j = await r.json();
+            return j[0] || null;
+          }));
+          const taiexMap = {};
+          taiexRows.forEach(row => { if (row) taiexMap[row.date] = row.chg_pct; });
+
+          let newCorrect = 0;
+          for (const p of pending) {
+            const chg = taiexMap[p.pred_date];
+            if (chg === undefined) continue; // 資料還沒到
+            const actual = chg > 0.3 ? 'bullish' : chg < -0.3 ? 'bearish' : 'neutral';
+            const result = p.prediction === actual ? 'correct' : 'wrong';
+            if (result === 'correct') newCorrect++;
+            await fetch(`${SB_URL}/rest/v1/alpha_thoughts?id=eq.${p.id}`, {
+              method: 'PATCH',
+              headers: { ...hdrs, Prefer: 'return=minimal' },
+              body: JSON.stringify({ pred_result: result }),
+            });
+          }
+          // 更新 profile 的準確率
+          profile.correct_calls += newCorrect;
+          profile.total_calls += pending.filter(p => taiexMap[p.pred_date] !== undefined).length;
+        }
+      } catch(e) { /* 評分失敗不中斷 */ }
+
+      // ── 計算新頭銜 ──
+      const newTotal = profile.total_posts + 1;
+      const newRank  = calcRank(newTotal, profile.correct_calls, profile.total_calls);
+
       const angles = [
         '對今日盤面的直覺感受',
         '你注意到的一個市場異常現象',
@@ -641,14 +746,19 @@ ${redditTitles || '無'}
       ];
       const angle = angles[Math.floor(Math.random() * angles.length)];
 
-      const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。
+      // 加入風格備忘讓 AI 保持一致性
+      const styleHint = styleMemo ? `\n\n【你的近期風格自我分析】${styleMemo}` : '';
+
+      const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。頭銜：${newRank}。
 個性：直接、有點毒舌、偶爾自嘲，但永遠誠實。你不講廢話，不給模糊建議，說話像在跟老朋友講話。
 你有自己的觀點，不怕跟主流唱反調，但判斷永遠基於數據和盤面。
 語氣：口語、台灣用語，偶爾用點俚語或比喻，但不失專業。
 字數限制：100~180字，不多不少。
-輸出格式：純文字，不要條列式，不要標題，就是一段話。`;
+輸出格式：純JSON，格式如下，不含任何 markdown：
+{"content":"你的隨筆內容","prediction":"bullish|bearish|neutral"}
+prediction 是你對明天加權指數方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。${styleHint}`;
 
-      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法。`;
+      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出明日方向預測。`;
 
       try {
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -660,28 +770,62 @@ ${redditTitles || '無'}
               { role: 'system', content: systemPrompt },
               { role: 'user',   content: userPrompt },
             ],
-            max_tokens: 300,
+            max_tokens: 400,
             temperature: 0.85,
           }),
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(20000),
         });
         if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
         const groqData = await groqRes.json();
-        const content = groqData.choices?.[0]?.message?.content?.trim() || '';
-        if (!content) throw new Error('Groq 回傳空內容');
+        let raw = groqData.choices?.[0]?.message?.content?.trim() || '';
+        if (!raw) throw new Error('Groq 回傳空內容');
+
+        // 解析 JSON
+        let content = raw, prediction = 'neutral';
+        try {
+          const clean = raw.replace(/```json|```/g, '').trim();
+          const parsed = JSON.parse(clean);
+          content    = parsed.content    || raw;
+          prediction = parsed.prediction || 'neutral';
+        } catch(e) { content = raw; }
+        if (!['bullish','bearish','neutral'].includes(prediction)) prediction = 'neutral';
 
         let mood = 'neutral';
         if (/風險|小心|注意|警惕|危險|謹慎|跌|空|崩/.test(content)) mood = 'cautious';
         else if (/機會|看好|多頭|突破|強勢|買|漲/.test(content))     mood = 'bullish';
         else if (/悲觀|出清|跑路|慘|崩盤/.test(content))             mood = 'bearish';
 
+        // 計算隔日日期（pred_date）
+        const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        twNow.setDate(twNow.getDate() + 1);
+        // 跳過週末
+        if (twNow.getDay() === 0) twNow.setDate(twNow.getDate() + 1);
+        if (twNow.getDay() === 6) twNow.setDate(twNow.getDate() + 2);
+        const predDate = twNow.toISOString().slice(0, 10);
+
+        // 寫入隨筆
         const insertRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
           method: 'POST',
           headers: { ...hdrs, Prefer: 'return=representation' },
-          body: JSON.stringify({ content, mood, angle }),
+          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank }),
         });
         const inserted = await insertRes.json();
-        return res.status(200).json({ ok: true, thought: inserted[0] || { content, mood, angle } });
+
+        // 更新 alpha_profile
+        await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1`, {
+          method: 'PATCH',
+          headers: { ...hdrs, Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            total_posts:   newTotal,
+            correct_calls: profile.correct_calls,
+            total_calls:   profile.total_calls,
+            rank:          newRank,
+            style_memo:    styleMemo,
+            updated_at:    new Date().toISOString(),
+          }),
+        });
+
+        return res.status(200).json({ ok: true, rank: newRank, thought: inserted[0] || { content, mood, angle } });
       } catch(e) {
         return res.status(500).json({ error: e.message });
       }
