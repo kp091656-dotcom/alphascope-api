@@ -1,0 +1,25 @@
+name: Alpha 隨筆生成
+
+on:
+  schedule:
+    # 台灣時間 09:00~14:00（UTC+8），每小時整點觸發
+    # UTC 01:00 ~ 06:00，週一到週五
+    - cron: '0 1 * * 1-5'
+    - cron: '0 2 * * 1-5'
+    - cron: '0 3 * * 1-5'
+    - cron: '0 4 * * 1-5'
+    - cron: '0 5 * * 1-5'
+    - cron: '0 6 * * 1-5'
+  workflow_dispatch:  # 手動觸發（測試用）
+
+jobs:
+  generate-thought:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 觸發 Alpha 隨筆生成
+        run: |
+          curl -s -X POST \
+            "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_thought" \
+            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            | jq .
