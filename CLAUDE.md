@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-10（對話五）
+> 更新日期：2026-06-11（對話六）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -13,12 +13,21 @@
 1. CLAUDE.md 只記錄當前狀態；歷史改動以 GitHub commit history 為準。
 1. ⚠️ **Claude 不使用任何 MCP push 功能，一律生成檔案讓使用者手動上傳。**
 1. ⚠️ **文件更新（CLAUDE.md）只在使用者主動要求切換新對話時才執行，平時不主動生成。**
+1. **Commit message 必須 50 字元以內**（GitHub 規範）。超過時拆成 subject + extended description。
 
 -----
 
 ## ⚠️ 已知問題
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
+
+### Alpha tab 獨立（2026-06-11）
+
+- `alphaTraderSection` + `alphaThoughtsSection` 已從 `signalPanel` 移出，包成獨立 `alphaPanel`
+- 新增 `🤖 Alpha` tab 按鈕，`showAlpha()` inline script 在 index.html
+- 所有 `showXxx()` 已加隱藏 `alphaPanel` 邏輯
+- `showSignal()` 移除 `initAlphaIfNeeded()`（Alpha 不再跟多空訊號一起載入）
+- `_hideAlphaPanel()` helper 定義在 signals.js 頂部
 
 ### options endpoint 法人資料備註
 
@@ -389,6 +398,12 @@ jobs:
 
 每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。市場環境感知從上述資料自動判斷，附加第9行 context。
 
+### lastTradingDay() 時區修正（2026-06-11）
+
+- 舊版用 `getUTCHours()` 讀原始 UTC 時間（22），導致早上 06:00 執行時不退一天，抓當天（TWSE 無資料）
+- 修正：`nowTW()` 已加 8h，`getUTCHours()` 即為台灣時間；`setDate/getDay` 改為 `setUTCDate/getUTCDay`
+- `collectInstitutional()` 改用 `lastTradingDay()` 只抓單日，不再 `daysAgo(5)` 跨區間
+
 ### Schema 雙寫過渡期
 
 |                        |舊表（保留）               |新表                              |
@@ -400,6 +415,11 @@ jobs:
 `sbUpsert()` 支援陣列 onConflict：`['date','contract_type']` 自動轉逗號。
 
 -----
+
+## alpha.js 已修 bug（2026-06-11）
+
+- **Canvas 空白**：`rated.length < 2` 時 `offsetWidth=0`，改用 `offsetWidth || 240` 設定實際尺寸再繪製
+- **信心分布條全滿**：`flex:0` 撐滿問題，改用 `width: N%`（根據 confTotal 計算比例），外層加底色
 
 ## 開發慣例
 
