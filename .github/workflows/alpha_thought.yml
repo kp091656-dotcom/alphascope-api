@@ -10,6 +10,8 @@ on:
     - cron: '0 4 * * 1-5'
     - cron: '0 5 * * 1-5'
     - cron: '0 6 * * 1-5'
+    # 台灣時間週五 16:00（UTC 08:00）→ 週報
+    - cron: '0 8 * * 5'
   workflow_dispatch:  # 手動觸發（測試用）
 
 jobs:
@@ -17,9 +19,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 觸發 Alpha 隨筆生成
+        # UTC 08:00 只在週五觸發，是週報時間；其他整點觸發隨筆
         run: |
-          curl -s -X POST \
-            "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_thought" \
-            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq .
+          HOUR=$(date -u +%H)
+          if [ "$HOUR" = "08" ]; then
+            echo "週五 16:00 → 觸發週報"
+            curl -s -X POST \
+              "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=weekly_recap" \
+              -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              | jq .
+          else
+            echo "盤中整點 → 觸發隨筆"
+            curl -s -X POST \
+              "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_thought" \
+              -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              | jq .
+          fi
