@@ -667,12 +667,19 @@ function _renderAccuracyChart(canvasId, thoughts) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-30);
   if (rated.length < 2) {
+    // 確保 canvas 有實際尺寸再繪製（offsetWidth 在 DOM 剛插入時可能為 0）
+    const W0 = canvas.offsetWidth || 240;
+    const H0 = canvas.offsetHeight || 72;
+    canvas.width  = W0;
+    canvas.height = H0;
+    canvas.style.width  = W0 + 'px';
+    canvas.style.height = H0 + 'px';
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, W0, H0);
     ctx.fillStyle = 'rgba(148,163,184,0.5)';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('累積 2 筆已評分預測後顯示', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('累積 2 筆已評分預測後顯示', W0 / 2, H0 / 2 + 4);
     return;
   }
 
@@ -824,13 +831,14 @@ async function loadAlphaThoughts() {
     const confCounts = { '高': 0, '中': 0, '低': 0 };
     list.filter(t => t.confidence && t.angle !== 'weekly_recap').forEach(t => { if (confCounts[t.confidence] !== undefined) confCounts[t.confidence]++; });
     const confTotal = confCounts['高'] + confCounts['中'] + confCounts['低'];
+    // 信心分布進度條：flex:0 會讓單色撐滿，改用 width% 避免此問題
     const confBarHtml = confTotal > 0 ? `
       <div style="margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);">
         <div style="font-size:0.55rem;color:var(--muted);margin-bottom:0.3rem;">近 24 篇信心分布</div>
-        <div style="display:flex;height:5px;border-radius:99px;overflow:hidden;gap:1px;">
-          <div style="flex:${confCounts['高']};background:rgba(220,38,38,0.6);border-radius:99px 0 0 99px;" title="高：${confCounts['高']}篇"></div>
-          <div style="flex:${confCounts['中']};background:rgba(251,191,36,0.6);" title="中：${confCounts['中']}篇"></div>
-          <div style="flex:${confCounts['低']};background:rgba(148,163,184,0.4);border-radius:0 99px 99px 0;" title="低：${confCounts['低']}篇"></div>
+        <div style="display:flex;height:5px;border-radius:99px;overflow:hidden;background:var(--border-dark);">
+          <div style="width:${Math.round(confCounts['高']/confTotal*100)}%;background:rgba(220,38,38,0.6);transition:width 0.4s;" title="高：${confCounts['高']}篇"></div>
+          <div style="width:${Math.round(confCounts['中']/confTotal*100)}%;background:rgba(251,191,36,0.6);transition:width 0.4s;" title="中：${confCounts['中']}篇"></div>
+          <div style="width:${Math.round(confCounts['低']/confTotal*100)}%;background:rgba(148,163,184,0.4);transition:width 0.4s;" title="低：${confCounts['低']}篇"></div>
         </div>
         <div style="display:flex;gap:0.7rem;margin-top:0.25rem;">
           <span style="font-size:0.52rem;color:var(--up);">高 ${confCounts['高']}</span>
