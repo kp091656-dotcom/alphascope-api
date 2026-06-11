@@ -657,24 +657,138 @@ function _alphaTimeAgo(isoStr) {
   return `${Math.floor(diff / 86400)} 天前`;
 }
 
+// ── 準確率趨勢圖（Canvas）──
+function _renderAccuracyChart(canvasId, thoughts) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  // 只取已評分，依 created_at 升序，最多取近 30 筆
+  const rated = [...thoughts]
+    .filter(t => t.pred_result === 'correct' || t.pred_result === 'wrong')
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-30);
+  if (rated.length < 2) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(148,163,184,0.5)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('累積 2 筆已評分預測後顯示', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  // 計算每個點的累積命中率（滾動 10 筆窗口）
+  const points = rated.map((_, i) => {
+    const window = rated.slice(Math.max(0, i - 9), i + 1);
+    const wCorrect = window.filter(t => t.pred_result === 'correct').length;
+    return { acc: Math.round(wCorrect / window.length * 100), t: rated[i] };
+  });
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || 240;
+  const H = canvas.offsetHeight || 72;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const padL = 28, padR = 8, padT = 8, padB = 20;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  // Y 軸：0% ~ 100%
+  const toX = i => padL + (i / (points.length - 1)) * chartW;
+  const toY = v => padT + chartH - (v / 100) * chartH;
+
+  // 格線 & 55% 基準線
+  const muted = 'rgba(148,163,184,0.25)';
+  ctx.strokeStyle = muted; ctx.lineWidth = 0.5;
+  [0, 25, 50, 75, 100].forEach(v => {
+    ctx.beginPath(); ctx.moveTo(padL, toY(v)); ctx.lineTo(padL + chartW, toY(v)); ctx.stroke();
+  });
+  // 55% 門檻線（精準狙擊手）
+  ctx.strokeStyle = 'rgba(99,102,241,0.35)'; ctx.lineWidth = 0.8; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(padL, toY(55)); ctx.lineTo(padL + chartW, toY(55)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 漸層填色
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+  grad.addColorStop(0, 'rgba(99,102,241,0.18)');
+  grad.addColorStop(1, 'rgba(99,102,241,0)');
+  ctx.beginPath();
+  points.forEach((pt, i) => { i === 0 ? ctx.moveTo(toX(i), toY(pt.acc)) : ctx.lineTo(toX(i), toY(pt.acc)); });
+  ctx.lineTo(toX(points.length - 1), toY(0)); ctx.lineTo(toX(0), toY(0)); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // 折線
+  ctx.beginPath(); ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+  points.forEach((pt, i) => { i === 0 ? ctx.moveTo(toX(i), toY(pt.acc)) : ctx.lineTo(toX(i), toY(pt.acc)); });
+  ctx.stroke();
+
+  // 最新點
+  const last = points[points.length - 1];
+  const lastColor = last.acc >= 55 ? '#22c55e' : last.acc >= 40 ? '#d97706' : '#ef4444';
+  ctx.beginPath(); ctx.arc(toX(points.length - 1), toY(last.acc), 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = lastColor; ctx.fill();
+
+  // Y 軸標籤
+  ctx.fillStyle = 'rgba(148,163,184,0.75)'; ctx.font = '8px sans-serif'; ctx.textAlign = 'right';
+  [0, 50, 100].forEach(v => { ctx.fillText(v + '%', padL - 3, toY(v) + 3); });
+
+  // X 軸標籤（第一筆 & 最後一筆日期）
+  ctx.textAlign = 'left'; ctx.font = '8px sans-serif';
+  ctx.fillText(rated[0].created_at?.slice(5, 10) || '', padL, H - 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(rated[rated.length - 1].created_at?.slice(5, 10) || '', W - padR, H - 4);
+
+  // 55% 標籤
+  ctx.fillStyle = 'rgba(99,102,241,0.6)'; ctx.font = '7px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('55%', padL + 2, toY(55) - 2);
+}
+
+// ── streak 徽章 ──
+function _streakBadge(streak) {
+  if (!streak || streak === 0) return '';
+  if (streak >= 5)  return `<span style="font-size:0.6rem;padding:2px 8px;border-radius:99px;background:rgba(220,38,38,0.12);color:var(--up);border:1px solid rgba(220,38,38,0.3);font-weight:700;">🔥 神準週 ×${streak}</span>`;
+  if (streak >= 3)  return `<span style="font-size:0.6rem;padding:2px 8px;border-radius:99px;background:rgba(220,38,38,0.08);color:var(--up);border:1px solid rgba(220,38,38,0.2);font-weight:600;">連中 ${streak} 次</span>`;
+  if (streak <= -3) return `<span style="font-size:0.6rem;padding:2px 8px;border-radius:99px;background:rgba(22,163,74,0.08);color:var(--down);border:1px solid rgba(22,163,74,0.2);font-weight:600;">🔍 反省中</span>`;
+  return '';
+}
+
+// ── 信心度標籤 ──
+function _confBadge(conf) {
+  if (!conf) return '';
+  const map = {
+    '高': { bg: 'rgba(220,38,38,0.08)',  color: 'var(--up)',   border: 'rgba(220,38,38,0.2)' },
+    '中': { bg: 'rgba(251,191,36,0.08)', color: '#d97706',     border: 'rgba(251,191,36,0.25)' },
+    '低': { bg: 'rgba(148,163,184,0.08)',color: 'var(--muted)', border: 'rgba(148,163,184,0.2)' },
+  };
+  const s = map[conf] || map['中'];
+  return `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:${s.bg};color:${s.color};border:1px solid ${s.border};font-weight:600;">信心${conf}</span>`;
+}
+
 async function loadAlphaThoughts() {
   const el = document.getElementById('alphaThoughtsFeed');
   if (!el) return;
 
   try {
-    // 並行抓隨筆 + profile
-    const [thoughtsRes, profileRes] = await Promise.all([
+    // 並行抓隨筆 + profile + 週報
+    const [thoughtsRes, profileRes, recapRes] = await Promise.all([
       fetch(`${API_BASE}?endpoint=alpha_thought&_t=${Date.now()}`),
       fetch(`${SUPABASE_URL}/rest/v1/alpha_profile?id=eq.1&select=*`, {
         headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }
       }),
+      fetch(`${API_BASE}?endpoint=weekly_recap&_t=${Date.now()}`),
     ]);
     const data    = await thoughtsRes.json();
     const profArr = await profileRes.json();
+    const recapData = await recapRes.json().catch(() => ({}));
     const profile = profArr[0] || {};
     const list    = data.thoughts || [];
+    const recap   = recapData.recap || null;
 
-    // ── 頭銜卡片 ──
+    // ── 頭銜計算 ──
     const rank     = profile.rank || '菜鳥交易員';
     const icon     = RANK_ICON[rank] || '📈';
     const total    = profile.total_posts || 0;
@@ -682,7 +796,22 @@ async function loadAlphaThoughts() {
     const calls    = profile.total_calls || 0;
     const accPct   = calls >= 5 ? Math.round(correct / calls * 100) : null;
     const accStr   = accPct !== null ? `${accPct}%` : '累計中';
-    const styleMemo = profile.style_memo || '';
+    const styleMemo    = profile.style_memo || '';
+    const specialties  = Array.isArray(profile.specialties) ? profile.specialties : [];
+    const marketRegime = profile.market_regime || 'normal';
+
+    const REGIME_LABEL = {
+      volatile:      { text: '高波動恐慌', color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.2)' },
+      trending_up:   { text: '趨勢多頭',   color: 'var(--up)',  bg: 'rgba(220,38,38,0.07)',  border: 'rgba(220,38,38,0.18)' },
+      trending_down: { text: '趨勢空頭',   color: 'var(--down)', bg: 'rgba(22,163,74,0.07)', border: 'rgba(22,163,74,0.18)' },
+      consolidating: { text: '窄幅震盪',   color: '#d97706',   bg: 'rgba(251,191,36,0.07)', border: 'rgba(251,191,36,0.2)' },
+      normal:        { text: '正常盤整',   color: 'var(--muted)', bg: 'rgba(148,163,184,0.07)', border: 'rgba(148,163,184,0.18)' },
+    };
+    const regimeStyle = REGIME_LABEL[marketRegime] || REGIME_LABEL.normal;
+    const regimeHtml = `<span style="font-size:0.55rem;padding:1px 7px;border-radius:99px;background:${regimeStyle.bg};color:${regimeStyle.color};border:1px solid ${regimeStyle.border};font-weight:600;">${regimeStyle.text}</span>`;
+
+    // 從最新隨筆取 streak（已評分中最新的）
+    const latestStreak = list.find(t => t.streak !== undefined && t.streak !== null)?.streak ?? 0;
 
     // 下一個頭銜進度
     const RANK_THRESHOLDS = [10, 30, 100, 300, Infinity];
@@ -691,63 +820,139 @@ async function loadAlphaThoughts() {
     const progress   = nextThresh === Infinity ? 100 : Math.min(100, Math.round((total - prevThresh) / (nextThresh - prevThresh) * 100));
     const nextLabel  = nextThresh === Infinity ? '已達頂峰' : `距下一頭銜 ${nextThresh - total} 篇`;
 
+    // 信心度分布（本次載入的隨筆）
+    const confCounts = { '高': 0, '中': 0, '低': 0 };
+    list.filter(t => t.confidence && t.angle !== 'weekly_recap').forEach(t => { if (confCounts[t.confidence] !== undefined) confCounts[t.confidence]++; });
+    const confTotal = confCounts['高'] + confCounts['中'] + confCounts['低'];
+    const confBarHtml = confTotal > 0 ? `
+      <div style="margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);">
+        <div style="font-size:0.55rem;color:var(--muted);margin-bottom:0.3rem;">近 24 篇信心分布</div>
+        <div style="display:flex;height:5px;border-radius:99px;overflow:hidden;gap:1px;">
+          <div style="flex:${confCounts['高']};background:rgba(220,38,38,0.6);border-radius:99px 0 0 99px;" title="高：${confCounts['高']}篇"></div>
+          <div style="flex:${confCounts['中']};background:rgba(251,191,36,0.6);" title="中：${confCounts['中']}篇"></div>
+          <div style="flex:${confCounts['低']};background:rgba(148,163,184,0.4);border-radius:0 99px 99px 0;" title="低：${confCounts['低']}篇"></div>
+        </div>
+        <div style="display:flex;gap:0.7rem;margin-top:0.25rem;">
+          <span style="font-size:0.52rem;color:var(--up);">高 ${confCounts['高']}</span>
+          <span style="font-size:0.52rem;color:#d97706;">中 ${confCounts['中']}</span>
+          <span style="font-size:0.52rem;color:var(--muted);">低 ${confCounts['低']}</span>
+        </div>
+      </div>` : '';
+
     const profileCard = `
       <div style="
         padding:1rem 1.1rem;border-radius:14px;
         background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(99,102,241,0.03));
-        border:1px solid rgba(99,102,241,0.2);margin-bottom:1rem;
+        border:1px solid rgba(99,102,241,0.2);margin-bottom:0.75rem;
       ">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.55rem;">
           <span style="font-size:1.3rem;">${icon}</span>
-          <div>
-            <div style="font-size:0.85rem;font-weight:700;color:var(--text);">${rank}</div>
-            <div style="font-size:0.6rem;color:var(--muted);">共 ${total} 篇 ｜ 預測命中率 ${accStr}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:0.85rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+              ${rank}
+              ${_streakBadge(latestStreak)}
+            </div>
+            <div style="font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:0.4rem;margin-top:0.15rem;flex-wrap:wrap;">
+              共 ${total} 篇 ｜ 預測命中率 ${accStr}
+              ${regimeHtml}
+            </div>
           </div>
-          ${accPct !== null ? `<div style="margin-left:auto;font-size:0.75rem;font-weight:700;color:${accPct>=55?'var(--up)':accPct>=40?'#d97706':'var(--down)'};">${accPct}%</div>` : ''}
+          ${accPct !== null ? `<div style="font-size:0.8rem;font-weight:700;color:${accPct>=55?'var(--up)':accPct>=40?'#d97706':'var(--down)'};">${accPct}%</div>` : ''}
         </div>
         <div style="background:var(--border-dark);border-radius:99px;height:4px;overflow:hidden;">
           <div style="width:${progress}%;height:100%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:99px;transition:width 0.6s;"></div>
         </div>
         <div style="font-size:0.58rem;color:var(--muted);margin-top:0.3rem;">${nextLabel}</div>
-        ${styleMemo ? `<div style="font-size:0.65rem;color:var(--muted);margin-top:0.55rem;padding-top:0.5rem;border-top:1px solid var(--border-dark);opacity:0.75;font-style:italic;">「${styleMemo}」</div>` : ''}
+        ${specialties.length ? `
+        <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.5rem;">
+          ${specialties.map(s => `<span style="font-size:0.58rem;padding:1px 8px;border-radius:99px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.18);">${s}</span>`).join('')}
+        </div>` : ''}
+        <div style="margin-top:0.5rem;">
+          <div style="font-size:0.55rem;color:var(--muted);margin-bottom:0.25rem;">預測命中率趨勢（滾動 10 篇）</div>
+          <canvas id="alphaAccChart" style="width:100%;height:72px;display:block;"></canvas>
+        </div>
+        ${confBarHtml}
+        ${styleMemo ? `<div style="font-size:0.65rem;color:var(--muted);margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);opacity:0.75;font-style:italic;">「${styleMemo}」</div>` : ''}
       </div>`;
 
+    // ── 週報卡片 ──
+    const recapCard = recap ? (() => {
+      const m = MOOD_COLOR[recap.mood] || MOOD_COLOR.neutral;
+      const ago = _alphaTimeAgo(recap.created_at);
+      return `<div style="
+        padding:0.9rem 1rem;border-radius:12px;
+        background:linear-gradient(135deg,rgba(251,191,36,0.06),rgba(251,191,36,0.02));
+        border:1px solid rgba(251,191,36,0.3);margin-bottom:0.75rem;
+      ">
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+          <span style="font-size:0.68rem;font-weight:700;color:#d97706;">📋 本週總結</span>
+          <span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
+          <span style="font-size:0.55rem;color:var(--muted);margin-left:auto;">${ago}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text);line-height:1.7;white-space:pre-line;">${recap.content}</div>
+      </div>`;
+    })() : '';
+
     if (!list.length) {
-      el.innerHTML = profileCard + `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1.5rem 0;">Alpha 還沒說話…</div>`;
+      el.innerHTML = profileCard + recapCard + `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1.5rem 0;">Alpha 還沒說話…</div>`;
+      // 渲染準確率圖（資料空時）
+      requestAnimationFrame(() => _renderAccuracyChart('alphaAccChart', list));
       return;
     }
 
-    const cards = list.map((t, i) => {
+    // 過濾週報，不顯示在一般隨筆流
+    const normalList = list.filter(t => t.angle !== 'weekly_recap');
+
+    const cards = normalList.map((t, i) => {
       const m      = MOOD_COLOR[t.mood] || MOOD_COLOR.neutral;
       const p      = PRED_COLOR[t.prediction] || PRED_COLOR.neutral;
       const rs     = RESULT_STYLE[t.pred_result] || RESULT_STYLE.pending;
       const ago    = _alphaTimeAgo(t.created_at);
       const isFirst = i === 0;
       const rankBadge = t.rank_at_post ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.2);">${RANK_ICON[t.rank_at_post]||''}${t.rank_at_post}</span>` : '';
-      return `<div style="
+      const isHighConfWrong = t.confidence === '高' && t.pred_result === 'wrong';
+      const rsHtml = isHighConfWrong
+        ? `<span style="font-size:0.58rem;color:var(--down);font-weight:700;">✗ 高信打臉</span>`
+        : `<span style="font-size:0.58rem;color:${rs.color};font-weight:600;">${rs.text}</span>`;
+      const isReflection = t.angle === 'reflection';
+      const cardBg     = isReflection ? 'rgba(251,191,36,0.04)' : isFirst ? 'rgba(99,102,241,0.06)' : 'var(--surface)';
+      const cardBorder = isReflection ? 'rgba(251,191,36,0.25)' : isFirst ? 'rgba(99,102,241,0.25)' : 'var(--border-dark)';
+      const reflectionTag = isReflection ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:rgba(251,191,36,0.12);color:#d97706;border:1px solid rgba(251,191,36,0.3);font-weight:600;">📝 檢討篇</span>` : '';
+      return `<div data-bet-id="${t.id}" data-pred-result="${t.pred_result}" style="
         padding:0.9rem 1rem;border-radius:12px;
-        background:${isFirst?'rgba(99,102,241,0.06)':'var(--surface)'};
-        border:1px solid ${isFirst?'rgba(99,102,241,0.25)':'var(--border-dark)'};
+        background:${cardBg};
+        border:1px solid ${cardBorder};
         margin-bottom:0.65rem;
       ">
         <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;flex-wrap:wrap;">
           <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Alpha</span>
           <span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
           <span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:${p.bg};color:${p.color};border:1px solid ${p.border};font-weight:600;">${p.text}</span>
-          <span style="font-size:0.58rem;color:${rs.color};font-weight:600;">${rs.text}</span>
+          ${_confBadge(t.confidence)}
+          ${rsHtml}
+          ${reflectionTag}
           ${isFirst?'<span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);font-weight:600;">最新</span>':''}
           ${rankBadge}
           <span style="font-size:0.58rem;color:var(--muted);margin-left:auto;">${ago}</span>
         </div>
         <div style="font-size:0.82rem;color:var(--text);line-height:1.7;white-space:pre-line;">${t.content}</div>
-        ${t.angle?`<div style="font-size:0.55rem;color:var(--muted);margin-top:0.4rem;opacity:0.6;">話題：${t.angle}</div>`:''}
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.4rem;flex-wrap:wrap;">
+          ${t.angle && t.angle !== 'reflection' ? `<span style="font-size:0.55rem;color:var(--muted);opacity:0.6;">話題：${t.angle}</span>` : ''}
+          ${t.pred_target && t.pred_target !== 'TAIEX' ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:3px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.15);">預測標的：${t.pred_target}</span>` : ''}
+        </div>
       </div>`;
     }).join('');
 
-    el.innerHTML = profileCard + cards;
+    el.innerHTML = profileCard + recapCard + cards;
+
+    // 渲染準確率趨勢圖 + 注入押注欄 + 同步挑戰統計（DOM 插入後）
+    requestAnimationFrame(() => {
+      _renderAccuracyChart('alphaAccChart', list);
+      _injectBetBars(normalList);
+    });
 
     const tsEl = document.getElementById('alphaThoughtsTs');
-    if (tsEl) tsEl.textContent = `上次更新：${_alphaTimeAgo(list[0].created_at)}`;
+    if (tsEl && normalList.length) tsEl.textContent = `上次更新：${_alphaTimeAgo(normalList[0].created_at)}`;
 
   } catch(e) {
     el.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1rem;">載入失敗</div>`;
@@ -758,7 +963,211 @@ async function loadAlphaThoughts() {
 function _startAlphaThoughtsTimer() {
   setInterval(() => {
     loadAlphaThoughts();
-  }, 60 * 60 * 1000); // 每 60 分鐘刷新一次前端
+  }, 60 * 60 * 1000);
 }
 
+// ════════════════════════════════════════
+// 🎯 讀者押注系統（localStorage 匿名）
+// ════════════════════════════════════════
 
+// 取得某篇隨筆的押注資料（localStorage key = `bet_${thoughtId}`）
+function _getBet(thoughtId) {
+  try {
+    const raw = localStorage.getItem(`bet_${thoughtId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function _saveBet(thoughtId, direction) {
+  try {
+    localStorage.setItem(`bet_${thoughtId}`, JSON.stringify({ direction, ts: Date.now() }));
+  } catch { /* 無法存就算了 */ }
+}
+
+// 全站押注統計（key = `bet_stats_${thoughtId}`，存 agree/disagree 計數）
+// 因為是 localStorage（本機），只能模擬單使用者視角，不做跨用戶統計
+// 改用「我的預測 vs Alpha」的呈現方式，不需要伺服器
+
+// 渲染某篇隨筆的押注區塊（插入在 .alpha-thought-card 底部）
+function renderBetBar(thoughtId, alphaPrediction, predResult) {
+  const bet = _getBet(thoughtId);
+  const voted = !!bet;
+  const myDir = bet?.direction || null;
+
+  const predMap = {
+    bullish: { text: '↑ 看漲', color: 'var(--up)',   bg: 'rgba(220,38,38,0.08)',  border: 'rgba(220,38,38,0.2)' },
+    bearish: { text: '↓ 看跌', color: 'var(--down)', bg: 'rgba(22,163,74,0.08)',  border: 'rgba(22,163,74,0.2)' },
+    neutral: { text: '→ 持平', color: 'var(--muted)', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)' },
+  };
+
+  // 已評分時顯示對決結果
+  let outcomeHtml = '';
+  if (voted && predResult && predResult !== 'pending' && myDir) {
+    const myCorrect = (() => {
+      // 對比「我的預測」和實際結果（predResult 是 Alpha 的，這裡比我的方向 vs Alpha 的結果）
+      // 若我跟 Alpha 同向 → 我的命中 = Alpha 命中
+      // 若我跟 Alpha 反向 → 我的命中 = Alpha 失誤
+      const sameAsAlpha = myDir === alphaPrediction;
+      return sameAsAlpha ? predResult === 'correct' : predResult === 'wrong';
+    })();
+    outcomeHtml = `<div style="font-size:0.62rem;margin-top:0.35rem;padding:0.3rem 0.6rem;border-radius:6px;
+      background:${myCorrect?'rgba(220,38,38,0.08)':'rgba(22,163,74,0.08)'};
+      color:${myCorrect?'var(--up)':'var(--down)'};
+      border:1px solid ${myCorrect?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};">
+      你：${myCorrect ? '✓ 猜對了' : '✗ 猜錯了'}　Alpha：${predResult === 'correct' ? '✓ 命中' : '✗ 失誤'}
+    </div>`;
+  }
+
+  if (voted) {
+    const s = predMap[myDir] || predMap.neutral;
+    return `<div class="alpha-bet-bar" style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border-dark);">
+      <div style="font-size:0.6rem;color:var(--muted);margin-bottom:0.3rem;">你的押注</div>
+      <span style="font-size:0.65rem;padding:2px 10px;border-radius:99px;background:${s.bg};color:${s.color};border:1px solid ${s.border};font-weight:600;">${s.text}</span>
+      ${predResult === 'pending' ? `<span style="font-size:0.58rem;color:var(--muted);margin-left:0.5rem;">待收盤驗證</span>` : ''}
+      ${outcomeHtml}
+    </div>`;
+  }
+
+  // 未投票：顯示三個按鈕
+  return `<div class="alpha-bet-bar" style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border-dark);">
+    <div style="font-size:0.6rem;color:var(--muted);margin-bottom:0.4rem;">你覺得明天怎麼走？</div>
+    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+      <button onclick="placeBet('${thoughtId}','bullish','${alphaPrediction}')" style="font-size:0.65rem;padding:3px 10px;border-radius:99px;background:rgba(220,38,38,0.08);color:var(--up);border:1px solid rgba(220,38,38,0.2);cursor:pointer;font-weight:600;">↑ 看漲</button>
+      <button onclick="placeBet('${thoughtId}','bearish','${alphaPrediction}')" style="font-size:0.65rem;padding:3px 10px;border-radius:99px;background:rgba(22,163,74,0.08);color:var(--down);border:1px solid rgba(22,163,74,0.2);cursor:pointer;font-weight:600;">↓ 看跌</button>
+      <button onclick="placeBet('${thoughtId}','neutral','${alphaPrediction}')" style="font-size:0.65rem;padding:3px 10px;border-radius:99px;background:rgba(148,163,184,0.08);color:var(--muted);border:1px solid rgba(148,163,184,0.2);cursor:pointer;">→ 持平</button>
+    </div>
+  </div>`;
+}
+
+function placeBet(thoughtId, direction, alphaPrediction) {
+  _saveBet(thoughtId, direction);
+  // 更新挑戰模式統計
+  _challengeRecord(thoughtId, direction, alphaPrediction);
+  // 重新渲染該卡片的押注區（只更新 .alpha-bet-bar，不重繪整個列表）
+  const barEl = document.querySelector(`[data-bet-id="${thoughtId}"] .alpha-bet-bar`);
+  if (barEl) {
+    const parent = barEl.closest('[data-bet-id]');
+    const predResult = parent?.dataset?.predResult || 'pending';
+    barEl.outerHTML = renderBetBar(thoughtId, alphaPrediction, predResult);
+  }
+  // 更新挑戰模式顯示
+  renderChallengeStats();
+}
+
+// ════════════════════════════════════════
+// 🏆 Alpha 挑戰模式（我 vs Alpha）
+// ════════════════════════════════════════
+
+const CHALLENGE_KEY = 'alpha_challenge_stats';
+
+function _getChallengeStats() {
+  try {
+    const raw = localStorage.getItem(CHALLENGE_KEY);
+    return raw ? JSON.parse(raw) : { myCorrect: 0, myTotal: 0, alphaCorrect: 0, alphaTotal: 0 };
+  } catch { return { myCorrect: 0, myTotal: 0, alphaCorrect: 0, alphaTotal: 0 }; }
+}
+
+// 記錄一筆押注（評分後才統計，押注時先存，收盤後在 loadAlphaThoughts 更新時計算）
+function _challengeRecord(thoughtId, myDirection, alphaPrediction) {
+  // 只記錄在 localStorage，實際對帳在 _syncChallengeFromThoughts
+  try {
+    const pending = JSON.parse(localStorage.getItem('alpha_challenge_pending') || '[]');
+    // 避免重複記錄同一篇
+    const exists = pending.find(p => p.id === thoughtId);
+    if (!exists) {
+      pending.push({ id: thoughtId, myDir: myDirection, alphaDir: alphaPrediction });
+      localStorage.setItem('alpha_challenge_pending', JSON.stringify(pending));
+    }
+  } catch { /* ignore */ }
+}
+
+// 在 loadAlphaThoughts 拿到最新 list 後呼叫，把已評分的押注結算進統計
+function _syncChallengeFromThoughts(list) {
+  try {
+    const pending = JSON.parse(localStorage.getItem('alpha_challenge_pending') || '[]');
+    if (!pending.length) return;
+
+    const stats = _getChallengeStats();
+    const settled = [];
+    const stillPending = [];
+
+    for (const p of pending) {
+      const thought = list.find(t => String(t.id) === String(p.id));
+      if (!thought || thought.pred_result === 'pending') {
+        stillPending.push(p); continue;
+      }
+      // 已評分：結算
+      const sameAsAlpha = p.myDir === p.alphaDir;
+      const myCorrect   = sameAsAlpha ? thought.pred_result === 'correct' : thought.pred_result === 'wrong';
+      stats.myTotal++;
+      stats.alphaTotal++;
+      if (myCorrect) stats.myCorrect++;
+      if (thought.pred_result === 'correct') stats.alphaCorrect++;
+      settled.push(p.id);
+      stillPending.push({ ...p, settled: true }); // 標記已結算，但保留供顯示
+    }
+
+    localStorage.setItem(CHALLENGE_KEY, JSON.stringify(stats));
+    // 已結算的從 pending 移除
+    localStorage.setItem('alpha_challenge_pending', JSON.stringify(stillPending.filter(p => !p.settled)));
+  } catch { /* ignore */ }
+}
+
+function renderChallengeStats() {
+  const el = document.getElementById('alphaChallengeStats');
+  if (!el) return;
+  const s = _getChallengeStats();
+  if (s.myTotal === 0) {
+    el.innerHTML = `<div style="font-size:0.72rem;color:var(--muted);text-align:center;padding:0.8rem 0;">對每篇隨筆押注方向，看看你能不能贏過 Alpha</div>`;
+    return;
+  }
+  const myRate    = Math.round(s.myCorrect / s.myTotal * 100);
+  const alphaRate = s.alphaTotal ? Math.round(s.alphaCorrect / s.alphaTotal * 100) : 0;
+  const diff      = myRate - alphaRate;
+  const diffColor = diff > 0 ? 'var(--up)' : diff < 0 ? 'var(--down)' : 'var(--muted)';
+  const diffStr   = diff > 0 ? `+${diff}%` : `${diff}%`;
+  const verdict   = diff > 5 ? '你正在贏過 Alpha 🎉' : diff < -5 ? 'Alpha 目前領先你' : '旗鼓相當';
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+      <div style="text-align:center;">
+        <div style="font-size:1.1rem;font-weight:700;color:${myRate>=alphaRate?'var(--up)':'var(--muted)'};">${myRate}%</div>
+        <div style="font-size:0.6rem;color:var(--muted);">你（${s.myCorrect}/${s.myTotal}）</div>
+      </div>
+      <div style="font-size:0.65rem;color:var(--muted);text-align:center;">vs</div>
+      <div style="text-align:center;">
+        <div style="font-size:1.1rem;font-weight:700;color:${alphaRate>=myRate?'var(--up)':'var(--muted)'};">${alphaRate}%</div>
+        <div style="font-size:0.6rem;color:var(--muted);">Alpha（${s.alphaCorrect}/${s.alphaTotal}）</div>
+      </div>
+    </div>
+    <div style="text-align:center;">
+      <span style="font-size:0.65rem;color:${diffColor};font-weight:600;">${diffStr} ${verdict}</span>
+    </div>
+    <button onclick="_resetChallenge()" style="display:block;margin:0.6rem auto 0;font-size:0.6rem;padding:2px 10px;border-radius:99px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;">重置紀錄</button>
+  `;
+}
+
+function _resetChallenge() {
+  if (!confirm('確定要重置挑戰模式的所有紀錄？')) return;
+  localStorage.removeItem(CHALLENGE_KEY);
+  localStorage.removeItem('alpha_challenge_pending');
+  renderChallengeStats();
+}
+
+// ── 在 loadAlphaThoughts 渲染完後注入押注 & 挑戰同步 ──
+// 覆寫 normalList.map 的卡片，改用加上 data-bet-id 的版本
+// 並在每篇底部插入 renderBetBar
+
+function _injectBetBars(normalList) {
+  normalList.forEach(t => {
+    const card = document.querySelector(`[data-bet-id="${t.id}"]`);
+    if (!card) return;
+    const existing = card.querySelector('.alpha-bet-bar');
+    if (existing) return; // 已有就跳過
+    const bar = document.createElement('div');
+    bar.innerHTML = renderBetBar(String(t.id), t.prediction, t.pred_result);
+    card.appendChild(bar.firstElementChild);
+  });
+  // 同步挑戰統計
+  _syncChallengeFromThoughts(normalList);
+  renderChallengeStats();
+}
