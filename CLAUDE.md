@@ -34,6 +34,9 @@
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表資料，不可提前刪除）
+- [ ] 執行 Supabase migration（Alpha 成長系統批次 1~4 新增欄位，見下方）
+- [ ] `alpha_thought.yml` 新增週五 16:00 weekly_recap 排程
+- [ ] HTML 補上 `#alphaChallengeStats` 容器（挑戰模式顯示用）
 
 -----
 
@@ -145,7 +148,7 @@ let futuresData, futuresSortKey
 
 |表名                       |來源               |內容                            |每日筆數     |備註   |
 |-------------------------|-----------------|------------------------------|---------|-----|
-|`stock_daily_twse`       |TWSE OpenAPI     |全上市股票收盤、成交量；含 stock_id=‘TAIEX’|~1231    |     |
+|`stock_daily_twse`       |TWSE OpenAPI     |全上市股票收盤、成交量；含 stock_id='TAIEX'|~1231    |     |
 |`institutional_daily`    |FinMind          |三大法人現貨買賣超                     |1        |⚠️ 待刪 |
 |`margin_daily`           |FinMind          |融資/融券餘額                       |1        |     |
 |`options_daily`          |FinMind          |P/C Ratio、法人選擇權               |1        |⚠️ 待刪 |
@@ -160,8 +163,8 @@ let futuresData, futuresSortKey
 |`options_analytics_daily`|FinMind          |選擇權分析                         |3        |🆕 雙寫中|
 |`shareholder_gifts`      |scrape_egift + 手動|股東紀念品                         |年度       |     |
 |`gift_scrape_log`        |scrape_gifts.js  |爬蟲進度追蹤                        |年度       |     |
-|`alpha_thoughts`         |Groq AI          |Alpha 隨筆專欄                    |每交易日約 6 筆|🆕 含預測/準確率|
-|`alpha_profile`          |系統自動更新         |Alpha 成長檔案（頭銜/準確率/風格備忘）      |單列（id=1）  |🆕    |
+|`alpha_thoughts`         |Groq AI          |Alpha 隨筆專欄                    |每交易日約 6 筆|🆕 含預測/準確率/信心度/streak|
+|`alpha_profile`          |系統自動更新         |Alpha 成長檔案（頭銜/準確率/風格備忘/專長標籤）  |單列（id=1）  |🆕    |
 
 ### RLS 政策
 
@@ -173,15 +176,8 @@ let futuresData, futuresSortKey
 
 ```
 stock_daily_twse      : date, stock_id, name, close, prev, chg_pct, volume, source, created_at
-                        ⚠️ stock_id='TAIEX' 為加權指數
 
-news_daily            : id, url, title, title_zh, description, source, lang, published_at, collected_at
-
-alpha_daily_report    : id, report_date, market_mood, market_summary, market_context,
-                        key_risks(jsonb), sector_focus(jsonb), alpha_note,
-                        dominant_player, retail_signal, suggest_cash(bool), cash_reason, margin_alert,
-                        recommendations(jsonb), data_sources(jsonb),
-                        macro_data(jsonb), fear_greed(jsonb), generated_at
+alpha_daily_report    : id, report_date(unique), content, mood, created_at
                         ⚠️ report_date 用台灣時間（todayTW()）
 
 trader_positions      : id, stock_id, stock_name, entry_price, target_price, stop_loss,
@@ -224,10 +220,32 @@ futures_daily         : date, symbol, name, close, chg, chg_pct, source
 
 alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cautious), angle, created_at,
                         prediction(bullish|bearish|neutral), pred_date(date), pred_result(pending|correct|wrong),
-                        rank_at_post(text)
+                        rank_at_post(text),
+                        confidence(高|中|低),   ← 批次1新增
+                        streak(int),             ← 批次1新增（正=連勝，負=連錯）
+                        pred_target(text)        ← 批次4新增（TAIEX / 股票代號 / 板塊名）
 
 alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total_calls,
-                        rank(text), style_memo(text), updated_at
+                        rank(text), style_memo(text), updated_at,
+                        specialties(jsonb),      ← 批次4新增（例：["外資動向敏感","善抓恐慌底部"]）
+                        market_regime(text)      ← 批次4新增（normal|volatile|trending_up|trending_down|consolidating）
+```
+
+### ⚠️ 待執行 Supabase Migration
+
+```sql
+-- 批次 1
+ALTER TABLE alpha_thoughts
+  ADD COLUMN IF NOT EXISTS confidence text DEFAULT '中' CHECK (confidence IN ('高','中','低')),
+  ADD COLUMN IF NOT EXISTS streak integer DEFAULT 0;
+
+-- 批次 4
+ALTER TABLE alpha_thoughts
+  ADD COLUMN IF NOT EXISTS pred_target text DEFAULT 'TAIEX';
+
+ALTER TABLE alpha_profile
+  ADD COLUMN IF NOT EXISTS specialties jsonb DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS market_regime text DEFAULT 'normal';
 ```
 
 ### market_chips_daily 資料修正紀錄
@@ -248,11 +266,30 @@ alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total
 |`backup.yml`         |週日 09:00 + push main|Supabase + pCloud 備份                                 |✅      |
 |`scrape_gifts.yml`   |手動                  |爬股東紀念品                                               |✅（停用自動）|
 |`scrape_egift.yml`   |每週日 09:30           |爬 eGift                                              |✅      |
-|`alpha_thought.yml`  |週一~五 09:00~14:00 每整點|Alpha 隨筆生成（POST endpoint=alpha_thought）              |🆕      |
+|`alpha_thought.yml`  |週一~五 09:00~14:00 每整點|Alpha 隨筆生成（POST endpoint=alpha_thought）              |✅      |
+|`weekly_recap.yml`   |週五 16:00（UTC 08:00）  |Alpha 週報生成（POST endpoint=weekly_recap）               |⚠️ 待建立 |
+
+### weekly_recap.yml 範本
+
+```yaml
+name: Alpha 週報
+on:
+  schedule:
+    - cron: '0 8 * * 5'   # 每週五 16:00 台灣時間
+  workflow_dispatch:
+jobs:
+  recap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST weekly_recap
+        run: |
+          curl -X POST "${{ secrets.VERCEL_URL }}/api/news?endpoint=weekly_recap" \
+            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}"
+```
 
 -----
 
-## Alpha 成長系統（2026-06-10 新增）
+## Alpha 成長系統（2026-06-10 全面升級）
 
 ### 頭銜規則（篇數 × 準確率雙維度）
 
@@ -268,21 +305,61 @@ alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total
 | 鐵血操盤手 ⚔️  | ≥100 篇 + 準確率 ≥55%         |
 | 傳奇預言家 🌟  | ≥300 篇 + 準確率 ≥55%         |
 
-### 後端邏輯（api/news.js）
+### 後端邏輯（api/news.js）— 批次 1~4 完整版
 
-- 每次 POST 觸發時：
-  1. 撈 `alpha_profile` 取得當前狀態
-  2. 撈最近 24 篇隨筆
-  3. 每 10 篇做一次風格自我分析（Groq），結果存 `style_memo`，下次帶入 system prompt
-  4. 自動補跑「評分昨日預測」：比對 `stock_daily_twse` 加權指數漲跌，更新 `pred_result`
-  5. AI 輸出 JSON：`{ content, prediction }`，漲跌 >0.3% 判定方向
-  6. 寫入 `alpha_thoughts`（含 prediction/pred_date/pred_result/rank_at_post）
-  7. 更新 `alpha_profile`
+每次 POST `endpoint=alpha_thought` 觸發：
 
-### 前端顯示（js/alpha.js）
+1. 並行抓取 8 項市場資料（加權指數、籌碼、融資、選擇權、FGI+VIX、熱門股、新聞）
+2. **市場環境感知**（批次4）：從上述資料自動判斷 `marketRegime`（volatile/trending_up/trending_down/consolidating/normal），附加進 context 並注入語氣調整 prompt
+3. 撈最近 24 篇隨筆（含 pred_result/confidence）
+4. **計算 streak**（批次1）：從已評分隨筆計算連勝（正）/連錯（負），連勝≥5 注入謙遜提醒，連錯≤-3 觸發反省模式語氣
+5. 每 10 篇：風格自我分析（50字 styleMemo）+ **專長標籤分析**（批次4，2~3個 specialties）
+6. **評分昨日預測**（批次3 強化）：撈 pending 隨筆，依 pred_target 分流評分（TAIEX/個股）；wrong 時收集 wrongItems
+7. **自動生成檢討篇**（批次3）：wrongItems 中取最高信心那筆，生成 angle='reflection' 隨筆
+8. AI 輸出 JSON：`{ content, prediction, confidence, pred_target }`
+9. 寫入 `alpha_thoughts`（含 confidence/streak/pred_target）
+10. 更新 `alpha_profile`（含 specialties/market_regime）
 
-- 頂部頭銜卡片：頭銜圖示、總篇數、命中率、進度條、下一頭銜距離、style_memo
-- 每篇顯示：情緒標籤 + 預測方向（↑↓→）+ 命中/失誤/待驗證 + 發文時頭銜
+**endpoint=weekly_recap（批次1）：**
+- GET：撈最新一篇 `angle=weekly_recap` 隨筆
+- POST（需 x-owner-token）：統計本週命中率、最精準一筆，AI 生成週報文字，寫入 alpha_thoughts
+
+### 前端顯示（js/alpha.js）— 批次 2~4 完整版
+
+**頭銜卡片：**
+- 頭銜 + streak 徽章（連中≥5 🔥神準週、連中3-4 連中N次、連錯≤-3 🔍反省中）
+- 市場環境標籤（volatile紅/trending_up紅/trending_down綠/consolidating橙）（批次4）
+- 命中率百分比、進度條、距下一頭銜篇數
+- 專長標籤列（紫色膠囊，批次4）
+- 準確率趨勢折線圖（Canvas，滾動10篇，55%基準線）（批次2）
+- 信心度分布三色進度條（高/中/低）（批次2）
+- style_memo（斜體）
+
+**週報卡片**（批次2）：週報卡在 profile 卡下方、一般隨筆上方，橙色邊框
+
+**隨筆卡片：**
+- 信心度標籤（高/中/低）（批次1）
+- 高信心預測失誤特別標示「✗ 高信打臉」（批次2）
+- 反省模式檢討篇：`angle=reflection`，橙色邊框 + 📝 檢討篇標籤（批次3）
+- pred_target 非 TAIEX 時顯示「預測標的：2330」（批次4）
+- **押注欄**（批次3）：每篇底部可選↑/↓/→，localStorage 記錄，收盤後自動顯示「你✓ vs Alpha✗」結果
+- `data-bet-id` + `data-pred-result` 屬性供 `_injectBetBars()` 定位
+
+**挑戰模式**（批次3，`#alphaChallengeStats` 容器）：
+- 我的命中率 vs Alpha 命中率即時對比
+- 差距 >5% 給出評語
+- 重置紀錄按鈕
+- 全部 localStorage，函式：`_getChallengeStats()` / `_syncChallengeFromThoughts(list)` / `renderChallengeStats()`
+
+**alpha.js 新增工具函式：**
+- `_renderAccuracyChart(canvasId, thoughts)` — Canvas 折線圖
+- `_streakBadge(streak)` — 連勝/連錯徽章
+- `_confBadge(conf)` — 信心度標籤
+- `renderBetBar(thoughtId, alphaPrediction, predResult)` — 押注欄 HTML
+- `placeBet(thoughtId, direction, alphaPrediction)` — 全域函式（onclick 用）
+- `_injectBetBars(normalList)` — 批次注入押注欄 + 同步挑戰統計
+- `renderChallengeStats()` — 渲染挑戰模式面板
+- `_resetChallenge()` — 全域函式（重置按鈕用）
 
 -----
 
@@ -310,9 +387,11 @@ alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total
 
 ### alpha_thought 背景資料（2026-06-10 擴充）
 
-每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。
+每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。市場環境感知從上述資料自動判斷，附加第9行 context。
 
-### Schema 雙寫過渡期                      |舊表（保留）               |新表                              |
+### Schema 雙寫過渡期
+
+|                        |舊表（保留）               |新表                              |
 |------------------------|---------------------|--------------------------------|
 |`collectChips()`        |`chips_daily`        |`market_chips_daily`            |
 |`collectOptions()`      |`options_daily`      |`options_analytics_daily`       |
@@ -332,6 +411,7 @@ alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total
 1. `str_replace` 後務必確認相鄰上下文
 1. 新增 show 函式時，記得在其他所有 `showXxx()` 函式裡加上隱藏新 panel 的邏輯
 1. Canvas 圖表禁止在 `appendChild` 前執行 `setupCanvas/draw`
+1. **alpha.js 押注欄**：`placeBet()` 和 `_resetChallenge()` 是全域函式，HTML onclick 直接呼叫，不可改名
 
 -----
 
