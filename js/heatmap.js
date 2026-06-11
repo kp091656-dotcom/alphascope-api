@@ -9,6 +9,7 @@ function showHeatmap() {
   document.getElementById('sentimentPanel').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('signalPanel').style.display = 'none';
+  const ap = document.getElementById('alphaPanel'); if (ap) ap.style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'block';
   if (heatmapData.length) {
     renderTreemap(heatmapData);
@@ -36,9 +37,9 @@ function showSignal() {
   document.getElementById('sentimentPanel').style.display = 'none';
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'none';
+  const apSig = document.getElementById('alphaPanel'); if (apSig) apSig.style.display = 'none';
   document.getElementById('signalPanel').style.display = 'block';
   loadMktSignals();
-  initAlphaIfNeeded();
   loadChipsPanel();  // 籌碼面板
 }
 

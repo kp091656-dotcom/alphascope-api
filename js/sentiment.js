@@ -15,6 +15,7 @@ function showSentiment() {
   document.getElementById('futuresPanel').style.display = 'none';
   document.getElementById('heatmapPanel').style.display = 'none';
   document.getElementById('signalPanel').style.display = 'none';
+  const ap = document.getElementById('alphaPanel'); if (ap) ap.style.display = 'none';
   document.getElementById('sentimentPanel').style.display = 'block';
 }
 

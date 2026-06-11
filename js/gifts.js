@@ -66,7 +66,7 @@ const SECTOR_INDEX_MAP = {
 function showGifts() {
   document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('giftsTab').classList.add('active');
-  ['newsFeed','loadMoreBtn','sentimentPanel','futuresPanel','heatmapPanel','signalPanel','screenerPanel'].forEach(id => {
+  ['newsFeed','loadMoreBtn','sentimentPanel','futuresPanel','heatmapPanel','signalPanel','screenerPanel','alphaPanel'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   const fh = document.querySelector('.feed-header'); if (fh) fh.style.display = 'none';
