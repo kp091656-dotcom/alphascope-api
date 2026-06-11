@@ -68,6 +68,7 @@
   <button class="cat-tab cat-tab-tools" id="signalTab" onclick="showSignal()">📡 多空訊號</button>
   <button class="cat-tab cat-tab-tools" id="screenerTab" onclick="openScreener()">🔍 選股篩選</button>
   <button class="cat-tab cat-tab-tools" id="giftsTab" onclick="showGifts()">🎁 紀念品</button>
+  <button class="cat-tab cat-tab-tools" id="alphaTab" onclick="showAlpha()">🤖 Alpha</button>
 </div>
 
 <main>
@@ -619,6 +620,10 @@
         </div>
       </div>
 
+    </div><!-- end signalPanel -->
+
+    <!-- Alpha 面板 -->
+    <div id="alphaPanel" style="display:none;">
       <!-- Alpha 交易室 -->
       <div id="alphaTraderSection" style="margin-top:1.5rem;">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap;">
@@ -707,7 +712,7 @@
         </div>
       </div>
 
-    </div><!-- end signalPanel -->
+    </div>
 
     <div id="giftsPanel" style="display:none;">
       <div class="gifts-topbar">
@@ -1009,6 +1014,28 @@
   </div>
 </div>
 
+<script>
+function showAlpha() {
+  // 隱藏所有工具 panel（與其他 showXxx 保持一致）
+  ['futuresPanel','sentimentPanel','heatmapPanel','signalPanel','giftsPanel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // 清除所有 tab active
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('alphaTab').classList.add('active');
+  // 顯示 alphaPanel
+  const panel = document.getElementById('alphaPanel');
+  if (panel) panel.style.display = 'block';
+  // 觸發資料載入（首次進入才載入）
+  if (!panel._loaded) {
+    panel._loaded = true;
+    if (typeof loadAlphaDailyReport     === 'function') loadAlphaDailyReport();
+    if (typeof loadAlphaThoughts        === 'function') loadAlphaThoughts();
+    if (typeof _startAlphaThoughtsTimer === 'function') _startAlphaThoughtsTimer();
+  }
+}
+</script>
 <script src="/js/api.js"></script>
 <script src="/js/news_feed.js"></script>
 <script src="/js/sentiment.js"></script>
