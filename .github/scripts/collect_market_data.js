@@ -13,10 +13,13 @@ function nowTW() { return new Date(Date.now() + 8 * 3600_000); }
 
 function lastTradingDay() {
   const tw   = nowTW();
+  // nowTW() 已加 8 小時，用 getUTCHours() 即可得到台灣時間的小時數
   const hour = tw.getUTCHours();
   let d = new Date(tw);
-  if (hour < 16) d.setDate(d.getDate() - 1);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  // 台灣時間 16:00 前（收盤前），當天資料尚未就緒，退回前一天
+  if (hour < 16) d.setUTCDate(d.getUTCDate() - 1);
+  // 跳過週末
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
@@ -184,8 +187,9 @@ async function collectValuation() {
 async function collectInstitutional() {
   console.log('🏢 三大法人買賣超（FinMind）...');
   try {
+    const tradeDate = lastTradingDay();
     const data = await fmFetch('TaiwanStockTotalInstitutionalInvestors',
-      { start_date: daysAgo(5), end_date: todayTW() });
+      { start_date: tradeDate, end_date: tradeDate });
     if (!data.length) throw new Error('無資料');
     const byDate = {};
     for (const r of data) {
