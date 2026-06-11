@@ -1,8 +1,15 @@
+
+// ── Alpha panel 隱藏 helper（供所有 showXxx 呼叫）──
+function _hideAlphaPanel() {
+  const ap = document.getElementById('alphaPanel');
+  if (ap) ap.style.display = 'none';
+}
 function showFutures() {
   document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('futuresTab').classList.add('active');
   document.getElementById('newsFeed').style.display = 'none';
   const gp = document.getElementById('giftsPanel'); if (gp) gp.style.display = 'none';
+  const ap = document.getElementById('alphaPanel'); if (ap) ap.style.display = 'none';
   document.getElementById('loadMoreBtn').style.display = 'none';
   document.querySelector('.feed-header').style.display = 'none';
   document.getElementById('sentimentPanel').style.display = 'none';
