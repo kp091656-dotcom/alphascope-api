@@ -1016,7 +1016,11 @@
 
 <script>
 function showAlpha() {
-  // 隱藏所有工具 panel（與其他 showXxx 保持一致）
+  // 隱藏新聞區（與其他 showXxx 保持一致）
+  const nf = document.getElementById('newsFeed');     if (nf) nf.style.display = 'none';
+  const lb = document.getElementById('loadMoreBtn'); if (lb) lb.style.display = 'none';
+  const fh = document.querySelector('.feed-header'); if (fh) fh.style.display = 'none';
+  // 隱藏所有工具 panel
   ['futuresPanel','sentimentPanel','heatmapPanel','signalPanel','giftsPanel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
