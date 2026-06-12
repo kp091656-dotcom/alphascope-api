@@ -630,7 +630,43 @@ ${redditTitles || '無'}
 
       const context = contextLines.join('\n');
 
-      // ── 頭銜系統 ──
+      // ── 市場環境感知（從 context data 自動判斷）──
+      // 依據：VIX、FGI、近5日加權漲跌、法人方向 → 判斷震盪/趨勢/高波動
+      let marketRegime = 'normal'; // normal | trending_up | trending_down | volatile | consolidating
+      let marketRegimeLabel = '正常盤整';
+      try {
+        // 從 contextLines 解析關鍵數字
+        const taiexLine  = contextLines.find(l => l.startsWith('加權指數'));
+        const chipsLine  = contextLines.find(l => l.startsWith('法人現貨'));
+        const emotionLine = contextLines.find(l => l.startsWith('市場情緒'));
+
+        const chgMatch  = taiexLine?.match(/\(([+-]?\d+\.?\d*)%\)/);
+        const chgPct    = chgMatch ? parseFloat(chgMatch[1]) : null;
+        const fgiMatch  = emotionLine?.match(/Fear & Greed：(\d+)/);
+        const fgiVal    = fgiMatch ? parseInt(fgiMatch[1]) : null;
+        const vixMatch  = emotionLine?.match(/VIX：([\d.]+)/);
+        const vixVal    = vixMatch ? parseFloat(vixMatch[1]) : null;
+        const foreignMatch = chipsLine?.match(/外資：([+-]?\d+\.?\d*)億/);
+        const foreignNet = foreignMatch ? parseFloat(foreignMatch[1]) : null;
+
+        if (vixVal !== null && vixVal >= 25) {
+          marketRegime = 'volatile'; marketRegimeLabel = '高波動恐慌';
+        } else if (fgiVal !== null && fgiVal >= 75) {
+          marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭（過熱）';
+        } else if (fgiVal !== null && fgiVal <= 25) {
+          marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭（恐慌）';
+        } else if (chgPct !== null && chgPct > 1.0 && foreignNet !== null && foreignNet > 0) {
+          marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭';
+        } else if (chgPct !== null && chgPct < -1.0 && foreignNet !== null && foreignNet < 0) {
+          marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭';
+        } else if (Math.abs(chgPct || 0) < 0.3) {
+          marketRegime = 'consolidating'; marketRegimeLabel = '窄幅震盪';
+        }
+        // 寫入 contextLines，讓 AI 知道當下環境
+        contextLines.push(`市場環境判斷：${marketRegimeLabel}（regime=${marketRegime}）`);
+      } catch(e) { /* 環境感知失敗不中斷 */ }
+
+
       const RANKS = [
         { min: 0,   acc: 0,    label: '菜鳥交易員' },
         { min: 10,  acc: 0,    label: '盤中觀察者' },
@@ -662,18 +698,36 @@ ${redditTitles || '無'}
         if (profJson[0]) profile = profJson[0];
       } catch(e) { /* 用預設值 */ }
 
-      // ── 撈最近 24 篇隨筆（風格學習用）──
+      // ── 撈最近 24 篇隨筆（風格學習 + streak 計算用）──
       let recentThoughts = [];
       try {
-        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result`, { headers: hdrs });
+        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result,confidence`, { headers: hdrs });
         recentThoughts = await recRes.json();
       } catch(e) { /* 忽略 */ }
 
+      // ── 計算連勝/連錯 streak ──
+      // 只計算已評分的預測（correct / wrong），忽略 pending
+      function calcStreak(thoughts) {
+        const rated = thoughts.filter(t => t.pred_result === 'correct' || t.pred_result === 'wrong');
+        if (!rated.length) return 0;
+        const last = rated[0].pred_result; // 最新一筆
+        let streak = 0;
+        for (const t of rated) {
+          if (t.pred_result === last) streak++;
+          else break;
+        }
+        // 連勝為正，連錯為負
+        return last === 'correct' ? streak : -streak;
+      }
+      const currentStreak = calcStreak(recentThoughts);
+      const isOnLosingStreak = currentStreak <= -3; // 連錯 3 次以上進入反省模式
+
       // ── 風格自我分析（每 10 篇觸發一次）──
       let styleMemo = profile.style_memo || '';
+      let specialties = profile.specialties || [];        // 專長標籤陣列
       if (recentThoughts.length >= 10 && profile.total_posts % 10 === 0) {
         try {
-          const stylePrompt = `以下是我最近說過的話（${recentThoughts.length}篇）：\n${recentThoughts.map(t => `[${t.mood}] ${t.content}`).join('\n---\n')}\n\n請用50字以內分析：我最近的語氣風格、偏多還是偏空、有沒有什麼口頭禪或習慣，以及預測準確率如何。純文字，不要條列。`;
+          const stylePrompt = `以下是我最近說過的話（${recentThoughts.length}篇）：\n${recentThoughts.map(t => `[${t.mood}][${t.pred_result}] ${t.content}`).join('\n---\n')}\n\n請用50字以內分析：我最近的語氣風格、偏多還是偏空、有沒有什麼口頭禪或習慣，以及預測準確率如何。純文字，不要條列。`;
           const styleRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
@@ -688,21 +742,49 @@ ${redditTitles || '無'}
           const styleData = await styleRes.json();
           styleMemo = styleData.choices?.[0]?.message?.content?.trim() || styleMemo;
         } catch(e) { /* 風格分析失敗不影響主流程 */ }
+
+        // ── 專長標籤分析（和 style_memo 同批觸發）──
+        try {
+          const specPrompt = `你是分析師，根據以下交易員隨筆，用最精簡的詞（每個 4~8 字）列出他 2~3 個最明顯的市場專長或習慣特徵。
+格式：只回傳 JSON 陣列，例如 ["外資動向敏感","善抓恐慌底部","偏好短線波段"]，不要任何其他文字。
+
+隨筆內容：
+${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
+          const specRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: specPrompt }],
+              max_tokens: 80,
+              temperature: 0.4,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          const specData = await specRes.json();
+          const specRaw = specData.choices?.[0]?.message?.content?.trim() || '';
+          const specParsed = JSON.parse(specRaw.replace(/```json|```/g, '').trim());
+          if (Array.isArray(specParsed) && specParsed.length) {
+            specialties = specParsed.slice(0, 3).map(s => String(s).slice(0, 10));
+          }
+        } catch(e) { /* 專長標籤失敗不影響主流程 */ }
       }
 
       // ── 評分昨日預測（補跑）──
+      const wrongItems = [];
       try {
-        // 撈所有 pred_result=pending 且 pred_date <= 今天 的隨筆
         const twToday = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
           .replace(/\//g, '-').replace(/(\d+)-(\d+)-(\d+)/, (_, y, m, d) => `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+        // 加入 pred_target 欄位
         const pendingRes = await fetch(
-          `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&select=id,prediction,pred_date`,
+          `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&angle=neq.weekly_recap&select=id,prediction,pred_date,content,confidence,pred_target`,
           { headers: hdrs }
         );
         const pending = await pendingRes.json();
         if (Array.isArray(pending) && pending.length) {
-          // 抓加權指數對應日期漲跌
           const dates = [...new Set(pending.map(p => p.pred_date))];
+
+          // 撈加權指數
           const taiexRows = await Promise.all(dates.map(async d => {
             const r = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&date=eq.${d}&select=date,chg_pct`, { headers: hdrs });
             const j = await r.json();
@@ -711,10 +793,35 @@ ${redditTitles || '無'}
           const taiexMap = {};
           taiexRows.forEach(row => { if (row) taiexMap[row.date] = row.chg_pct; });
 
+          // 撈個股（pred_target 為 4 位代號的）
+          const stockTargets = [...new Set(pending
+            .map(p => p.pred_target)
+            .filter(t => t && t !== 'TAIEX' && /^\d{4}$/.test(t))
+          )];
+          const stockMap = {}; // { 'date_stockId': chg_pct }
+          if (stockTargets.length > 0) {
+            await Promise.all(dates.map(async d => {
+              const r = await fetch(
+                `${SB_URL}/rest/v1/stock_daily_twse?date=eq.${d}&stock_id=in.(${stockTargets.join(',')})&select=date,stock_id,chg_pct`,
+                { headers: hdrs }
+              );
+              const rows = await r.json();
+              if (Array.isArray(rows)) rows.forEach(row => { stockMap[`${row.date}_${row.stock_id}`] = row.chg_pct; });
+            }));
+          }
+
           let newCorrect = 0;
           for (const p of pending) {
-            const chg = taiexMap[p.pred_date];
-            if (chg === undefined) continue; // 資料還沒到
+            const target = p.pred_target || 'TAIEX';
+            // 取對應漲跌幅
+            let chg;
+            if (target === 'TAIEX' || !/^\d{4}$/.test(target)) {
+              // TAIEX 或板塊名：都用加權指數評分（板塊暫無獨立資料）
+              chg = taiexMap[p.pred_date];
+            } else {
+              chg = stockMap[`${p.pred_date}_${target}`] ?? taiexMap[p.pred_date];
+            }
+            if (chg === undefined) continue;
             const actual = chg > 0.3 ? 'bullish' : chg < -0.3 ? 'bearish' : 'neutral';
             const result = p.prediction === actual ? 'correct' : 'wrong';
             if (result === 'correct') newCorrect++;
@@ -723,12 +830,89 @@ ${redditTitles || '無'}
               headers: { ...hdrs, Prefer: 'return=minimal' },
               body: JSON.stringify({ pred_result: result }),
             });
+            if (result === 'wrong' && Math.abs(chg) > 0.3) {
+              wrongItems.push({ ...p, actual, chg });
+            }
           }
-          // 更新 profile 的準確率
           profile.correct_calls += newCorrect;
-          profile.total_calls += pending.filter(p => taiexMap[p.pred_date] !== undefined).length;
+          profile.total_calls += pending.filter(p => {
+            const t = p.pred_target || 'TAIEX';
+            return (/^\d{4}$/.test(t) && t !== 'TAIEX')
+              ? stockMap[`${p.pred_date}_${t}`] !== undefined || taiexMap[p.pred_date] !== undefined
+              : taiexMap[p.pred_date] !== undefined;
+          }).length;
         }
       } catch(e) { /* 評分失敗不中斷 */ }
+
+      // ── 被打臉記錄：wrong 時自動生成檢討篇 ──
+      // 每次最多觸發 1 篇（避免連錯時洗版），優先選 confidence=高 的
+      try {
+        if (wrongItems.length > 0) {
+          const target = wrongItems.find(w => w.confidence === '高') || wrongItems[0];
+          const dirMap = { bullish: '↑多', bearish: '↓空', neutral: '→中性' };
+          const actualDir = target.chg > 0 ? '↑漲' : '↓跌';
+          const reflectSystem = `你是 Alpha，台股職業交易員。頭銜：${profile.rank || '菜鳥交易員'}。
+個性：直接、有點毒舌、偶爾自嘲，永遠誠實。
+這篇是「被打臉檢討」：你之前預測錯了，現在要誠實面對。
+語氣：帶點苦笑和自嘲，不要推卸責任，說話還是像在跟老朋友聊。
+字數：80~140字，不多不少。
+輸出格式：純JSON，不含 markdown：
+{"content":"檢討全文","mood":"cautious"}`;
+          const reflectUser = `你之前說：「${(target.content||'').slice(0,80)}」
+你預測：${dirMap[target.prediction]||target.prediction}，結果：${actualDir}（${target.chg > 0 ? '+' : ''}${target.chg?.toFixed(2)}%）
+信心度：${target.confidence || '中'}
+
+請用你的風格寫一篇檢討：說清楚你錯在哪，市場給了你什麼教訓，語氣帶點苦笑，但不要太哭哭啼啼。`;
+
+          const rRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                { role: 'system', content: reflectSystem },
+                { role: 'user',   content: reflectUser },
+              ],
+              max_tokens: 300,
+              temperature: 0.8,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (rRes.ok) {
+            const rData = await rRes.json();
+            let rRaw = rData.choices?.[0]?.message?.content?.trim() || '';
+            let rContent = rRaw, rMood = 'cautious';
+            try {
+              const rParsed = JSON.parse(rRaw.replace(/```json|```/g, '').trim());
+              rContent = rParsed.content || rRaw;
+              rMood    = rParsed.mood    || 'cautious';
+            } catch(e) { rContent = rRaw; }
+
+            // 計算隔日 pred_date
+            const twNow2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+            twNow2.setDate(twNow2.getDate() + 1);
+            if (twNow2.getDay() === 0) twNow2.setDate(twNow2.getDate() + 1);
+            if (twNow2.getDay() === 6) twNow2.setDate(twNow2.getDate() + 2);
+            const reflectPredDate = twNow2.toISOString().slice(0, 10);
+
+            await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
+              method: 'POST',
+              headers: { ...hdrs, Prefer: 'return=minimal' },
+              body: JSON.stringify({
+                content:      rContent,
+                mood:         rMood,
+                angle:        'reflection',
+                prediction:   'neutral',
+                pred_date:    reflectPredDate,
+                pred_result:  'pending',
+                rank_at_post: profile.rank || '菜鳥交易員',
+                confidence:   '低',
+                streak:       currentStreak,
+              }),
+            });
+          }
+        }
+      } catch(e) { /* 檢討篇失敗不中斷主流程 */ }
 
       // ── 計算新頭銜 ──
       const newTotal = profile.total_posts + 1;
@@ -749,14 +933,33 @@ ${redditTitles || '無'}
       // 加入風格備忘讓 AI 保持一致性
       const styleHint = styleMemo ? `\n\n【你的近期風格自我分析】${styleMemo}` : '';
 
+      // 連勝/連錯模式提示
+      let streakHint = '';
+      if (currentStreak >= 5) {
+        streakHint = `\n\n【狀態】你已連續命中 ${currentStreak} 次預測，市場正在配合你的判斷，但保持謙遜，別讓連勝沖昏頭。`;
+      } else if (isOnLosingStreak) {
+        streakHint = `\n\n【反省模式】你最近已連續預測失誤 ${Math.abs(currentStreak)} 次。請誠實面對，這篇隨筆要帶有自我檢討的語氣：承認最近判斷有偏差，說說你認為錯在哪、市場給了你什麼教訓，語氣可以更謙遜甚至帶點苦笑。不要假裝沒事。`;
+      }
+
+      // 市場環境對語氣的影響
+      const regimeHint = {
+        volatile:       '\n\n【市場環境】目前高波動恐慌市場。語氣可以更謹慎、帶點緊張感，但不要散佈恐慌；可以談風險控管和心態。',
+        trending_up:    '\n\n【市場環境】目前趨勢多頭。語氣可以積極但不要過度樂觀；可以談追漲的風險或挑選強勢股的眉角。',
+        trending_down:  '\n\n【市場環境】目前趨勢空頭。語氣務實，可以談防禦策略、空手或放空的時機；不要強行找底。',
+        consolidating:  '\n\n【市場環境】目前窄幅震盪。語氣可以偏觀望，談等待訊號或短線操作的機會。',
+        normal:         '',
+      }[marketRegime] || '';
+
       const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。頭銜：${newRank}。
 個性：直接、有點毒舌、偶爾自嘲，但永遠誠實。你不講廢話，不給模糊建議，說話像在跟老朋友講話。
 你有自己的觀點，不怕跟主流唱反調，但判斷永遠基於數據和盤面。
 語氣：口語、台灣用語，偶爾用點俚語或比喻，但不失專業。
 字數限制：100~180字，不多不少。
 輸出格式：純JSON，格式如下，不含任何 markdown：
-{"content":"你的隨筆內容","prediction":"bullish|bearish|neutral"}
-prediction 是你對明天加權指數方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。${styleHint}`;
+{"content":"你的隨筆內容","prediction":"bullish|bearish|neutral","confidence":"高|中|低","pred_target":"TAIEX"}
+prediction 是你對明天方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
+confidence 是你對這次預測的信心程度（高=你有把握、中=普通、低=不確定）。
+pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}`;
 
       const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出明日方向預測。`;
 
@@ -781,14 +984,19 @@ prediction 是你對明天加權指數方向的預測（漲>0.3%=bullish，跌>0
         if (!raw) throw new Error('Groq 回傳空內容');
 
         // 解析 JSON
-        let content = raw, prediction = 'neutral';
+        let content = raw, prediction = 'neutral', confidence = '中', predTarget = 'TAIEX';
         try {
           const clean = raw.replace(/```json|```/g, '').trim();
           const parsed = JSON.parse(clean);
-          content    = parsed.content    || raw;
-          prediction = parsed.prediction || 'neutral';
+          content    = parsed.content     || raw;
+          prediction = parsed.prediction  || 'neutral';
+          confidence = parsed.confidence  || '中';
+          predTarget = parsed.pred_target || 'TAIEX';
         } catch(e) { content = raw; }
         if (!['bullish','bearish','neutral'].includes(prediction)) prediction = 'neutral';
+        if (!['高','中','低'].includes(confidence)) confidence = '中';
+        // pred_target 安全過濾（只允許 TAIEX、4 位數字代號、板塊名）
+        if (!/^(TAIEX|\d{4}|[^\d]{2,10})$/.test(predTarget)) predTarget = 'TAIEX';
 
         let mood = 'neutral';
         if (/風險|小心|注意|警惕|危險|謹慎|跌|空|崩/.test(content)) mood = 'cautious';
@@ -807,7 +1015,7 @@ prediction 是你對明天加權指數方向的預測（漲>0.3%=bullish，跌>0
         const insertRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
           method: 'POST',
           headers: { ...hdrs, Prefer: 'return=representation' },
-          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank }),
+          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank, confidence, streak: currentStreak, pred_target: predTarget }),
         });
         const inserted = await insertRes.json();
 
@@ -821,11 +1029,13 @@ prediction 是你對明天加權指數方向的預測（漲>0.3%=bullish，跌>0
             total_calls:   profile.total_calls,
             rank:          newRank,
             style_memo:    styleMemo,
+            specialties:   specialties,
+            market_regime: marketRegime,
             updated_at:    new Date().toISOString(),
           }),
         });
 
-        return res.status(200).json({ ok: true, rank: newRank, thought: inserted[0] || { content, mood, angle } });
+        return res.status(200).json({ ok: true, rank: newRank, streak: currentStreak, thought: inserted[0] || { content, mood, angle } });
       } catch(e) {
         return res.status(500).json({ error: e.message });
       }
@@ -834,7 +1044,140 @@ prediction 是你對明天加權指數方向的預測（漲>0.3%=bullish，跌>0
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // ── Alpha 交易紀錄 CRUD ──
+  // ── Alpha 週報（每週五收盤後生成）──
+  if (endpoint === 'weekly_recap') {
+    const SB_URL  = process.env.SUPABASE_URL || 'https://fdxedcwtmlurumfjmlys.supabase.co';
+    const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
+    const GROQ_KEY = process.env.GROQ_API_KEY;
+    if (!SB_KEY)   return res.status(500).json({ error: 'SUPABASE_SERVICE_KEY not configured' });
+    if (!GROQ_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
+    const hdrs = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+
+    // GET：撈最近一篇週報（type=weekly_recap）
+    if (req.method === 'GET') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/alpha_thoughts?angle=eq.weekly_recap&order=created_at.desc&limit=1`,
+        { headers: hdrs }
+      );
+      const rows = await r.json();
+      return res.status(200).json({ recap: rows[0] || null });
+    }
+
+    // POST：生成週報（由 GitHub Action 每週五 16:00 觸發）
+    if (req.method === 'POST') {
+      const ownerToken = req.headers['x-owner-token'];
+      if (ownerToken !== process.env.OWNER_TOKEN)
+        return res.status(403).json({ error: 'Forbidden' });
+
+      // 撈本週（最近 5 個交易日）所有隨筆
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const thoughtsRes = await fetch(
+        `${SB_URL}/rest/v1/alpha_thoughts?created_at=gte.${weekAgo}&angle=neq.weekly_recap&order=created_at.asc&select=content,mood,prediction,pred_result,confidence,created_at`,
+        { headers: hdrs }
+      );
+      const weekThoughts = await thoughtsRes.json();
+      if (!Array.isArray(weekThoughts) || weekThoughts.length === 0)
+        return res.status(200).json({ ok: false, msg: '本週無隨筆資料' });
+
+      // 計算本週統計
+      const rated    = weekThoughts.filter(t => t.pred_result === 'correct' || t.pred_result === 'wrong');
+      const correct  = rated.filter(t => t.pred_result === 'correct').length;
+      const hitRate  = rated.length ? Math.round(correct / rated.length * 100) : null;
+
+      // 找本週最精準一筆（correct + confidence=高 優先）
+      const bestCall = weekThoughts.find(t => t.pred_result === 'correct' && t.confidence === '高')
+                    || weekThoughts.find(t => t.pred_result === 'correct')
+                    || null;
+
+      // 撈 alpha_profile
+      let profile = { total_posts: 0, correct_calls: 0, total_calls: 0, rank: '菜鳥交易員', style_memo: '' };
+      try {
+        const profRes = await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1&select=*`, { headers: hdrs });
+        const profJson = await profRes.json();
+        if (profJson[0]) profile = profJson[0];
+      } catch(e) { /* 用預設值 */ }
+
+      const weekSummary = weekThoughts.map(t =>
+        `[${t.mood}][預測:${t.prediction}|信心:${t.confidence || '中'}|結果:${t.pred_result}] ${t.content}`
+      ).join('\n---\n');
+
+      const systemPrompt = `你是 Alpha，台股職業交易員。頭銜：${profile.rank}。
+個性：直接、有點毒舌、偶爾自嘲，永遠誠實。
+語氣：口語、台灣用語，說話像在跟老朋友聊這週發生什麼事。
+字數限制：200~280字，不多不少。
+輸出格式：純JSON，不含任何 markdown：
+{"content":"週報全文","mood":"bullish|bearish|neutral|cautious"}`;
+
+      const userPrompt = `本週共發表 ${weekThoughts.length} 篇隨筆，預測命中率：${hitRate !== null ? hitRate + '%' : '計算中'}（${correct}/${rated.length}）。
+${bestCall ? `本週最精準一筆：「${bestCall.content.slice(0, 60)}...」` : ''}
+
+本週所有隨筆：
+${weekSummary}
+
+請根據以上內容，用你的風格寫一篇週報：
+1. 整體回顧：這週市場怎麼走、你說中了什麼、打臉了什麼
+2. 準確率點評：對自己的表現誠實評價（不要只報喜不報憂）
+3. 下週展望：一句你真正有感的觀察或警示
+語氣要像在跟老朋友聊，不要寫成報告格式。`;
+
+      try {
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user',   content: userPrompt },
+            ],
+            max_tokens: 600,
+            temperature: 0.8,
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
+        const groqData = await groqRes.json();
+        let raw = groqData.choices?.[0]?.message?.content?.trim() || '';
+        if (!raw) throw new Error('Groq 回傳空內容');
+
+        let content = raw, mood = 'neutral';
+        try {
+          const clean = raw.replace(/```json|```/g, '').trim();
+          const parsed = JSON.parse(clean);
+          content = parsed.content || raw;
+          mood    = parsed.mood    || 'neutral';
+        } catch(e) { content = raw; }
+        if (!['bullish','bearish','neutral','cautious'].includes(mood)) mood = 'neutral';
+
+        // 計算下週台灣日期（週報的 pred_date = 下週一）
+        const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        twNow.setDate(twNow.getDate() + (8 - twNow.getDay()) % 7 || 7); // 下週一
+        const predDate = twNow.toISOString().slice(0, 10);
+
+        // 寫入 alpha_thoughts（angle='weekly_recap' 作為識別）
+        const insertRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
+          method: 'POST',
+          headers: { ...hdrs, Prefer: 'return=representation' },
+          body: JSON.stringify({
+            content, mood, angle: 'weekly_recap', prediction: 'neutral',
+            pred_date: predDate, pred_result: 'pending',
+            rank_at_post: profile.rank, confidence: '中', streak: 0,
+          }),
+        });
+        const inserted = await insertRes.json();
+
+        return res.status(200).json({
+          ok: true,
+          recap: inserted[0] || { content, mood },
+          stats: { total: weekThoughts.length, correct, total_rated: rated.length, hit_rate: hitRate },
+        });
+      } catch(e) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
   if (endpoint === 'alpha_positions') {
     const SUPABASE_URL = process.env.SUPABASE_URL  || 'https://fdxedcwtmlurumfjmlys.supabase.co';
     const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'sb_publishable_BAaZB86ibYZSvTFkFGkeQA_GspDNdf0';
