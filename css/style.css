@@ -50,6 +50,8 @@
      ══════════════════════════════════════════ */
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html { scroll-behavior: smooth; }
+
   body {
     background: var(--bg);
     background-image: radial-gradient(circle at 1px 1px, rgba(99,102,241,0.05) 1px, transparent 0);
@@ -339,9 +341,9 @@
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
-  .cat-tab:hover { color: var(--text); }
+  .cat-tab:hover { color: var(--text); background: rgba(99,102,241,0.04); }
   .cat-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
   /* ══════════════════════════════════════════
@@ -1030,6 +1032,9 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button:focus:not(:focus-visible) { outline: none; }
 
+  /* ── 物理按壓回饋：全站所有可點按鈕 ── */
+  button:not(:disabled):active { transform: scale(0.97); transition: transform 0.08s; }
+
   /* ══════════════════════════════════════════
      FGI Legend Scale
      ══════════════════════════════════════════ */
@@ -1047,7 +1052,12 @@
   .fgi-scale-label { font-weight: 700; }
   .fgi-scale-range { opacity: 0.8; }
 
-  .fgi-ts {
+  .mkt-val, .mkt-chg, .stat-value, .opt-big-val,
+  .fgi-big-score, .hero-stat-val, .hero-stat-chg,
+  .opt-maxpain-val, .opt-oi-val,
+  .dsb-val, #mktSignalScore {
+    font-variant-numeric: tabular-nums;
+  }
     font-family: 'IBM Plex Mono', monospace;
     font-size: var(--text-2xs);
     color: var(--muted);
@@ -1392,4 +1402,71 @@
   .cat-icon-cash    { background: #dc262615; color: #dc2626; border-color: #dc262630; }
   .cat-icon-3c      { background: #6d56f515; color: var(--accent); border-color: #6d56f530; }
   .cat-icon-other   { background: var(--tag-bg); color: var(--muted); border-color: var(--border); }
+
+
+  /* ══════════════════════════════════════════
+     Alpha 隨筆 — 卡片 hover & 互動
+     ══════════════════════════════════════════ */
+
+  /* 隨筆卡片（alpha.js 動態生成，以 data-bet-id 識別） */
+  [data-bet-id] {
+    transition:
+      transform  0.2s var(--ease-out),
+      box-shadow 0.2s var(--ease-out),
+      border-color 0.2s;
+    cursor: default;
+  }
+  [data-bet-id]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99,102,241,0.1), 0 2px 6px rgba(0,0,0,0.06);
+    border-color: rgba(99,102,241,0.3) !important;
+  }
+
+  /* 反省篇 hover 用amber色調 */
+  [data-bet-id][style*="fbe12480"] :hover,
+  [data-bet-id][style*="rgba(251,191,36"]:hover {
+    box-shadow: 0 6px 20px rgba(217,119,6,0.12), 0 2px 6px rgba(0,0,0,0.06);
+    border-color: rgba(217,119,6,0.4) !important;
+  }
+
+  /* Alpha 面板內的功能按鈕 hover */
+  #alphaPanel .icon-btn,
+  #alphaPanel button[style] {
+    transition: opacity 0.15s, transform 0.12s, box-shadow 0.15s, background 0.15s;
+  }
+
+  /* alphaChallengeStats 內的數字對齊 */
+  #alphaChallengeStats {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 隨筆 feed 捲軸優化：thumb 顏色融入深色卡片 */
+  #alphaThoughtsFeed::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.25); }
+  #alphaThoughtsFeed::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.4); }
+
+  /* ══════════════════════════════════════════
+     Sent-src-tab / Hm-filter-btn :active 補強
+     ══════════════════════════════════════════ */
+  .sent-src-tab:active,
+  .sent-pill:active,
+  .hm-filter-btn:active,
+  .fut-sort-btn:active,
+  .gift-cat-btn:active,
+  .icon-btn:active,
+  .load-more:active,
+  .analyze-btn:not(:disabled):active,
+  .api-fetch-btn:not(:disabled):active {
+    transform: scale(0.97) !important;
+  }
+
+  /* ══════════════════════════════════════════
+     Entry animation — 隨筆卡片淡入
+     ══════════════════════════════════════════ */
+  @keyframes thoughtIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0);   }
+  }
+  [data-bet-id] {
+    animation: thoughtIn 0.36s var(--ease-out) backwards;
+  }
 
