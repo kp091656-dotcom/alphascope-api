@@ -42,6 +42,26 @@ async function fmFetch(dataset, params = {}) {
   return json.data || [];
 }
 
+// TWSE OpenAPI fetch with retry（應對 IP 暫時封鎖 / 伺服器維護）
+async function twseFetch(url, retries = 3, delay = 8000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (text.trimStart().startsWith('<')) throw new Error('HTML response（可能被封鎖或維護中）');
+      return JSON.parse(text);
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      console.log(`  ⚠️  第 ${i + 1} 次失敗（${e.message}），${delay / 1000}s 後重試…`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+}
+
 async function sbUpsert(table, rows, onConflict) {
   if (!SB_KEY) throw new Error('SUPABASE_SERVICE_KEY 未設定');
   if (!rows.length) { console.log(`  ⏭ ${table}：0 筆，略過`); return; }
@@ -75,10 +95,7 @@ async function sbUpsert(table, rows, onConflict) {
 async function collectTWSEDaily() {
   console.log('📊 台股個股收盤（TWSE OpenAPI）...');
   try {
-    const res = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
-      { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw = await res.json();
+    const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
     const tradeDate = lastTradingDay();
     console.log(`  📅 寫入日期：${tradeDate}`);
     const rows = raw
@@ -99,10 +116,7 @@ async function collectTWSEDaily() {
 async function collectSectorIndex() {
   console.log('📈 產業指數（TWSE MI_INDEX）...');
   try {
-    const res = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX',
-      { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw = await res.json();
+    const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX');
     if (!raw.length) throw new Error('API 回傳空陣列');
     console.log(`  🔍 欄位：${Object.keys(raw[0]).join(', ')}`);
     const tradeDate = lastTradingDay();
@@ -152,10 +166,7 @@ async function collectSectorIndex() {
 async function collectValuation() {
   console.log('💹 個股估值（TWSE BWIBBU_ALL）...');
   try {
-    const res = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL',
-      { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw = await res.json();
+    const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL');
     const tradeDate = lastTradingDay();
     const rows = raw
       .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
