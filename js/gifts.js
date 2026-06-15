@@ -193,7 +193,7 @@ function giftCard(g) {
     <div class="gift-foot-item"><span class="gift-foot-label">禮品估值</span><span class="gift-foot-val">${valStr}</span></div>
     <div class="gift-foot-item"><span class="gift-foot-label">持有門檻</span><span class="gift-foot-val">${fmtShares(g.share_required)}</span></div>
     <div class="gift-foot-item"><span class="gift-foot-label">參考股價</span><span class="gift-foot-val">${refStr}</span></div>
-    ${g.source_url ? `<div class="gift-foot-item"><a href="${g.source_url}" target="_blank" style="font-size:0.6rem;color:var(--accent);text-decoration:none;">來源 →</a></div>` : '<div></div>'}
+    ${g.source_url ? `<div class="gift-foot-item"><a href="${g.source_url}" target="_blank" style="font-size:0.65rem;color:var(--accent);text-decoration:none;">來源 →</a></div>` : '<div></div>'}
   </div>
   ${g.note ? `<div class="gift-note">※ ${g.note}</div>` : ''}
 </div>`;
@@ -212,4 +212,3 @@ function setGiftSort(s) {
   document.getElementById('gsort' + s.charAt(0).toUpperCase() + s.slice(1))?.classList.add('gs-active');
   reRenderGifts();
 }
-

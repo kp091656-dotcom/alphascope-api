@@ -70,7 +70,7 @@ function sentRenderDashboard(posts) {
         <div style="width:${nPct}%;background:#b4b2a9;height:100%;transition:width 0.8s;"></div>
         <div style="width:${ePct}%;background:var(--accent3);height:100%;transition:width 0.8s;"></div>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;white-space:nowrap;display:flex;gap:4px;min-width:80px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;white-space:nowrap;display:flex;gap:4px;min-width:80px;font-variant-numeric:tabular-nums;">
         <span style="color:var(--accent);font-weight:500;">多${bull}</span>
         <span style="color:var(--muted);">中${neu}</span>
         <span style="color:var(--accent3);font-weight:500;">空${bear}</span>
@@ -87,9 +87,9 @@ function sentRenderPosts() {
   if (sentCurSrc  !== 'all') filtered = filtered.filter(p => p.source === sentCurSrc);
   if (sentCurSent !== 'all') filtered = filtered.filter(p => p.sentiment === sentCurSent);
   const srcBadge = s =>
-    s==='ptt' ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;padding:1px 5px;border-radius:2px;background:#fde;color:#e44;border:1px solid #fcc;">PTT</span>`
-    : s==='wsb' ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;padding:1px 5px;border-radius:2px;background:#ffe8dc;color:var(--accent);border:1px solid #fcc;">WSB</span>`
-    : `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;padding:1px 5px;border-radius:2px;background:#dde8f8;color:var(--accent2);border:1px solid #c0d4ef;">INV</span>`;
+    s==='ptt' ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:2px 6px;border-radius:3px;background:#fee2e2;color:#9b1c1c;border:1px solid #fca5a5;font-weight:600;letter-spacing:0.02em;">PTT</span>`
+    : s==='wsb' ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:2px 6px;border-radius:3px;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;font-weight:600;letter-spacing:0.02em;">WSB</span>`
+    : `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:2px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;font-weight:600;letter-spacing:0.02em;">INV</span>`;
   if (!filtered.length) {
     document.getElementById('sentPostList').innerHTML = `<div style="text-align:center;padding:28px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">沒有符合條件的貼文</div>`;
     return;
@@ -99,7 +99,7 @@ function sentRenderPosts() {
     const sl = p.sentiment==='bull' ? '多頭' : p.sentiment==='bear' ? '空頭' : '中性';
     const safeUrl = p.url ? p.url.replace(/'/g,'%27') : '';
     const clickable = safeUrl ? `style="cursor:pointer;" onclick="window.open('${safeUrl}','_blank')" title="點擊開啟原文"` : '';
-    const linkIcon  = safeUrl ? `<span style="font-size:0.55rem;color:var(--accent2);margin-left:4px;opacity:0.8;">↗</span>` : '';
+    const linkIcon  = safeUrl ? `<span style="font-size:0.65rem;color:var(--accent2);margin-left:4px;opacity:0.8;">↗</span>` : '';
     return `<div class="sent-post-card" ${clickable}>
       <span class="sent-s-pill ${sc}">${sl}</span>
       <div style="flex:1;min-width:0;">
@@ -113,7 +113,7 @@ function sentRenderPosts() {
         <strong style="display:block;font-size:0.85rem;color:${(p.rank&&p.rank<=5)?'var(--accent)':'var(--text)'};">${p.rank ? '#'+p.rank : '—'}</strong>
         <span style="font-size:0.6rem;">${p.source==='ptt'?'時間排名':'熱度排名'}</span>
         ${p.source==='ptt' && p.pushes ? `<div style="font-size:0.6rem;color:${p.pushes>0?'#dc2626':p.pushes<0?'#16a34a':'#aaa'};">推${p.pushes>0?'+':''}${p.pushes}</div>` : ''}
-        ${p.confidence ? `<div style="font-size:0.55rem;margin-top:2px;color:${p.confidence==='high'?'var(--accent3)':p.confidence==='low'?'#aaa':'var(--accent2)'};">${p.confidence==='high'?'◆高信心':p.confidence==='low'?'◇低信心':'◈中信心'}</div>` : ''}
+        ${p.confidence ? `<div style="font-size:0.62rem;margin-top:3px;font-weight:600;color:${p.confidence==='high'?'var(--accent3)':p.confidence==='low'?'var(--muted)':'var(--accent2)'};">${p.confidence==='high'?'◆高信心':p.confidence==='low'?'◇低信心':'◈中信心'}</div>` : ''}
       </div>
     </div>`;
   }).join('');

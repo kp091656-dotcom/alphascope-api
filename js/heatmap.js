@@ -18,8 +18,8 @@ function showHeatmap() {
     loadingEl.style.display = 'block';
     loadingEl.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--muted);padding:2rem 0;text-align:center;">
       <div class="spinner" style="margin:0 auto 12px;"></div>
-      <div style="font-size:0.78rem;">正在載入台股熱圖資料…</div>
-      <div style="font-size:0.65rem;margin-top:0.5rem;opacity:0.7;">資料來自 Supabase，每日盤後自動更新</div>
+      <div style="font-size:0.82rem;">正在載入台股熱圖資料…</div>
+      <div style="font-size:0.72rem;margin-top:0.5rem;opacity:0.7;">資料來自 Supabase，每日盤後自動更新</div>
     </div>`;
     document.getElementById('heatmapSvgWrap').style.display = 'none';
   }
@@ -252,7 +252,7 @@ async function loadHeatmap() {
   const loadingEl = document.getElementById('heatmapLoading');
   loadingEl.style.display = 'block';
   const total = HM_STOCK_LIST.length;
-  loadingEl.innerHTML = `<div class="spinner" style="margin:0 auto 12px;"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);">從 Supabase 載入台股資料中（${total} 支）…</span>`;
+  loadingEl.innerHTML = `<div class="spinner" style="margin:0 auto 12px;"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:var(--muted);">從 Supabase 載入台股資料中（${total} 支）…</span>`;
   document.getElementById('heatmapSvgWrap').style.display = 'none';
 
   try {
@@ -941,16 +941,16 @@ function renderSectorBar(data, activeSector, officialData) {
     const isActive = activeSector && activeSector !== 'all' && activeSector === s.sector;
     // 右側標籤：官方指數顯示「官方」，fallback 顯示股票數
     const tagLabel = s.official
-      ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--accent2);width:22px;text-align:right;flex-shrink:0;opacity:0.8;">官方</div>`
-      : `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);width:22px;text-align:right;flex-shrink:0;">${s.count || ''}</div>`;
+      ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--accent2);width:26px;text-align:right;flex-shrink:0;opacity:0.8;">官方</div>`
+      : `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);width:26px;text-align:right;flex-shrink:0;">${s.count || ''}</div>`;
     // tooltip：官方模式顯示完整指數名稱
     const titleAttr = s.indexName ? `title="${s.indexName}"` : '';
 
-    return `<div ${titleAttr} style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:1px 0;border-radius:3px;${isActive ? 'background:var(--surface);padding:1px 3px;box-shadow:0 0 0 1px var(--border-dark);' : ''}"
+    return `<div ${titleAttr} style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:1px 0;border-radius:3px;transition:opacity 0.15s;${isActive ? 'background:var(--surface);padding:1px 3px;box-shadow:0 0 0 1px var(--border-dark);' : ''}"
       onclick="hmFilterSectorByName('${s.sector}')"
-      onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+      onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
       <div style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;"></div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--text);width:52px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.sector}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text);width:52px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.sector}</div>
       <div style="flex:1;height:8px;background:var(--bg);border-radius:1px;position:relative;overflow:hidden;">
         <div style="position:absolute;top:0;left:${barLeft.toFixed(1)}%;width:${Math.max(1,barWidth).toFixed(1)}%;height:100%;background:${barColor};border-radius:1px;transition:width 0.5s,left 0.5s;"></div>
         <div style="position:absolute;top:0;left:${midPct}%;width:1px;height:100%;background:var(--border-dark);"></div>

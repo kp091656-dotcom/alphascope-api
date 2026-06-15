@@ -757,9 +757,9 @@ function _renderAccuracyChart(canvasId, thoughts) {
 // ── streak 徽章 ──
 function _streakBadge(streak) {
   if (!streak || streak === 0) return '';
-  if (streak >= 5)  return `<span style="font-size:0.6rem;padding:2px 8px;border-radius:99px;background:rgba(220,38,38,0.12);color:var(--up);border:1px solid rgba(220,38,38,0.3);font-weight:700;">🔥 神準週 ×${streak}</span>`;
-  if (streak >= 3)  return `<span style="font-size:0.6rem;padding:2px 8px;border-radius:99px;background:rgba(220,38,38,0.08);color:var(--up);border:1px solid rgba(220,38,38,0.2);font-weight:600;">連中 ${streak} 次</span>`;
-  if (streak <= -3) return `<span style="font-size:0.6rem;padding:2px 8px;border-radius:99px;background:rgba(22,163,74,0.08);color:var(--down);border:1px solid rgba(22,163,74,0.2);font-weight:600;">🔍 反省中</span>`;
+  if (streak >= 5)  return `<span style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:rgba(220,38,38,0.12);color:var(--up);border:1px solid rgba(220,38,38,0.3);font-weight:700;">🔥 神準週 ×${streak}</span>`;
+  if (streak >= 3)  return `<span style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:rgba(220,38,38,0.08);color:var(--up);border:1px solid rgba(220,38,38,0.2);font-weight:600;">連中 ${streak} 次</span>`;
+  if (streak <= -3) return `<span style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:rgba(22,163,74,0.08);color:var(--down);border:1px solid rgba(22,163,74,0.2);font-weight:600;">🔍 反省中</span>`;
   return '';
 }
 
@@ -772,7 +772,7 @@ function _confBadge(conf) {
     '低': { bg: 'rgba(148,163,184,0.08)',color: 'var(--muted)', border: 'rgba(148,163,184,0.2)' },
   };
   const s = map[conf] || map['中'];
-  return `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:${s.bg};color:${s.color};border:1px solid ${s.border};font-weight:600;">信心${conf}</span>`;
+  return `<span style="font-size:0.65rem;padding:2px 7px;border-radius:99px;background:${s.bg};color:${s.color};border:1px solid ${s.border};font-weight:600;">信心${conf}</span>`;
 }
 
 async function loadAlphaThoughts() {
@@ -815,7 +815,7 @@ async function loadAlphaThoughts() {
       normal:        { text: '正常盤整',   color: 'var(--muted)', bg: 'rgba(148,163,184,0.07)', border: 'rgba(148,163,184,0.18)' },
     };
     const regimeStyle = REGIME_LABEL[marketRegime] || REGIME_LABEL.normal;
-    const regimeHtml = `<span style="font-size:0.55rem;padding:1px 7px;border-radius:99px;background:${regimeStyle.bg};color:${regimeStyle.color};border:1px solid ${regimeStyle.border};font-weight:600;">${regimeStyle.text}</span>`;
+    const regimeHtml = `<span style="font-size:0.65rem;padding:2px 7px;border-radius:99px;background:${regimeStyle.bg};color:${regimeStyle.color};border:1px solid ${regimeStyle.border};font-weight:600;">${regimeStyle.text}</span>`;
 
     // 從最新隨筆取 streak（已評分中最新的）
     const latestStreak = list.find(t => t.streak !== undefined && t.streak !== null)?.streak ?? 0;
@@ -834,16 +834,16 @@ async function loadAlphaThoughts() {
     // 信心分布進度條：flex:0 會讓單色撐滿，改用 width% 避免此問題
     const confBarHtml = confTotal > 0 ? `
       <div style="margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);">
-        <div style="font-size:0.55rem;color:var(--muted);margin-bottom:0.3rem;">近 24 篇信心分布</div>
+        <div style="font-size:0.62rem;color:var(--muted);margin-bottom:0.3rem;">近 24 篇信心分布</div>
         <div style="display:flex;height:5px;border-radius:99px;overflow:hidden;background:var(--border-dark);">
           <div style="width:${Math.round(confCounts['高']/confTotal*100)}%;background:rgba(220,38,38,0.6);transition:width 0.4s;" title="高：${confCounts['高']}篇"></div>
           <div style="width:${Math.round(confCounts['中']/confTotal*100)}%;background:rgba(251,191,36,0.6);transition:width 0.4s;" title="中：${confCounts['中']}篇"></div>
           <div style="width:${Math.round(confCounts['低']/confTotal*100)}%;background:rgba(148,163,184,0.4);transition:width 0.4s;" title="低：${confCounts['低']}篇"></div>
         </div>
         <div style="display:flex;gap:0.7rem;margin-top:0.25rem;">
-          <span style="font-size:0.52rem;color:var(--up);">高 ${confCounts['高']}</span>
-          <span style="font-size:0.52rem;color:#d97706;">中 ${confCounts['中']}</span>
-          <span style="font-size:0.52rem;color:var(--muted);">低 ${confCounts['低']}</span>
+          <span style="font-size:0.62rem;color:var(--up);">高 ${confCounts['高']}</span>
+          <span style="font-size:0.62rem;color:#d97706;">中 ${confCounts['中']}</span>
+          <span style="font-size:0.62rem;color:var(--muted);">低 ${confCounts['低']}</span>
         </div>
       </div>` : '';
 
@@ -860,27 +860,27 @@ async function loadAlphaThoughts() {
               ${rank}
               ${_streakBadge(latestStreak)}
             </div>
-            <div style="font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:0.4rem;margin-top:0.15rem;flex-wrap:wrap;">
+            <div style="font-size:0.65rem;color:var(--muted);display:flex;align-items:center;gap:0.4rem;margin-top:0.15rem;flex-wrap:wrap;">
               共 ${total} 篇 ｜ 預測命中率 ${accStr}
               ${regimeHtml}
             </div>
           </div>
-          ${accPct !== null ? `<div style="font-size:0.8rem;font-weight:700;color:${accPct>=55?'var(--up)':accPct>=40?'#d97706':'var(--down)'};">${accPct}%</div>` : ''}
+          ${accPct !== null ? `<div style="font-size:0.85rem;font-weight:700;color:${accPct>=55?'var(--up)':accPct>=40?'#d97706':'var(--down)'};">${accPct}%</div>` : ''}
         </div>
         <div style="background:var(--border-dark);border-radius:99px;height:4px;overflow:hidden;">
           <div style="width:${progress}%;height:100%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:99px;transition:width 0.6s;"></div>
         </div>
-        <div style="font-size:0.58rem;color:var(--muted);margin-top:0.3rem;">${nextLabel}</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">${nextLabel}</div>
         ${specialties.length ? `
         <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.5rem;">
-          ${specialties.map(s => `<span style="font-size:0.58rem;padding:1px 8px;border-radius:99px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.18);">${s}</span>`).join('')}
+          ${specialties.map(s => `<span style="font-size:0.62rem;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.18);">${s}</span>`).join('')}
         </div>` : ''}
         <div style="margin-top:0.5rem;">
-          <div style="font-size:0.55rem;color:var(--muted);margin-bottom:0.25rem;">預測命中率趨勢（滾動 10 篇）</div>
+          <div style="font-size:0.62rem;color:var(--muted);margin-bottom:0.25rem;">預測命中率趨勢（滾動 10 篇）</div>
           <canvas id="alphaAccChart" style="width:100%;height:72px;display:block;"></canvas>
         </div>
         ${confBarHtml}
-        ${styleMemo ? `<div style="font-size:0.65rem;color:var(--muted);margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);opacity:0.75;font-style:italic;">「${styleMemo}」</div>` : ''}
+        ${styleMemo ? `<div style="font-size:0.68rem;color:var(--muted);margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);opacity:0.75;font-style:italic;">「${styleMemo}」</div>` : ''}
       </div>`;
 
     // ── 週報卡片 ──
@@ -894,10 +894,10 @@ async function loadAlphaThoughts() {
       ">
         <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;flex-wrap:wrap;">
           <span style="font-size:0.68rem;font-weight:700;color:#d97706;">📋 本週總結</span>
-          <span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
-          <span style="font-size:0.55rem;color:var(--muted);margin-left:auto;">${ago}</span>
+          <span style="font-size:0.62rem;padding:2px 7px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
+          <span style="font-size:0.62rem;color:var(--muted);margin-left:auto;">${ago}</span>
         </div>
-        <div style="font-size:0.82rem;color:var(--text);line-height:1.7;white-space:pre-line;">${recap.content}</div>
+        <div style="font-size:0.875rem;color:var(--text);line-height:1.75;white-space:pre-line;">${recap.content}</div>
       </div>`;
     })() : '';
 
@@ -917,36 +917,37 @@ async function loadAlphaThoughts() {
       const rs     = RESULT_STYLE[t.pred_result] || RESULT_STYLE.pending;
       const ago    = _alphaTimeAgo(t.created_at);
       const isFirst = i === 0;
-      const rankBadge = t.rank_at_post ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.2);">${RANK_ICON[t.rank_at_post]||''}${t.rank_at_post}</span>` : '';
+      const rankBadge = t.rank_at_post ? `<span style="font-size:0.62rem;padding:2px 7px;border-radius:99px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.2);">${RANK_ICON[t.rank_at_post]||''}${t.rank_at_post}</span>` : '';
       const isHighConfWrong = t.confidence === '高' && t.pred_result === 'wrong';
       const rsHtml = isHighConfWrong
-        ? `<span style="font-size:0.58rem;color:var(--down);font-weight:700;">✗ 高信打臉</span>`
-        : `<span style="font-size:0.58rem;color:${rs.color};font-weight:600;">${rs.text}</span>`;
+        ? `<span style="font-size:0.65rem;color:var(--down);font-weight:700;">✗ 高信打臉</span>`
+        : `<span style="font-size:0.65rem;color:${rs.color};font-weight:600;">${rs.text}</span>`;
       const isReflection = t.angle === 'reflection';
       const cardBg     = isReflection ? 'rgba(251,191,36,0.04)' : isFirst ? 'rgba(99,102,241,0.06)' : 'var(--surface)';
       const cardBorder = isReflection ? 'rgba(251,191,36,0.25)' : isFirst ? 'rgba(99,102,241,0.25)' : 'var(--border-dark)';
-      const reflectionTag = isReflection ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:99px;background:rgba(251,191,36,0.12);color:#d97706;border:1px solid rgba(251,191,36,0.3);font-weight:600;">📝 檢討篇</span>` : '';
+      const reflectionTag = isReflection ? `<span style="font-size:0.62rem;padding:2px 7px;border-radius:99px;background:rgba(251,191,36,0.12);color:#d97706;border:1px solid rgba(251,191,36,0.3);font-weight:600;">📝 檢討篇</span>` : '';
       return `<div data-bet-id="${t.id}" data-pred-result="${t.pred_result}" style="
-        padding:0.9rem 1rem;border-radius:12px;
+        padding:1rem 1.1rem;border-radius:12px;
         background:${cardBg};
         border:1px solid ${cardBorder};
-        margin-bottom:0.65rem;
+        margin-bottom:0.75rem;
+        animation-delay:${i * 55}ms;
       ">
-        <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;flex-wrap:wrap;">
-          <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Alpha</span>
-          <span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
-          <span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:${p.bg};color:${p.color};border:1px solid ${p.border};font-weight:600;">${p.text}</span>
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.55rem;flex-wrap:wrap;">
+          <span style="font-size:0.78rem;font-weight:700;color:var(--text);">Alpha</span>
+          <span style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
+          <span style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:${p.bg};color:${p.color};border:1px solid ${p.border};font-weight:600;">${p.text}</span>
           ${_confBadge(t.confidence)}
           ${rsHtml}
           ${reflectionTag}
-          ${isFirst?'<span style="font-size:0.58rem;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);font-weight:600;">最新</span>':''}
+          ${isFirst?'<span style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);font-weight:600;">最新</span>':''}
           ${rankBadge}
-          <span style="font-size:0.58rem;color:var(--muted);margin-left:auto;">${ago}</span>
+          <span style="font-size:0.65rem;color:var(--muted);margin-left:auto;">${ago}</span>
         </div>
-        <div style="font-size:0.82rem;color:var(--text);line-height:1.7;white-space:pre-line;">${t.content}</div>
-        <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.4rem;flex-wrap:wrap;">
-          ${t.angle && t.angle !== 'reflection' ? `<span style="font-size:0.55rem;color:var(--muted);opacity:0.6;">話題：${t.angle}</span>` : ''}
-          ${t.pred_target && t.pred_target !== 'TAIEX' ? `<span style="font-size:0.55rem;padding:1px 6px;border-radius:3px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.15);">預測標的：${t.pred_target}</span>` : ''}
+        <div style="font-size:0.875rem;color:var(--text);line-height:1.75;white-space:pre-line;">${t.content}</div>
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.5rem;flex-wrap:wrap;">
+          ${t.angle && t.angle !== 'reflection' ? `<span style="font-size:0.62rem;color:var(--muted);opacity:0.6;">話題：${t.angle}</span>` : ''}
+          ${t.pred_target && t.pred_target !== 'TAIEX' ? `<span style="font-size:0.62rem;padding:2px 7px;border-radius:3px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.15);">預測標的：${t.pred_target}</span>` : ''}
         </div>
       </div>`;
     }).join('');

@@ -113,9 +113,9 @@ async function loadMktSignals() {
           <div style="flex:1;height:5px;background:var(--bg);border-radius:2px;overflow:hidden;">
             <div style="height:100%;width:${barW}%;background:${color};border-radius:2px;transition:width 0.6s;"></div>
           </div>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:${color};font-weight:700;width:52px;text-align:right;">${sign}${net.toLocaleString()}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:${color};font-weight:700;width:52px;text-align:right;font-variant-numeric:tabular-nums;">${sign}${net.toLocaleString()}</span>
         </div>
-        <div style="display:flex;gap:0.5rem;padding-left:42px;font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">
+        <div style="display:flex;gap:0.5rem;padding-left:42px;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">
           <span>C <b style="color:var(--up);">${callStr}</b></span>
           <span>P <b style="color:var(--down);">${putStr}</b></span>
         </div>
@@ -173,7 +173,7 @@ async function loadMktSignals() {
           <div style="flex:1;height:5px;background:var(--bg);border-radius:2px;overflow:hidden;">
             <div style="height:100%;width:${barW}%;background:${color};border-radius:2px;transition:width 0.6s;"></div>
           </div>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:${color};font-weight:700;width:52px;text-align:right;">${pos?'+':''}${val.toLocaleString()}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:${color};font-weight:700;width:52px;text-align:right;font-variant-numeric:tabular-nums;">${pos?'+':''}${val.toLocaleString()}</span>
         </div>`;
       }).join('');
 
@@ -203,7 +203,7 @@ async function loadMktSignals() {
           el.querySelector('div').style.opacity = '0.7';
           tmfTip.innerHTML = `<div style="color:var(--muted);margin-bottom:2px;">${d.date}</div>` +
             `<div>散戶多空比 <span style="color:${col};font-weight:700;">${r >= 0 ? '+' : ''}${r.toFixed(2)}%</span></div>` +
-            `<div style="color:var(--muted);font-size:0.55rem;">法人淨口 ${d.total_net >= 0 ? '+' : ''}${(d.total_net||0).toLocaleString()} ／ OI ${(d.total_oi||0).toLocaleString()}</div>`;
+            `<div style="color:var(--muted);font-size:0.65rem;">法人淨口 ${d.total_net >= 0 ? '+' : ''}${(d.total_net||0).toLocaleString()} ／ OI ${(d.total_oi||0).toLocaleString()}</div>`;
           tmfTip.style.display = 'block';
         });
         el.addEventListener('mousemove', e => {
@@ -217,7 +217,7 @@ async function loadMktSignals() {
       });
 
       document.getElementById('ms_tmfDates').innerHTML = bars.map(d =>
-        `<div style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.42rem;color:var(--muted);text-align:center;overflow:hidden;">${d.date.slice(5)}</div>`
+        `<div style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);text-align:center;overflow:hidden;">${d.date.slice(5)}</div>`
       ).join('');
 
       document.getElementById('ms_tmfTs').textContent = `公式：-1 × ${tn != null ? tn.toLocaleString() : '?'} ÷ ${to != null ? to.toLocaleString() : '?'} = ${ratio.toFixed(2)}%`;
@@ -457,7 +457,7 @@ async function loadOptions() {
           </div>
           <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:${color};font-weight:700;width:56px;text-align:right;">${sign}${net.toLocaleString()}</span>
         </div>
-        <div style="display:flex;gap:0.6rem;padding-left:42px;font-family:'IBM Plex Mono',monospace;font-size:0.57rem;color:var(--muted);">
+        <div style="display:flex;gap:0.6rem;padding-left:42px;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">
           <span>買權 <b style="color:var(--up);">${callStr}</b></span>
           <span>賣權 <b style="color:var(--down);">${putStr}</b></span>
         </div>
@@ -534,7 +534,7 @@ async function openStockModal(stock) {
     { label:'昨收', val: `$${stock.prev?.toFixed(2) ?? '—'}`, color: 'var(--muted)' },
     { label:'漲跌', val: `${sign}${((stock.price - stock.prev) || 0).toFixed(2)}`, color },
   ].map(s => `<div style="background:var(--surface);border-radius:8px;padding:0.5rem 0.7rem;box-shadow:0 0 0 1px var(--border);">
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">${s.label}</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">${s.label}</div>
     <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;color:${s.color};">${s.val}</div>
   </div>`).join('');
 
@@ -581,8 +581,8 @@ async function openStockModal(stock) {
       const chgPct = parseFloat((chg / prev * 100).toFixed(2));
       const sign   = chgPct >= 0 ? '+' : '';
       const color  = chgPct >= 0 ? '#dc2626' : '#16a34a';
-      const limitTag = price >= up   ? '<span style="font-size:0.55rem;margin-left:4px;color:#ff9500;font-weight:700;">漲停</span>'
-                     : price <= down ? '<span style="font-size:0.55rem;margin-left:4px;color:#06b6d4;font-weight:700;">跌停</span>'
+      const limitTag = price >= up   ? '<span style="font-size:0.65rem;margin-left:4px;color:#ff9500;font-weight:700;">漲停</span>'
+                     : price <= down ? '<span style="font-size:0.65rem;margin-left:4px;color:#06b6d4;font-weight:700;">跌停</span>'
                      : '';
       document.getElementById('modalTodayStats').innerHTML = [
         { label:'即時價 ⚡', val: `$${price.toFixed(2)}${limitTag}`, color, raw: true },
@@ -590,7 +590,7 @@ async function openStockModal(stock) {
         { label:'昨收',      val: `$${prev.toFixed(2)}`,             color: 'var(--muted)' },
         { label:'漲跌',      val: `${sign}${chg.toFixed(2)}`,        color },
       ].map(s => `<div style="background:var(--surface);border-radius:8px;padding:0.5rem 0.7rem;box-shadow:0 0 0 1px var(--border);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">${s.label}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">${s.label}</div>
         <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;color:${s.color};">${s.raw ? s.val : s.val}</div>
       </div>`).join('');
       const vol = parseInt(row.v);
@@ -599,7 +599,7 @@ async function openStockModal(stock) {
         if (nameEl && !nameEl.querySelector('.mis-time')) {
           const timeTag = document.createElement('span');
           timeTag.className = 'mis-time';
-          timeTag.style.cssText = 'font-size:0.55rem;color:var(--muted);margin-left:0.5rem;font-family:"IBM Plex Mono",monospace;font-weight:400;';
+          timeTag.style.cssText = 'font-size:0.65rem;color:var(--muted);margin-left:0.5rem;font-family:"IBM Plex Mono",monospace;font-weight:400;';
           timeTag.textContent = `${row.t} · ${(vol/1000).toFixed(0)}k張`;
           nameEl.appendChild(timeTag);
         }
@@ -690,7 +690,7 @@ async function _loadModalStats(stock) {
       { label:'上漲天數', val:`${upDays} / ${data.length}`, color:'var(--accent2)' },
       { label:'單日最大漲/跌', val:`+${maxGain}% / ${maxLoss}%`, color:'var(--muted)' },
     ].map(s => `<div style="background:var(--surface);border-radius:8px;padding:0.5rem 0.7rem;box-shadow:0 0 0 1px var(--border);">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);">${s.label}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">${s.label}</div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:700;color:${s.color};margin-top:2px;">${s.val}</div>
     </div>`).join('');
   } catch(e) { /* 靜默 */ }
@@ -745,7 +745,7 @@ async function runStockAI() {
     const now  = new Date();
     const ts   = now.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false,
       month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const tsHtml   = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:0.5rem;opacity:0.75;">◆ AI 生成｜${ts}</div>`;
+    const tsHtml   = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);margin-bottom:0.5rem;opacity:0.75;">◆ AI 生成｜${ts}</div>`;
     resultEl.innerHTML = tsHtml + text.replace(/\n/g, '<br>');
     resultEl.style.display = 'block';
     btn.textContent = '✦ 重新生成';
@@ -767,7 +767,7 @@ document.addEventListener('keydown', e => {
 async function renderMaxPainTrend(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 趨勢載入中…</span>';
+  el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:var(--muted);">Max Pain 趨勢載入中…</span>';
   try {
     // ── 每天取最高優先有值的合約：weekly_fri → weekly_wed → monthly ──
     const contractPriority = ['weekly_fri', 'weekly_wed', 'monthly'];
@@ -790,7 +790,7 @@ async function renderMaxPainTrend(containerId) {
     // usedContract 取最新那天的合約類型（用於標籤）
     let usedContract = rows.length ? rows[0].contract_type : '';
     if (rows.length < 2) {
-      el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.58rem;color:var(--muted);">Max Pain 資料累積中…</span>';
+      el.innerHTML = '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:var(--muted);">Max Pain 資料累積中…</span>';
       return;
     }
     const data = [...rows].reverse();
@@ -871,7 +871,7 @@ async function renderMaxPainTrend(containerId) {
     // ── 合約類型標籤 ──
     const ctLabel = usedContract === 'weekly_fri' ? '近週五' : usedContract === 'weekly_wed' ? '近週三' : '月選';
     const label = document.createElement('div');
-    label.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);margin-bottom:4px;";
+    label.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);margin-bottom:4px;";
     label.textContent = `近 ${data.length} 日 Max Pain 走勢（${ctLabel}）`;
     wrapper.appendChild(label);
 
@@ -884,7 +884,7 @@ async function renderMaxPainTrend(containerId) {
     const tip = document.createElement('div');
     tip.style.cssText = [
       'position:absolute;pointer-events:none;display:none;',
-      "font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;",
+      "font-family:'IBM Plex Mono',monospace;font-size:0.65rem;font-weight:700;",
       'color:#818cf8;background:var(--surface);border:1px solid var(--border);',
       'border-radius:5px;padding:2px 6px;white-space:nowrap;',
       'transform:translate(-50%,-100%);margin-top:-6px;z-index:10;',
@@ -935,7 +935,7 @@ async function renderMaxPainTrend(containerId) {
     summary.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-top:4px;';
     summary.innerHTML = `
       <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;font-weight:700;color:#818cf8;">${latest.toLocaleString()} 點</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:${diffColor};">${diff >= 0 ? '+' : ''}${diff.toLocaleString()} vs 前日</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:${diffColor};">${diff >= 0 ? '+' : ''}${diff.toLocaleString()} vs 前日</span>
     `;
     wrapper.appendChild(summary);
     el.appendChild(wrapper);
@@ -988,7 +988,7 @@ function renderRiskOverview(positions) {
           { label:'持倉檔數',     val: `${open.length} 檔`, color:'var(--muted)' },
           { label:'平均持有',     val: `${avgDays} 天`,     color:'var(--muted)' },
         ].map(s => `<div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.65rem;box-shadow:0 0 0 1px var(--border);">
-          <div style="font-size:0.52rem;color:var(--muted);margin-bottom:2px;">${s.label}</div>
+          <div style="font-size:0.62rem;color:var(--muted);margin-bottom:2px;">${s.label}</div>
           <div style="font-size:0.72rem;font-weight:700;color:${s.color};">${s.val}</div>
         </div>`).join('')}
       </div>
@@ -1009,7 +1009,7 @@ function renderRiskOverview(positions) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:0.4rem;">
               <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;font-weight:700;color:var(--text);">${p.stock_id} ${p.stock_name||''}</span>
-              <span style="font-size:0.52rem;padding:1px 5px;border-radius:4px;background:${isLong?'rgba(220,38,38,0.1)':'rgba(22,163,74,0.1)'};color:${isLong?'var(--up)':'var(--down)'};font-family:'IBM Plex Mono',monospace;">${p.style||'多單'}</span>
+              <span style="font-size:0.62rem;padding:1px 5px;border-radius:4px;background:${isLong?'rgba(220,38,38,0.1)':'rgba(22,163,74,0.1)'};color:${isLong?'var(--up)':'var(--down)'};font-family:'IBM Plex Mono',monospace;">${p.style||'多單'}</span>
               ${p.days ? `<span style="font-size:0.5rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">持有 ${p.days} 天</span>` : ''}
             </div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;font-weight:700;color:${pnlColor};">${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct.toFixed(2)}%</div>
@@ -1022,18 +1022,18 @@ function renderRiskOverview(positions) {
             ${slX  !== null ? `<div style="position:absolute;top:-2px;left:${slX}%;transform:translateX(-50%);width:2px;height:14px;background:#6b7280;border-radius:2px;opacity:0.7;" title="停損 ${p.stop_loss}"></div>` : ''}
           </div>
           <div style="position:relative;height:14px;margin-bottom:2px;">
-            <span style="position:absolute;left:${entX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:#818cf8;white-space:nowrap;">進 ${p.entry_price}</span>
+            <span style="position:absolute;left:${entX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:#818cf8;white-space:nowrap;">進 ${p.entry_price}</span>
             <span style="position:absolute;left:${curX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.5rem;font-weight:700;color:${pnlColor};white-space:nowrap;">${p.cur}</span>
-            ${tgtX !== null ? `<span style="position:absolute;left:${tgtX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:#f59e0b;white-space:nowrap;">目標 ${p.target_price}</span>` : ''}
-            ${slX  !== null ? `<span style="position:absolute;left:${slX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:#6b7280;white-space:nowrap;">停損 ${p.stop_loss}</span>` : ''}
+            ${tgtX !== null ? `<span style="position:absolute;left:${tgtX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:#f59e0b;white-space:nowrap;">目標 ${p.target_price}</span>` : ''}
+            ${slX  !== null ? `<span style="position:absolute;left:${slX}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:#6b7280;white-space:nowrap;">停損 ${p.stop_loss}</span>` : ''}
           </div>
           <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:4px;">
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">${p.shares} 張</span>
-            ${p.reason ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.reason}">${p.reason}</span>` : ''}
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">${p.shares} 張</span>
+            ${p.reason ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.reason}">${p.reason}</span>` : ''}
           </div>
         </div>`;
       }).join('')}
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);margin-top:0.5rem;opacity:0.7;">⚠ 市值以 Supabase 最新收盤價計算，非即時報價。僅供參考。</div>`;
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);margin-top:0.5rem;opacity:0.7;">⚠ 市值以 Supabase 最新收盤價計算，非即時報價。僅供參考。</div>`;
   }).catch(() => {
     el.style.display = 'block';
     el.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">部位風險總覽：無法取得最新收盤價，請稍後重試。</div>`;

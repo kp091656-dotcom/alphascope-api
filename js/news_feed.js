@@ -491,7 +491,7 @@ function requireOwner(callback) {
           取消
         </button>
       </div>
-      <div style="font-size:0.55rem;color:#aaa;margin-top:0.9rem;">解鎖狀態在本分頁關閉後自動清除。</div>
+      <div style="font-size:0.65rem;color:var(--muted);margin-top:0.9rem;">解鎖狀態在本分頁關閉後自動清除。</div>
     </div>`;
 
   document.body.appendChild(overlay);
@@ -678,7 +678,7 @@ ${headlines || '（今日暫無相關新聞）'}`;
       callGroq(prompt, 400, 0.3),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
     ]);
-    const disclaimer = '<div style="font-size:0.55rem;color:var(--muted);margin-top:0.5rem;opacity:0.75;">⚠ 內容僅基於載入之新聞標題摘要，具體數字請自行查證</div>';
+    const disclaimer = '<div style="font-size:0.65rem;color:var(--muted);margin-top:0.5rem;opacity:0.75;">⚠ 內容僅基於載入之新聞標題摘要，具體數字請自行查證</div>';
     el.innerHTML = `<div class="brief-text">${text || fallbacks[market]}</div>${disclaimer}`;
   } catch {
     el.innerHTML = `<div class="brief-text">${fallbacks[market]}</div>`;
@@ -956,8 +956,8 @@ function renderFuturesChart(sortKey) {
       const stooqSyms = ['%5E','EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','USDCNH','10USY','30USY','BTCUSD','ETHUSD'];
       const isST = stooqSyms.some(s => item.symbol.includes(s));
       const srcTag = isST
-        ? `<span style="font-size:0.42rem;padding:0 2px;border:1px solid #aaa;border-radius:2px;color:var(--muted);margin-right:3px;flex-shrink:0;">ST</span>`
-        : `<span style="font-size:0.42rem;padding:0 2px;border:1px solid #1a6bc8;border-radius:2px;color:#1a6bc8;margin-right:3px;flex-shrink:0;">FM</span>`;
+        ? `<span style="font-size:0.58rem;padding:1px 4px;border:1px solid #c4c4d4;border-radius:2px;color:var(--muted);margin-right:3px;flex-shrink:0;">ST</span>`
+        : `<span style="font-size:0.58rem;padding:1px 4px;border:1px solid #1a6bc8;border-radius:2px;color:#1a6bc8;margin-right:3px;flex-shrink:0;">FM</span>`;
 
       const leftPct  = isUp ? 0 : barW;
       const rightPct = isUp ? barW : 0;
