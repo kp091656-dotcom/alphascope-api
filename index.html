@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
-
+<body>
 <header>
   <div style="display:flex;align-items:center;gap:1.25rem">
     <div class="logo">Alpha<span style="color:#818cf8">Scope</span> <span class="logo-badge">BETA</span></div>
@@ -114,7 +114,7 @@
       <div id="wlList"><div style="font-size:0.78rem;color:var(--muted);padding:0.5rem 0;">尚未加入自選股</div></div>
     </div>
 
-    <div id="marketSummaryBox" style="display:none;margin-bottom:1.5rem;background:#fff;border:1.5px solid var(--accent);border-radius:10px;overflow:hidden;">
+    <div id="marketSummaryBox" style="display:none;margin-bottom:1.5rem;background:var(--surface);border:1.5px solid var(--accent);border-radius:10px;overflow:hidden;">
       <div style="background:var(--accent);padding:0.6rem 1.2rem;display:flex;align-items:center;justify-content:space-between;">
         <span style="color:#fff;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:700;letter-spacing:0.08em;">◆ 今日市場摘要 · Groq AI</span>
         <div style="display:flex;align-items:center;gap:0.6rem;">
@@ -166,7 +166,7 @@
           <button onclick="loadSentimentDemo()" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;padding:0.3rem 0.9rem;border:1px solid var(--accent2);border-radius:4px;background:transparent;color:var(--accent2);cursor:pointer;">Demo</button>
         </div>
       </div>
-      <div id="sentAiSummary" style="display:none;background:#fff;color:var(--text);border-radius:6px;padding:16px 20px;margin-bottom:18px;border-left:4px solid var(--accent);box-shadow:0 0 0 1px var(--border);">
+      <div id="sentAiSummary" style="display:none;background:var(--surface);color:var(--text);border-radius:6px;padding:16px 20px;margin-bottom:18px;border-left:4px solid var(--accent);box-shadow:0 0 0 1px var(--border);">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--accent);letter-spacing:0.12em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
           <span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;animation:sentPulse 1.5s infinite;"></span>
           AI SENTIMENT SUMMARY
@@ -384,7 +384,7 @@
             <div id="ms_maxPainTrend"></div>
             <div class="opt-inst-label" style="margin-top:0.75rem;">法人選擇權淨部位（口）</div>
             <div id="ms_instRows" style="display:flex;flex-direction:column;gap:0.28rem;"></div>
-            <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.7rem;"></div>
+            <div id="ms_optTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:right;margin-top:0.7rem;"></div>
           </div>
 
           <!-- 欄②：微台指散戶多空比 -->
@@ -399,22 +399,22 @@
               <div id="ms_tmfLabel" style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;padding:0.22rem 0.5rem;border-radius:4px;display:inline-block;margin-bottom:0.8rem;font-weight:600;"></div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.8rem;">
                 <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.6rem;">
-                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">三大法人合計淨額</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:3px;">三大法人合計淨額</div>
                   <div id="ms_tmfTotalNet" style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:700;">—</div>
                   <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);">口</div>
                 </div>
                 <div style="background:var(--bg);border-radius:8px;padding:0.5rem 0.6rem;">
-                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:3px;">全體未平倉量</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:3px;">全體未平倉量</div>
                   <div id="ms_tmfTotalOI" style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:700;">—</div>
                   <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);">口</div>
                 </div>
               </div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">法人淨部位（口）</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.35rem;">法人淨部位（口）</div>
               <div id="ms_tmfInstRows" style="display:flex;flex-direction:column;gap:0.25rem;margin-bottom:0.6rem;"></div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">近期散戶多空比（%）</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.35rem;">近期散戶多空比（%）</div>
               <div id="ms_tmfBars" style="display:flex;align-items:flex-end;gap:3px;height:44px;"></div>
               <div id="ms_tmfDates" style="display:flex;gap:3px;margin-top:3px;"></div>
-              <div id="ms_tmfTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.6rem;"></div>
+              <div id="ms_tmfTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:right;margin-top:0.6rem;"></div>
             </div>
           </div>
 
@@ -426,19 +426,19 @@
               <div id="ms_marginContent" style="display:none;">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.7rem;">
                   <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
-                    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融資餘額（億）</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">融資餘額（億）</div>
                     <div id="ms_marginBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
                     <div id="ms_marginChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
                   </div>
                   <div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.5rem;text-align:center;">
-                    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);">融券餘額（張）</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">融券餘額（張）</div>
                     <div id="ms_shortBal" style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:800;margin-top:3px;line-height:1.1;">—</div>
                     <div id="ms_shortChg" style="font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;margin-top:3px;"></div>
                   </div>
                 </div>
-                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.35rem;">融資近10日趨勢（億）</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.35rem;">融資近10日趨勢（億）</div>
                 <div id="ms_marginBars" style="display:flex;align-items:flex-end;gap:3px;height:40px;"></div>
-                <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);text-align:right;margin-top:0.5rem;"></div>
+                <div id="ms_marginTs" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:right;margin-top:0.5rem;"></div>
               </div>
             </div>
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
@@ -508,7 +508,7 @@
                 <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">市場平均 β</span>
                 <span id="ms_avgBeta" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:600;">—</span>
               </div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;color:var(--muted);margin-bottom:0.3rem;">高波動 Top 5</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.3rem;">高波動 Top 5</div>
               <div id="ms_betaTop5" style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.6rem;"></div>
               <div id="ms_betaSignal" style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;padding:0.35rem 0.6rem;border-radius:6px;text-align:center;font-weight:600;"></div>
             </div>
@@ -524,89 +524,89 @@
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">🏢 三大法人現貨 <span style="font-size:0.52rem;opacity:0.7;">億元</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">🏢 三大法人現貨 <span style="font-size:0.62rem;opacity:0.7;">億元</span></div>
               <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
                 <thead><tr>
-                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買進</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣出</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買賣超</th>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買進</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣出</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買賣超</th>
                 </tr></thead>
                 <tbody id="chips-spot-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
               </table>
               <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計</span>
+                <span style="font-size:0.62rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計</span>
                 <span id="chips-spot-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
               </div>
             </div>
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📈 台指期 TX（大台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📈 台指期 TX（大台）<span style="font-size:0.62rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
               <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
                 <thead><tr>
-                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">多方</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">空方</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額</th>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">多方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">空方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額</th>
                 </tr></thead>
                 <tbody id="chips-tx-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
               </table>
               <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計淨額</span>
+                <span style="font-size:0.62rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">三大法人合計淨額</span>
                 <span id="chips-tx-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
               </div>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📉 小型台指 MTX（小台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">📉 小型台指 MTX（小台）<span style="font-size:0.62rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
               <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
                 <thead><tr>
-                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
                 </tr></thead>
                 <tbody id="chips-mtx-body"><tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
               </table>
               <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
+                <span style="font-size:0.62rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
                 <span id="chips-mtx-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
               </div>
             </div>
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">🔬 微型台指 TMF（微台）<span style="font-size:0.52rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;">🔬 微型台指 TMF（微台）<span style="font-size:0.62rem;opacity:0.7;margin-left:4px;">OI 口數</span></div>
               <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
                 <thead><tr>
-                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨額口數</th>
                 </tr></thead>
                 <tbody id="chips-tmf-body"><tr><td colspan="2" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
               </table>
               <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:0.52rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
+                <span style="font-size:0.62rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">合計淨額</span>
                 <span id="chips-tmf-total" style="font-size:0.8rem;font-weight:700;font-family:'IBM Plex Mono',monospace;"></span>
               </div>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.5rem;">
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#ef4444;font-weight:600;">▲ 選擇權 CALL（買權 OI）<span style="font-size:0.52rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#ef4444;font-weight:600;">▲ 選擇權 CALL（買權 OI）<span style="font-size:0.62rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span></div>
               <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
                 <thead><tr>
-                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
                 </tr></thead>
                 <tbody id="chips-call-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
               </table>
             </div>
             <div style="border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 0 0 1px var(--border-dark);background:var(--surface);">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#22c55e;font-weight:600;">▼ 選擇權 PUT（賣權 OI）<span style="font-size:0.52rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.9rem;color:#22c55e;font-weight:600;">▼ 選擇權 PUT（賣權 OI）<span style="font-size:0.62rem;font-weight:400;margin-left:4px;color:var(--muted);">口數</span></div>
               <table style="width:100%;border-collapse:collapse;font-size:0.68rem;">
                 <thead><tr>
-                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
-                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.52rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
+                  <th style="text-align:left;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">身份</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">買方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">賣方</th>
+                  <th style="text-align:right;padding:4px 6px;color:var(--muted);font-size:0.62rem;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-weight:400;">淨部位</th>
                 </tr></thead>
                 <tbody id="chips-put-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px;font-size:0.65rem;">載入中…</td></tr></tbody>
               </table>
@@ -700,14 +700,14 @@
       </div>
 
       <!-- Alpha 隨筆專欄 -->
-      <div id="alphaThoughtsSection" style="margin-top:1.5rem;">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;">
+      <div id="alphaThoughtsSection" style="margin-top:2rem;">
+        <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:1rem;">
           <div style="font-size:1.05rem;font-weight:700;color:var(--text);">✍️ Alpha 隨筆</div>
-          <div style="font-size:0.65rem;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.2);">每日4次更新</div>
-          <span id="alphaThoughtsTs" style="font-size:0.62rem;color:var(--muted);margin-left:auto;"></span>
+          <div style="font-size:0.65rem;padding:3px 9px;border-radius:99px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.2);letter-spacing:0.02em;">每日4次更新</div>
+          <span id="alphaThoughtsTs" style="font-size:0.65rem;color:var(--muted);margin-left:auto;"></span>
         </div>
-        <div id="alphaChallengeStats" style="padding:0.85rem 1rem;border-radius:12px;background:var(--surface);border:1px solid var(--border-dark);margin-bottom:0.75rem;"></div>
-        <div id="alphaThoughtsFeed" style="max-height:520px;overflow-y:auto;padding-right:2px;">
+        <div id="alphaChallengeStats" style="padding:1rem 1.15rem;border-radius:12px;background:var(--surface);border:1px solid var(--border-dark);margin-bottom:1rem;"></div>
+        <div id="alphaThoughtsFeed" style="max-height:600px;overflow-y:auto;padding-right:2px;">
           <div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:1.5rem 0;">載入中…</div>
         </div>
       </div>
