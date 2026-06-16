@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-11（對話六）
+> 更新日期：2026-06-16（對話七）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -43,9 +43,6 @@
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表資料，不可提前刪除）
-- [ ] 執行 Supabase migration（Alpha 成長系統批次 1~4 新增欄位，見下方）
-- [ ] `alpha_thought.yml` 新增週五 16:00 weekly_recap 排程
-- [ ] HTML 補上 `#alphaChallengeStats` 容器（挑戰模式顯示用）
 
 -----
 
@@ -240,22 +237,9 @@ alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total
                         market_regime(text)      ← 批次4新增（normal|volatile|trending_up|trending_down|consolidating）
 ```
 
-### ⚠️ 待執行 Supabase Migration
+### Supabase Migration（已完成，2026-06-16）
 
-```sql
--- 批次 1
-ALTER TABLE alpha_thoughts
-  ADD COLUMN IF NOT EXISTS confidence text DEFAULT '中' CHECK (confidence IN ('高','中','低')),
-  ADD COLUMN IF NOT EXISTS streak integer DEFAULT 0;
-
--- 批次 4
-ALTER TABLE alpha_thoughts
-  ADD COLUMN IF NOT EXISTS pred_target text DEFAULT 'TAIEX';
-
-ALTER TABLE alpha_profile
-  ADD COLUMN IF NOT EXISTS specialties jsonb DEFAULT '[]',
-  ADD COLUMN IF NOT EXISTS market_regime text DEFAULT 'normal';
-```
+批次 1~4 欄位（`confidence`、`streak`、`pred_target`、`specialties`、`market_regime`）已確認存在於資料表，資料正常寫入。
 
 ### market_chips_daily 資料修正紀錄
 
@@ -275,26 +259,7 @@ ALTER TABLE alpha_profile
 |`backup.yml`         |週日 09:00 + push main|Supabase + pCloud 備份                                 |✅      |
 |`scrape_gifts.yml`   |手動                  |爬股東紀念品                                               |✅（停用自動）|
 |`scrape_egift.yml`   |每週日 09:30           |爬 eGift                                              |✅      |
-|`alpha_thought.yml`  |週一~五 09:00~14:00 每整點|Alpha 隨筆生成（POST endpoint=alpha_thought）              |✅      |
-|`weekly_recap.yml`   |週五 16:00（UTC 08:00）  |Alpha 週報生成（POST endpoint=weekly_recap）               |⚠️ 待建立 |
-
-### weekly_recap.yml 範本
-
-```yaml
-name: Alpha 週報
-on:
-  schedule:
-    - cron: '0 8 * * 5'   # 每週五 16:00 台灣時間
-  workflow_dispatch:
-jobs:
-  recap:
-    runs-on: ubuntu-latest
-    steps:
-      - name: POST weekly_recap
-        run: |
-          curl -X POST "${{ secrets.VERCEL_URL }}/api/news?endpoint=weekly_recap" \
-            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}"
-```
+|`alpha_thought.yml`  |週一~五 02:00/08:00/14:00/20:00 + 週五16:00週報|Alpha 隨筆生成 + 週報（整合在同一 yml，HOUR=08 週五觸發週報）|✅      |
 
 -----
 
