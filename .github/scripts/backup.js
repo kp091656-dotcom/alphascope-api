@@ -77,6 +77,21 @@ const TABLES = [
     params: `select=*&order=opened_at.desc`,
     desc: 'Alpha 持倉（全量）',
   },
+  {
+    name: 'alpha_thoughts',
+    params: `select=*&order=created_at.desc`,
+    desc: 'Alpha 隨筆（全量）',
+  },
+  {
+    name: 'alpha_profile',
+    params: `select=*`,
+    desc: 'Alpha 成長檔案（全量）',
+  },
+  {
+    name: 'shareholder_gifts',
+    params: `select=*&order=stock_id.asc`,
+    desc: '股東紀念品（全量）',
+  },
 ];
 
 // ── Supabase 查詢 ──
