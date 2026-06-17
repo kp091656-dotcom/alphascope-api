@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-16（對話七）
+> 更新日期：2026-06-17（對話八）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -20,6 +20,14 @@
 ## ⚠️ 已知問題
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
+
+### Alpha 弱點自覺系統（2026-06-17）
+
+- `alpha_thoughts` 新增 `market_regime` 欄位：每篇隨筆記錄生成當下的市場環境
+- `alpha_profile` 新增 `weakness_analysis`（jsonb）+ `weakest_regime`（text）
+- 評分完後（批次3之後）自動撈最近 60 篇已評分隨筆，交叉統計各 regime 命中率（樣本 ≥ 3 才計入）
+- 弱點注入 system prompt：若最弱環境命中率 < 50%，依當下是否為弱環境給出不同提示
+- 前端 `alpha.js` profileCard 新增「🧠 各市場環境命中率」進度條區塊（需 ≥ 2 種環境才顯示）
 
 ### Alpha tab 獨立（2026-06-11）
 
@@ -229,17 +237,29 @@ alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cau
                         rank_at_post(text),
                         confidence(高|中|低),   ← 批次1新增
                         streak(int),             ← 批次1新增（正=連勝，負=連錯）
-                        pred_target(text)        ← 批次4新增（TAIEX / 股票代號 / 板塊名）
+                        pred_target(text),       ← 批次4新增（TAIEX / 股票代號 / 板塊名）
+                        market_regime(text)      ← 對話8新增（記錄每篇生成當下的市場環境）
 
 alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total_calls,
                         rank(text), style_memo(text), updated_at,
-                        specialties(jsonb),      ← 批次4新增（例：["外資動向敏感","善抓恐慌底部"]）
-                        market_regime(text)      ← 批次4新增（normal|volatile|trending_up|trending_down|consolidating）
+                        specialties(jsonb),       ← 批次4新增（例：["外資動向敏感","善抓恐慌底部"]）
+                        market_regime(text),      ← 批次4新增（normal|volatile|trending_up|trending_down|consolidating）
+                        weakness_analysis(jsonb), ← 對話8新增（各market_regime命中率統計，樣本≥3才寫入）
+                        weakest_regime(text)      ← 對話8新增（命中率最低的環境）
 ```
 
 ### Supabase Migration（已完成，2026-06-16）
 
 批次 1~4 欄位（`confidence`、`streak`、`pred_target`、`specialties`、`market_regime`）已確認存在於資料表，資料正常寫入。
+
+### Supabase Migration（待執行，2026-06-17）
+
+對話8新增欄位，需手動執行：
+```sql
+ALTER TABLE alpha_thoughts ADD COLUMN IF NOT EXISTS market_regime text;
+ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakness_analysis jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
+```
 
 ### market_chips_daily 資料修正紀錄
 
@@ -362,6 +382,8 @@ alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total
 ### alpha_thought 背景資料（2026-06-10 擴充）
 
 每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。市場環境感知從上述資料自動判斷，附加第9行 context。
+
+每次生成同時：從最近 60 篇已評分隨筆計算各 market_regime 命中率 → 注入弱點自覺提示（對話8新增）。
 
 ### lastTradingDay() 時區修正（2026-06-11）
 
