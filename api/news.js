@@ -701,7 +701,7 @@ ${redditTitles || '無'}
       // ── 撈最近 24 篇隨筆（風格學習 + streak 計算用）──
       let recentThoughts = [];
       try {
-        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result,confidence`, { headers: hdrs });
+        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result,confidence,market_regime`, { headers: hdrs });
         recentThoughts = await recRes.json();
       } catch(e) { /* 忽略 */ }
 
@@ -844,6 +844,44 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
         }
       } catch(e) { /* 評分失敗不中斷 */ }
 
+      // ── 弱點分析：交叉分析 market_regime × pred_result ──
+      // 從最近 60 篇已評分隨筆，統計各市場環境下的命中率，存進 alpha_profile
+      try {
+        const weakRes = await fetch(
+          `${SB_URL}/rest/v1/alpha_thoughts?pred_result=in.(correct,wrong)&angle=neq.weekly_recap&order=created_at.desc&limit=60&select=pred_result,confidence,market_regime`,
+          { headers: hdrs }
+        );
+        const weakRows = await weakRes.json();
+        if (Array.isArray(weakRows) && weakRows.length >= 5) {
+          // 統計各 regime 的命中情況
+          const regimeStats = {};
+          for (const row of weakRows) {
+            const regime = row.market_regime || 'normal';
+            if (!regimeStats[regime]) regimeStats[regime] = { total: 0, correct: 0 };
+            regimeStats[regime].total++;
+            if (row.pred_result === 'correct') regimeStats[regime].correct++;
+          }
+          // 轉成命中率，只保留樣本數 ≥ 3 的
+          const weaknessAnalysis = {};
+          for (const [regime, s] of Object.entries(regimeStats)) {
+            if (s.total >= 3) {
+              weaknessAnalysis[regime] = {
+                total: s.total,
+                correct: s.correct,
+                rate: parseFloat((s.correct / s.total).toFixed(2)),
+              };
+            }
+          }
+          // 找出最弱的環境（命中率最低且樣本 ≥ 3）
+          const weakestRegime = Object.entries(weaknessAnalysis)
+            .sort((a, b) => a[1].rate - b[1].rate)[0]?.[0] || null;
+
+          // 寫回 profile（之後 PATCH 時一起帶入）
+          profile._weaknessAnalysis = weaknessAnalysis;
+          profile._weakestRegime = weakestRegime;
+        }
+      } catch(e) { /* 弱點分析失敗不中斷 */ }
+
       // ── 被打臉記錄：wrong 時自動生成檢討篇 ──
       // 每次最多觸發 1 篇（避免連錯時洗版），優先選 confidence=高 的
       try {
@@ -950,6 +988,31 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
         normal:         '',
       }[marketRegime] || '';
 
+      // ── 弱點自覺提示（注入 system prompt）──
+      let weaknessHint = '';
+      try {
+        const wa = profile._weaknessAnalysis || {};
+        const wr = profile._weakestRegime;
+        const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
+        if (wr && wa[wr] && wa[wr].rate < 0.5) {
+          const wrLabel = REGIME_ZH[wr] || wr;
+          const wrRate  = Math.round(wa[wr].rate * 100);
+          const curIsWeak = marketRegime === wr;
+          weaknessHint = `\n\n【你的弱點自覺】你在「${wrLabel}」環境下的歷史命中率只有 ${wrRate}%（${wa[wr].correct}/${wa[wr].total}）。`;
+          if (curIsWeak) {
+            weaknessHint += `今天正是這種環境——請特別謹慎，信心度不應超過「中」，措詞也要更保守。`;
+          } else {
+            weaknessHint += `今天環境還好，但要記住這個弱點，避免在類似盤況過度自信。`;
+          }
+          // 若有多個弱環境，補充最強環境
+          const bestEntry = Object.entries(wa).filter(([k]) => k !== wr).sort((a,b) => b[1].rate - a[1].rate)[0];
+          if (bestEntry && bestEntry[1].rate >= 0.6) {
+            const bestLabel = REGIME_ZH[bestEntry[0]] || bestEntry[0];
+            weaknessHint += `反之你在「${bestLabel}」環境表現最好（${Math.round(bestEntry[1].rate*100)}%），可以更有把握。`;
+          }
+        }
+      } catch(e) { /* 弱點提示失敗不中斷 */ }
+
       const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。頭銜：${newRank}。
 個性：直接、有點毒舌、偶爾自嘲，但永遠誠實。你不講廢話，不給模糊建議，說話像在跟老朋友講話。
 你有自己的觀點，不怕跟主流唱反調，但判斷永遠基於數據和盤面。
@@ -959,7 +1022,7 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
 {"content":"你的隨筆內容","prediction":"bullish|bearish|neutral","confidence":"高|中|低","pred_target":"TAIEX"}
 prediction 是你對明天方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
 confidence 是你對這次預測的信心程度（高=你有把握、中=普通、低=不確定）。
-pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}`;
+pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}${weaknessHint}`;
 
       const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出明日方向預測。`;
 
@@ -1015,7 +1078,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         const insertRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
           method: 'POST',
           headers: { ...hdrs, Prefer: 'return=representation' },
-          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank, confidence, streak: currentStreak, pred_target: predTarget }),
+          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank, confidence, streak: currentStreak, pred_target: predTarget, market_regime: marketRegime }),
         });
         const inserted = await insertRes.json();
 
@@ -1024,14 +1087,16 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           method: 'PATCH',
           headers: { ...hdrs, Prefer: 'return=minimal' },
           body: JSON.stringify({
-            total_posts:   newTotal,
-            correct_calls: profile.correct_calls,
-            total_calls:   profile.total_calls,
-            rank:          newRank,
-            style_memo:    styleMemo,
-            specialties:   specialties,
-            market_regime: marketRegime,
-            updated_at:    new Date().toISOString(),
+            total_posts:        newTotal,
+            correct_calls:      profile.correct_calls,
+            total_calls:        profile.total_calls,
+            rank:               newRank,
+            style_memo:         styleMemo,
+            specialties:        specialties,
+            market_regime:      marketRegime,
+            weakness_analysis:  profile._weaknessAnalysis || profile.weakness_analysis || {},
+            weakest_regime:     profile._weakestRegime || profile.weakest_regime || null,
+            updated_at:         new Date().toISOString(),
           }),
         });
 
