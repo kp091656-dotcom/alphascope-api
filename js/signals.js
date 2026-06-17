@@ -384,6 +384,7 @@ async function loadMktSignals() {
   loadSignalBacktest();
   loadValuationSignal();
   loadBetaSignal();
+  loadTechnicalSignal();
   } catch(e) {
     console.error('[loadMktSignals] error:', e);
   } finally {
@@ -942,6 +943,209 @@ async function renderMaxPainTrend(containerId) {
   } catch(e) {
     el.innerHTML = '';
     console.warn('[renderMaxPainTrend]', e.message);
+  }
+}
+
+// ════════ 大盤技術分析 ════════
+async function loadTechnicalSignal() {
+  let el = document.getElementById("technicalSignalCard");
+  if (!el) {
+    const panel = document.getElementById("signalPanel");
+    if (!panel) return;
+    el = document.createElement("div");
+    el.id = "technicalSignalCard";
+    el.style.cssText = "background:var(--card);border-radius:16px;padding:1.25rem;box-shadow:0 0 0 1px var(--border);margin-bottom:1rem;";
+    panel.appendChild(el);
+  }
+  el.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:var(--muted);">技術指標計算中…</div>';
+
+  try {
+    const rows = await sbFetch('stock_daily_twse',
+      'stock_id=eq.TAIEX&order=date.desc&limit=120&select=date,close');
+    if (!rows || rows.length < 26) {
+      el.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:var(--muted);">資料不足，無法計算技術指標</div>';
+      return;
+    }
+    const data = rows.slice().reverse(); // 舊→新
+    const closes = data.map(d => d.close);
+    const N = closes.length;
+
+    // ── MA ──
+    function ma(arr, period) {
+      if (arr.length < period) return null;
+      return arr.slice(-period).reduce((a, b) => a + b, 0) / period;
+    }
+    const ma5  = ma(closes, 5);
+    const ma20 = ma(closes, 20);
+    const ma60 = ma(closes, 60);
+    const cur  = closes[N - 1];
+
+    // ── 布林通道（20,2）──
+    const bArr = closes.slice(-20);
+    const bMa  = bArr.reduce((a, b) => a + b, 0) / 20;
+    const bStd = Math.sqrt(bArr.reduce((s, v) => s + (v - bMa) ** 2, 0) / 20);
+    const bbUpper = bMa + 2 * bStd;
+    const bbLower = bMa - 2 * bStd;
+    const bbPct   = bStd > 0 ? ((cur - bbLower) / (bbUpper - bbLower) * 100) : 50;
+
+    // ── RSI(14) ──
+    function calcRSI(arr, period) {
+      if (arr.length < period + 1) return null;
+      const diffs = arr.slice(-(period + 1)).map((v, i, a) => i === 0 ? 0 : v - a[i - 1]).slice(1);
+      const gains = diffs.map(d => d > 0 ? d : 0);
+      const loses = diffs.map(d => d < 0 ? -d : 0);
+      const avgG  = gains.reduce((a, b) => a + b, 0) / period;
+      const avgL  = loses.reduce((a, b) => a + b, 0) / period;
+      return avgL === 0 ? 100 : 100 - 100 / (1 + avgG / avgL);
+    }
+    const rsi14 = calcRSI(closes, 14);
+
+    // ── KD(9,3,3) ──
+    function calcKD(arr, n = 9, m = 3) {
+      if (arr.length < n) return { k: null, d: null };
+      const sub = arr.slice(-n);
+      const H = Math.max(...sub), L = Math.min(...sub);
+      const rsv = H === L ? 50 : (arr[arr.length - 1] - L) / (H - L) * 100;
+      // 簡化：單步 EMA-like（實務上需迭代，這裡取近似）
+      let k = 50, d = 50;
+      for (let i = Math.max(0, arr.length - 30); i < arr.length; i++) {
+        const w = arr.slice(Math.max(0, i - n + 1), i + 1);
+        const wH = Math.max(...w), wL = Math.min(...w);
+        const wRsv = wH === wL ? 50 : (arr[i] - wL) / (wH - wL) * 100;
+        k = (k * (m - 1) + wRsv) / m;
+        d = (d * (m - 1) + k) / m;
+      }
+      return { k, d };
+    }
+    const { k: kdK, d: kdD } = calcKD(closes);
+
+    // ── MACD(12,26,9) ──
+    function ema(arr, period) {
+      const k = 2 / (period + 1);
+      let val = arr[0];
+      for (let i = 1; i < arr.length; i++) val = arr[i] * k + val * (1 - k);
+      return val;
+    }
+    function calcMACD(arr) {
+      if (arr.length < 26) return { macd: null, signal: null, hist: null };
+      const ema12Arr = [], ema26Arr = [];
+      for (let i = 11; i < arr.length; i++) ema12Arr.push(ema(arr.slice(0, i + 1), 12));
+      for (let i = 25; i < arr.length; i++) ema26Arr.push(ema(arr.slice(0, i + 1), 26));
+      const diffArr = ema26Arr.map((v26, i) => ema12Arr[i + 14] - v26);
+      const macd   = diffArr[diffArr.length - 1];
+      const signal = ema(diffArr.slice(-9), 9);
+      return { macd, signal, hist: macd - signal };
+    }
+    const { macd, signal: macdSig, hist: macdHist } = calcMACD(closes);
+
+    // ── 判斷訊號 ──
+    function sig(val, bull, bear) {
+      return val > bull ? { label: '偏多', color: 'var(--up)', score: 1 }
+           : val < bear ? { label: '偏空', color: 'var(--down)', score: -1 }
+           : { label: '中性', color: 'var(--muted)', score: 0 };
+    }
+
+    const rsiSig   = rsi14 != null ? sig(rsi14, 55, 45) : null;
+    const kdSig    = kdK   != null ? (kdK > kdD ? { label: 'K>D 黃金叉', color: 'var(--up)', score: 1 } : { label: 'K<D 死亡叉', color: 'var(--down)', score: -1 }) : null;
+    const macdSig2 = macd  != null ? (macd > 0 && macdHist > 0 ? { label: 'MACD 多頭', color: 'var(--up)', score: 1 } : macd < 0 && macdHist < 0 ? { label: 'MACD 空頭', color: 'var(--down)', score: -1 } : { label: 'MACD 中性', color: 'var(--muted)', score: 0 }) : null;
+    const bbSig    = { label: bbPct > 80 ? '近上軌壓力' : bbPct < 20 ? '近下軌支撐' : '通道中部', color: bbPct > 80 ? 'var(--down)' : bbPct < 20 ? 'var(--up)' : 'var(--muted)', score: bbPct > 80 ? -0.5 : bbPct < 20 ? 0.5 : 0 };
+    const maSig    = ma5 && ma20 ? (ma5 > ma20 ? { label: 'MA5>MA20 多排', color: 'var(--up)', score: 1 } : { label: 'MA5<MA20 空排', color: 'var(--down)', score: -1 }) : null;
+
+    // ── 綜合技術分數 ──
+    const techScore = [rsiSig, kdSig, macdSig2, bbSig, maSig]
+      .filter(Boolean).reduce((s, v) => s + (v.score || 0), 0);
+    const techTitle = techScore >= 2.5 ? '技術面偏多' : techScore <= -2.5 ? '技術面偏空' : techScore >= 1 ? '技術略偏多' : techScore <= -1 ? '技術略偏空' : '技術面中性';
+    const techColor = techScore >= 1 ? 'var(--up)' : techScore <= -1 ? 'var(--down)' : 'var(--muted)';
+
+    // ── 支撐/壓力位 ──
+    const supportLevel  = ma60 ? Math.round(ma60) : Math.round(bbLower);
+    const resistLevel   = Math.round(bbUpper);
+    const supportLabel  = ma60 ? 'MA60 支撐' : '布林下軌支撐';
+
+    // ── 寫入 sessionStorage 供 Alpha 隨筆使用 ──
+    try {
+      sessionStorage.setItem('tech_signal_cache', JSON.stringify({
+        rsi14:   rsi14 != null ? rsi14.toFixed(1) : null,
+        kdK:     kdK   != null ? kdK.toFixed(1)   : null,
+        kdD:     kdD   != null ? kdD.toFixed(1)   : null,
+        kdCross: kdSig?.label || null,
+        macd:    macd  != null ? macd.toFixed(1)  : null,
+        macdHist:macdHist != null ? macdHist.toFixed(1) : null,
+        ma5:     ma5   != null ? Math.round(ma5)  : null,
+        ma20:    ma20  != null ? Math.round(ma20) : null,
+        ma60:    ma60  != null ? Math.round(ma60) : null,
+        bbUpper: Math.round(bbUpper),
+        bbLower: Math.round(bbLower),
+        bbPct:   bbPct.toFixed(0),
+        techScore, techTitle,
+        support: supportLevel, resist: resistLevel,
+        ts: Date.now(),
+      }));
+    } catch(e) { /* sessionStorage 失敗不影響顯示 */ }
+
+    // ── 指標列表 ──
+    const indicators = [
+      {
+        name: 'RSI(14)',
+        val:  rsi14 != null ? rsi14.toFixed(1) : '—',
+        sig:  rsiSig,
+        desc: rsi14 != null ? (rsi14 >= 70 ? '超買區，注意拉回' : rsi14 <= 30 ? '超賣區，留意反彈' : `${rsi14.toFixed(1)}，動能${rsiSig?.label}`) : '資料不足',
+      },
+      {
+        name: 'KD(9,3,3)',
+        val:  kdK != null ? `K ${kdK.toFixed(0)} / D ${kdD.toFixed(0)}` : '—',
+        sig:  kdSig,
+        desc: kdSig?.label || '—',
+      },
+      {
+        name: 'MACD',
+        val:  macd != null ? `${macd >= 0 ? '+' : ''}${macd.toFixed(0)} / 柱 ${macdHist >= 0 ? '+' : ''}${macdHist?.toFixed(0)}` : '—',
+        sig:  macdSig2,
+        desc: macdSig2?.label || '—',
+      },
+      {
+        name: '布林通道',
+        val:  `${Math.round(bbLower)} ─ ${Math.round(bbUpper)}`,
+        sig:  bbSig,
+        desc: `現價位於通道 ${bbPct.toFixed(0)}% 位置｜${bbSig.label}`,
+      },
+      {
+        name: 'MA5/20/60',
+        val:  `${ma5 ? Math.round(ma5) : '—'} / ${ma20 ? Math.round(ma20) : '—'} / ${ma60 ? Math.round(ma60) : '—'}`,
+        sig:  maSig,
+        desc: maSig?.label || '均線資料不足',
+      },
+    ];
+
+    el.innerHTML = `
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--accent);border-left:2px solid var(--accent);padding-left:8px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:0.75rem;">📐 技術面分析</div>
+
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+        <div style="flex:1;">
+          <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;color:${techColor};">${techTitle}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:2px;">技術綜合評分 ${techScore >= 0 ? '+' : ''}${techScore.toFixed(1)} ／ 加權指數 ${cur.toLocaleString()}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">支撐 <span style="color:var(--up);font-weight:700;">${supportLevel.toLocaleString()}</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);margin-top:2px;">壓力 <span style="color:var(--down);font-weight:700;">${resistLevel.toLocaleString()}</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);opacity:0.6;margin-top:2px;">${supportLabel} / 布林上軌</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:0.4rem;">
+        ${indicators.map(ind => `
+          <div style="display:flex;align-items:center;gap:6px;padding:0.45rem 0.6rem;background:var(--bg);border-radius:8px;box-shadow:0 0 0 1px var(--border);">
+            <div style="flex-shrink:0;width:70px;font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">${ind.name}</div>
+            <div style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text);font-weight:700;">${ind.val}</div>
+            <div style="flex-shrink:0;padding:2px 7px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.58rem;font-weight:700;color:${ind.sig?.color || 'var(--muted)'};background:${ind.sig?.score > 0 ? 'rgba(220,38,38,0.1)' : ind.sig?.score < 0 ? 'rgba(22,163,74,0.1)' : 'rgba(128,128,128,0.1)'};">${ind.sig?.label || '—'}</div>
+          </div>
+          <div style="padding:0 0.6rem;font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);opacity:0.8;margin-bottom:0.1rem;">${ind.desc}</div>
+        `).join('')}
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);opacity:0.6;margin-top:0.75rem;">⚙ 前端自算｜TAIEX 近 ${N} 日收盤價 · 僅供參考</div>
+    `;
+  } catch(e) {
+    el.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">技術指標載入失敗：${e.message}</div>`;
   }
 }
 
