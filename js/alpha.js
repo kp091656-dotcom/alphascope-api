@@ -806,6 +806,40 @@ async function loadAlphaThoughts() {
     const styleMemo    = profile.style_memo || '';
     const specialties  = Array.isArray(profile.specialties) ? profile.specialties : [];
     const marketRegime = profile.market_regime || 'normal';
+    const weaknessAnalysis = profile.weakness_analysis && typeof profile.weakness_analysis === 'object' ? profile.weakness_analysis : {};
+    const weakestRegime    = profile.weakest_regime || null;
+
+    // ── 弱點分析 HTML ──
+    const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
+    const REGIME_COLOR = {
+      volatile:      '#ef4444',
+      trending_up:   'var(--up)',
+      trending_down: 'var(--down)',
+      consolidating: '#d97706',
+      normal:        'var(--muted)',
+    };
+    const weakEntries = Object.entries(weaknessAnalysis).sort((a, b) => a[1].rate - b[1].rate);
+    const weaknessHtml = weakEntries.length >= 2 ? (() => {
+      const bars = weakEntries.map(([regime, s]) => {
+        const label  = REGIME_ZH[regime] || regime;
+        const pct    = Math.round(s.rate * 100);
+        const color  = pct >= 60 ? 'var(--up)' : pct >= 45 ? '#d97706' : 'var(--down)';
+        const isWeak = regime === weakestRegime;
+        return `<div style="margin-bottom:0.35rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;">
+            <span style="font-size:0.62rem;color:${isWeak ? 'var(--down)' : 'var(--muted)'};">${isWeak ? '⚠ ' : ''}${label}</span>
+            <span style="font-size:0.62rem;font-weight:600;color:${color};">${pct}% <span style="font-weight:400;opacity:0.6;">${s.correct}/${s.total}</span></span>
+          </div>
+          <div style="height:4px;border-radius:99px;background:var(--border-dark);overflow:hidden;">
+            <div style="width:${pct}%;height:100%;border-radius:99px;background:${color};transition:width 0.5s;"></div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);">
+        <div style="font-size:0.62rem;color:var(--muted);margin-bottom:0.4rem;font-weight:600;">🧠 各市場環境命中率</div>
+        ${bars}
+      </div>`;
+    })() : '';
 
     const REGIME_LABEL = {
       volatile:      { text: '高波動恐慌', color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.2)' },
@@ -880,6 +914,7 @@ async function loadAlphaThoughts() {
           <canvas id="alphaAccChart" style="width:100%;height:72px;display:block;"></canvas>
         </div>
         ${confBarHtml}
+        ${weaknessHtml}
         ${styleMemo ? `<div style="font-size:0.68rem;color:var(--muted);margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border-dark);opacity:0.75;font-style:italic;">「${styleMemo}」</div>` : ''}
       </div>`;
 
