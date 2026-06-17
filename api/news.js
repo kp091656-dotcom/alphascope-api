@@ -563,10 +563,55 @@ ${redditTitles || '無'}
           fetchVIX().catch(() => null),
         ]);
 
-        // 加權指數
+        // 加權指數 + 技術指標（後端自算）
         if (taiexRes.status === 'fulfilled') {
           const taiex = (await taiexRes.value.json())[0];
           if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
+
+          // ── 技術指標（拉 120 天收盤自算）──
+          try {
+            const techR = await fetch(
+              `${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.asc&limit=120&select=date,close`,
+              { headers: hdrs, signal: AbortSignal.timeout(6000) }
+            );
+            const techRows = await techR.json();
+            const closes = techRows.map(r => r.close);
+            const N = closes.length;
+            if (N >= 26) {
+              // RSI(14)
+              const diffs = closes.slice(-15).map((v,i,a)=>i===0?0:v-a[i-1]).slice(1);
+              const avgG = diffs.filter(d=>d>0).reduce((s,v)=>s+v,0)/14;
+              const avgL = diffs.filter(d=>d<0).reduce((s,v)=>s+Math.abs(v),0)/14;
+              const rsi14 = +(avgL===0 ? 100 : 100-100/(1+avgG/avgL)).toFixed(1);
+              // KD(9,3,3)
+              let k=50,d=50;
+              for(let i=Math.max(0,N-30);i<N;i++){
+                const ww=closes.slice(Math.max(0,i-8),i+1);
+                const wH=Math.max(...ww),wL=Math.min(...ww);
+                const rsv=wH===wL?50:(closes[i]-wL)/(wH-wL)*100;
+                k=(k*2+rsv)/3; d=(d*2+k)/3;
+              }
+              // MACD(12,26,9)
+              const emaFn=(arr,p)=>{const kk=2/(p+1);return arr.reduce((e,v)=>v*kk+e*(1-kk));};
+              const macdVal = emaFn(closes.slice(-12),12)-emaFn(closes.slice(-26),26);
+              // MA
+              const ma5  = closes.slice(-5).reduce((s,v)=>s+v,0)/5;
+              const ma20 = closes.slice(-20).reduce((s,v)=>s+v,0)/20;
+              const ma60 = N>=60 ? closes.slice(-60).reduce((s,v)=>s+v,0)/60 : null;
+              // 布林通道(20,2)
+              const bArr=closes.slice(-20), bMa=bArr.reduce((s,v)=>s+v,0)/20;
+              const bStd=Math.sqrt(bArr.reduce((s,v)=>s+(v-bMa)**2,0)/20);
+              const bbU=Math.round(bMa+2*bStd), bbL=Math.round(bMa-2*bStd);
+              // 組合訊號摘要
+              const rsiLbl  = rsi14>=70?'超買':rsi14<=30?'超賣':rsi14>=55?'偏多':'偏空';
+              const kdLbl   = k>d?'K>D黃金叉':'K<D死亡叉';
+              const macdLbl = macdVal>0?'MACD零軸上':'MACD零軸下';
+              const maLbl   = ma5>ma20?'MA5>MA20多排':'MA5<MA20空排';
+              contextLines.push(
+                `技術面｜RSI(14)：${rsi14}（${rsiLbl}）KD：K=${k.toFixed(0)} D=${d.toFixed(0)}（${kdLbl}）${macdLbl}｜${maLbl}｜布林：${bbL}~${bbU}｜MA5 ${Math.round(ma5)} MA20 ${Math.round(ma20)}${ma60?' MA60 '+Math.round(ma60):''}`
+              );
+            }
+          } catch(_techErr) { /* 技術指標失敗不影響主流程 */ }
         }
 
         // 籌碼
