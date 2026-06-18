@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-17（對話八）
+> 更新日期：2026-06-18（對話九）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -134,6 +134,7 @@
 |`runStockAI()`                 |AI 個股快速研究                                         |
 |`renderMaxPainTrend(id)`       |Max Pain 近5日趨勢圖（weekly_fri→weekly_wed→monthly 優先序）|
 |`renderRiskOverview(positions)`|Alpha 部位風險總覽 + 個別進度條                              |
+|`loadTechnicalSignal()`        |大盤技術面卡片（RSI/KD/MACD/MA/布林），自動建立容器插入 signalPanel 底部；技術快照寫入 sessionStorage('tech_signal_cache')|
 
 ### chips.js 重要邏輯（2026-06-09 更新）
 
@@ -381,7 +382,7 @@ ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
 
 ### alpha_thought 背景資料（2026-06-10 擴充）
 
-每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。市場環境感知從上述資料自動判斷，附加第9行 context。
+每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。市場環境感知從上述資料自動判斷，附加第9行 context。**第10行（對話九新增）**：後端自算 TAIEX 近120天技術指標（RSI14/KD/MACD/MA5.20.60/布林），注入技術面摘要供 Alpha 隨筆參考。
 
 每次生成同時：從最近 60 篇已評分隨筆計算各 market_regime 命中率 → 注入弱點自覺提示（對話8新增）。
 
