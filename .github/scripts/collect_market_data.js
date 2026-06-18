@@ -439,22 +439,29 @@ async function collectOptions() {
     };
 
     const mpCandidates = [];
+    // 到期當天（結算日）視為已結算，不納入 Max Pain 計算
     if (nearMonthCD) {
       const exp = getMonthlyExpiry(nearMonthCD);
-      if (exp) mpCandidates.push({ label: `近月 ${nearMonthCD}`, byStrike: monthly.byStrike, expiry: exp });
+      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
+        mpCandidates.push({ label: `近月 ${nearMonthCD}`, byStrike: monthly.byStrike, expiry: exp });
+      else if (exp) console.log(`  ⏭ 近月 ${nearMonthCD} 今日結算，略過`);
     }
     if (nearWedCD) {
       const exp = getWeeklyWedExpiry(nearWedCD);
-      if (exp) mpCandidates.push({ label: `近週三 ${nearWedCD}`, byStrike: wed.byStrike, expiry: exp });
+      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
+        mpCandidates.push({ label: `近週三 ${nearWedCD}`, byStrike: wed.byStrike, expiry: exp });
+      else if (exp) console.log(`  ⏭ 近週三 ${nearWedCD} 今日結算，略過`);
     }
     if (nearFriCD) {
       const exp = getWeeklyFriExpiry(nearFriCD);
-      if (exp) mpCandidates.push({ label: `近週五 ${nearFriCD}`, byStrike: fri.byStrike, expiry: exp });
+      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
+        mpCandidates.push({ label: `近週五 ${nearFriCD}`, byStrike: fri.byStrike, expiry: exp });
+      else if (exp) console.log(`  ⏭ 近週五 ${nearFriCD} 今日結算，略過`);
     }
 
     const validCandidates = mpCandidates.filter(c => c.expiry >= tradeDateObj);
     validCandidates.sort((a, b) => a.expiry - b.expiry);
-    const mpCandidate = validCandidates[0] || mpCandidates[0] || null;
+    const mpCandidate = validCandidates[0] || null;
 
     let maxPain = null;
     if (mpCandidate) {
