@@ -357,6 +357,44 @@ export default async function handler(req, res) {
         twFuture          ? `台指期: ${twFuture.name} ${twFuture.close ?? ''}` : '',
       ].filter(Boolean).join(' | ');
 
+      // ── 技術指標（拉 120 天 TAIEX 自算）──
+      let techSummary = '';
+      try {
+        const techR = await fetch(
+          `${SUPABASE_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.asc&limit=120&select=close`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(6000) }
+        );
+        const techRows = await techR.json();
+        const closes = techRows.map(r => r.close);
+        const N = closes.length;
+        if (N >= 26) {
+          const diffs = closes.slice(-15).map((v,i,a)=>i===0?0:v-a[i-1]).slice(1);
+          const avgG = diffs.filter(d=>d>0).reduce((s,v)=>s+v,0)/14;
+          const avgL = diffs.filter(d=>d<0).reduce((s,v)=>s+Math.abs(v),0)/14;
+          const rsi14 = +(avgL===0 ? 100 : 100-100/(1+avgG/avgL)).toFixed(1);
+          let k=50,d=50;
+          for(let i=Math.max(0,N-30);i<N;i++){
+            const ww=closes.slice(Math.max(0,i-8),i+1);
+            const wH=Math.max(...ww),wL=Math.min(...ww);
+            const rsv=wH===wL?50:(closes[i]-wL)/(wH-wL)*100;
+            k=(k*2+rsv)/3; d=(d*2+k)/3;
+          }
+          const emaFn=(arr,p)=>{const kk=2/(p+1);return arr.reduce((e,v)=>v*kk+e*(1-kk));};
+          const macdVal = emaFn(closes.slice(-12),12)-emaFn(closes.slice(-26),26);
+          const ma5  = closes.slice(-5).reduce((s,v)=>s+v,0)/5;
+          const ma20 = closes.slice(-20).reduce((s,v)=>s+v,0)/20;
+          const ma60 = N>=60 ? closes.slice(-60).reduce((s,v)=>s+v,0)/60 : null;
+          const bArr=closes.slice(-20), bMa=bArr.reduce((s,v)=>s+v,0)/20;
+          const bStd=Math.sqrt(bArr.reduce((s,v)=>s+(v-bMa)**2,0)/20);
+          const bbU=Math.round(bMa+2*bStd), bbL=Math.round(bMa-2*bStd);
+          const rsiLbl  = rsi14>=70?'超買':rsi14<=30?'超賣':rsi14>=55?'偏多':'偏空';
+          const kdLbl   = k>d?'K>D黃金叉':'K<D死亡叉';
+          const macdLbl = macdVal>0?'MACD零軸上':'MACD零軸下';
+          const maLbl   = ma5>ma20?'MA5>MA20多排':'MA5<MA20空排';
+          techSummary = `RSI(14)：${rsi14}（${rsiLbl}）｜KD：K=${k.toFixed(0)} D=${d.toFixed(0)}（${kdLbl}）｜${macdLbl}｜${maLbl}｜布林：${bbL}~${bbU}`;
+        }
+      } catch(_e) { /* 技術指標失敗不影響主流程 */ }
+
       const systemPrompt = `你是 Alpha，一位經驗豐富的台股交易員。
 你的分析風格：冷靜、數據導向、不隨波逐流。
 你會根據：技術面（量價）、基本面（PE/PB/殖利率）、市場情緒、社群聲量、新聞催化劑，綜合判斷操作方向。
@@ -374,7 +412,7 @@ export default async function handler(req, res) {
 - 回傳嚴格 JSON，不含任何 markdown 或說明文字
 - JSON 格式如下（不可有多餘欄位）：
 {
-  "market_summary": "50字以內的市場總結",
+  "market_summary": "80字以內的市場總結，須涵蓋技術面訊號（RSI/KD/MA）",
   "market_mood": "樂觀|中性|謹慎|悲觀",
   "recommendations": [
     {
@@ -398,6 +436,9 @@ recommendations 必須包含 3-5 檔，action=買進 至少 2 檔。`;
 
       const userPrompt = `【市場情緒指標】
 ${marketContext || '資料暫無'}
+
+【技術面指標（加權指數）】
+${techSummary || '資料暫無'}
 
 【台股量價估值（前50大成交量）】
 ${stockTable}
