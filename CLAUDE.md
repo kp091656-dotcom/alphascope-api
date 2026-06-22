@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-18（對話九）
+> 更新日期：2026-06-18（對話十）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -20,6 +20,11 @@
 ## ⚠️ 已知問題
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
+
+### 對話十新增（2026-06-18）
+
+- **collect_market_data.js**：`collectOptions()` 修正月選/週三選/週五選到期當天（結算日）排除邏輯。到期日與 `tradeDate` 相同時，視為已結算略過，改用下一個最近合約計算 Max Pain。
+- **api/news.js（alpha_analyze）**：`userPrompt` 新增 `【技術面指標（加權指數）】` 區塊，後端即時自算 RSI14/KD/MACD/MA5.20/布林，注入給 Groq 生成 `market_summary`；`market_summary` prompt 從 50 字改為 80 字，要求涵蓋技術面訊號（RSI/KD/MA）。
 
 ### Alpha 弱點自覺系統（2026-06-17）
 
@@ -369,7 +374,7 @@ ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
 ### collectOptions() 邏輯
 
 1. 日盤過濾：排除 `after_market`
-1. Max Pain：最近到期合約
+1. Max Pain：最近到期合約；**到期當天（結算日）視為已結算，不納入**，改用次近合約
 1. 移除：`pc_ratio_vol`、`foreign_opt_net`
 
 ### collectChips() 現貨欄位策略（2026-06-08 修正）
