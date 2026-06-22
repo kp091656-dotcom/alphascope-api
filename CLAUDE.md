@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-18（對話十）
+> 更新日期：2026-06-22（對話十一）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -20,6 +20,24 @@
 ## ⚠️ 已知問題
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
+
+### 對話十一新增（2026-06-22）
+
+- **collect_market_data.js**：`lastTradingDay()` 從 sync 改為 **async**，新增國定假日動態偵測（三層）：
+  1. 查 Supabase `stock_daily_twse`（TAIEX）確認候選日有無資料
+  2. 呼叫 TWSE `STOCK_DAY`（2330）取當月最後一筆交易日期（民國年自動轉換）
+  3. Fallback 回原本週末跳過的候選日
+- **全域快取** `_lastTradingDayCache`：同一次執行只呼叫一次外部 API
+- 所有呼叫 `lastTradingDay()` 的地方均已加 `await`（共 5 處）
+- `collectInstitutional()`：新增非交易日跳過邏輯（`daysDiff > 1` 時 `ok: true` 略過，不拋錯）
+- **髒資料清理**：6/19 假日被誤寫，需執行以下 SQL：
+  ```sql
+  DELETE FROM stock_daily_twse      WHERE date = '2026-06-19';
+  DELETE FROM sector_index_daily    WHERE date = '2026-06-19';
+  DELETE FROM stock_valuation_daily WHERE date = '2026-06-19';
+  DELETE FROM chips_daily           WHERE date = '2026-06-19';
+  DELETE FROM market_chips_daily    WHERE date = '2026-06-19';
+  ```
 
 ### 對話十新增（2026-06-18）
 
