@@ -11,16 +11,78 @@ const MODE         = process.env.COLLECT_MODE   || 'all';
 
 function nowTW() { return new Date(Date.now() + 8 * 3600_000); }
 
-function lastTradingDay() {
+// 快取，避免同一次執行重複呼叫外部 API
+let _lastTradingDayCache = null;
+
+/**
+ * 動態偵測最近交易日（含國定假日處理）：
+ * 1. 先以台灣時間 + 16:00 門檻推算「候選日」（跳週末）
+ * 2. 查 Supabase stock_daily_twse（TAIEX）確認是否有資料
+ *    → 有：直接用（最快，TWSE 收集完後即可用）
+ *    → 無：改查 TWSE OpenAPI 的 STOCK_DAY（2330）取得最新日期
+ * 3. 若兩者都無法確認，fallback 到原本的候選日
+ */
+async function lastTradingDay() {
+  if (_lastTradingDayCache) return _lastTradingDayCache;
+
+  // ── 步驟 1：推算候選日（週末跳過）──
   const tw   = nowTW();
-  // nowTW() 已加 8 小時，用 getUTCHours() 即可得到台灣時間的小時數
   const hour = tw.getUTCHours();
   let d = new Date(tw);
-  // 台灣時間 16:00 前（收盤前），當天資料尚未就緒，退回前一天
   if (hour < 16) d.setUTCDate(d.getUTCDate() - 1);
-  // 跳過週末
   while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  const candidate = d.toISOString().slice(0, 10);
+
+  // ── 步驟 2a：查 Supabase 確認候選日有無 TAIEX 收盤資料 ──
+  if (SB_KEY) {
+    try {
+      const sbRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/stock_daily_twse?date=eq.${candidate}&stock_id=eq.TAIEX&select=date&limit=1`,
+        { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+          signal: AbortSignal.timeout(10_000) }
+      );
+      if (sbRes.ok) {
+        const rows = await sbRes.json();
+        if (rows.length > 0) {
+          console.log(`  📅 lastTradingDay（Supabase 確認）：${candidate}`);
+          _lastTradingDayCache = candidate;
+          return candidate;
+        }
+        // 候選日無資料 → 可能是假日，繼續往下查 TWSE 取得真實最近交易日
+        console.log(`  ⚠️  Supabase 無 ${candidate} 資料，嘗試 TWSE 動態偵測…`);
+      }
+    } catch (e) { console.warn(`  ⚠️  Supabase 查詢失敗：${e.message}`); }
+  }
+
+  // ── 步驟 2b：查 TWSE STOCK_DAY（2330）取得最新交易日 ──
+  // 此 API 回傳當月每日成交，最後一筆即為最近交易日
+  try {
+    const twseRes = await fetch(
+      'https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&stockNo=2330',
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15_000) }
+    );
+    if (twseRes.ok) {
+      const text = await twseRes.text();
+      if (!text.trimStart().startsWith('<')) {
+        const json = JSON.parse(text);
+        // 回傳格式：{ date: "114/06/20", data: [["114/06/02",...], ...] }
+        if (json.data && json.data.length > 0) {
+          const lastRow  = json.data[json.data.length - 1];
+          const twDate   = lastRow[0]; // e.g. "115/06/18"
+          const [y, m, d2] = twDate.split('/');
+          const iso = `${parseInt(y) + 1911}-${m.padStart(2,'0')}-${d2.padStart(2,'0')}`;
+          console.log(`  📅 lastTradingDay（TWSE 動態偵測）：${iso}（原候選日 ${candidate}）`);
+          _lastTradingDayCache = iso;
+          return iso;
+        }
+      }
+    }
+  } catch (e) { console.warn(`  ⚠️  TWSE STOCK_DAY 查詢失敗：${e.message}`); }
+
+  // ── 步驟 3：fallback 到原候選日 ──
+  console.log(`  📅 lastTradingDay fallback：${candidate}`);
+  _lastTradingDayCache = candidate;
+  return candidate;
 }
 
 function todayTW()  { return nowTW().toISOString().slice(0, 10); }
@@ -96,7 +158,7 @@ async function collectTWSEDaily() {
   console.log('📊 台股個股收盤（TWSE OpenAPI）...');
   try {
     const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
-    const tradeDate = lastTradingDay();
+    const tradeDate = await lastTradingDay();
     console.log(`  📅 寫入日期：${tradeDate}`);
     const rows = raw
       .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
@@ -119,7 +181,7 @@ async function collectSectorIndex() {
     const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX');
     if (!raw.length) throw new Error('API 回傳空陣列');
     console.log(`  🔍 欄位：${Object.keys(raw[0]).join(', ')}`);
-    const tradeDate = lastTradingDay();
+    const tradeDate = await lastTradingDay();
     const rows = raw
       .filter(r => {
         const name = r['指數'] || '';
@@ -167,7 +229,7 @@ async function collectValuation() {
   console.log('💹 個股估值（TWSE BWIBBU_ALL）...');
   try {
     const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL');
-    const tradeDate = lastTradingDay();
+    const tradeDate = await lastTradingDay();
     const rows = raw
       .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
       .map(r => ({
@@ -198,7 +260,14 @@ async function collectValuation() {
 async function collectInstitutional() {
   console.log('🏢 三大法人買賣超（FinMind）...');
   try {
-    const tradeDate = lastTradingDay();
+    const tradeDate = await lastTradingDay();
+    // 若 lastTradingDay 距今超過 1 天（例如週末執行），代表非交易日，資料不存在屬正常，略過
+    const twToday = nowTW().toISOString().slice(0, 10);
+    const daysDiff = (new Date(twToday) - new Date(tradeDate)) / 86_400_000;
+    if (daysDiff > 1) {
+      console.log(`  ℹ️  非交易日（lastTradingDay=${tradeDate}，今日=${twToday}），略過三大法人`);
+      return { ok: true, count: 0 };
+    }
     const data = await fmFetch('TaiwanStockTotalInstitutionalInvestors',
       { start_date: tradeDate, end_date: tradeDate });
     if (!data.length) throw new Error('無資料');
@@ -673,7 +742,7 @@ async function collectFutures() {
 
 async function collectChips() {
   console.log('📡 籌碼資料（FinMind 現貨法人 + TAIFEX 期貨/選擇權三大法人）...');
-  const tradeDate = lastTradingDay();
+  const tradeDate = await lastTradingDay();
 
   const result = {
     date: tradeDate,
