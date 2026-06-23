@@ -3002,7 +3002,76 @@ ${weekSummary}
     const unique = articles
       .filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true; })
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-    res.status(200).json({ data: unique, count: unique.length });
+
+    // ── Agent 1 尾端：AI 相關性評分（方案 B）──
+    // 對所有文章批次評分，過濾掉與台灣股市投資人無關的新聞
+    let filtered = unique;
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (GROQ_API_KEY && unique.length > 0) {
+      try {
+        // 只送標題給 Groq，省 token；中文文章通常已是台股來源，只評英文
+        const enIndices = unique.reduce((acc, a, i) => { if (a.lang === 'en') acc.push(i); return acc; }, []);
+
+        if (enIndices.length > 0) {
+          const titleList = enIndices.map((i, seq) => `${seq}. ${unique[i].title}`).join('\n');
+          const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${GROQ_API_KEY}`,
+            },
+            signal: AbortSignal.timeout(10000),
+            body: JSON.stringify({
+              model: 'llama-3.1-8b-instant',
+              temperature: 0,
+              max_tokens: 800,
+              messages: [{
+                role: 'user',
+                content: `你是台灣股市投資人的新聞篩選員。
+以下是英文新聞標題列表，請評估每則對「台灣股市投資人」的相關程度（1-10分）。
+
+評分標準：
+- 9-10分：直接涉及台灣、台積電、台股、新台幣
+- 6-8分：全球重大事件（Fed利率、美股指數、AI/半導體產業、油金幣、地緣政治）
+- 1-5分：與台灣投資人無關（他國貨幣、地方政治、娛樂、體育等）
+
+標題列表：
+${titleList}
+
+只回傳 JSON array，格式：[{"i":0,"s":8},{"i":1,"s":3}]
+不要有任何其他文字。`,
+              }],
+            }),
+          });
+
+          if (groqRes.ok) {
+            const groqJson = await groqRes.json();
+            const raw = groqJson.choices?.[0]?.message?.content?.trim() || '[]';
+            // 清理可能的 markdown code fence
+            const clean = raw.replace(/```json|```/g, '').trim();
+            const scores = JSON.parse(clean);
+
+            // 建立 index → score 對照表
+            const scoreMap = {};
+            for (const { i, s } of scores) scoreMap[i] = s;
+
+            // 過濾：英文文章分數 < 6 就移除；中文文章全部保留
+            const lowScoreIndices = new Set(
+              enIndices.filter((origIdx, seq) => (scoreMap[seq] ?? 10) < 6)
+            );
+            filtered = unique.filter((_, i) => !lowScoreIndices.has(i));
+
+            console.log(`[AI篩選] 英文文章 ${enIndices.length} 篇，過濾掉 ${lowScoreIndices.size} 篇，剩餘 ${filtered.length} 篇`);
+          }
+        }
+      } catch (e) {
+        // AI 評分失敗時靜默降級，使用原始 unique 列表
+        console.warn('[AI篩選] Groq 評分失敗，略過篩選：', e.message);
+        filtered = unique;
+      }
+    }
+
+    res.status(200).json({ data: filtered, count: filtered.length });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
