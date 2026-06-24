@@ -317,18 +317,6 @@
     <div id="hmTooltip"></div>
 
     <!-- 產業自選 Modal -->
-    <div id="rsmCustomModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;">
-      <div style="background:var(--card,#1e2533);border:1px solid rgba(148,163,184,0.15);border-radius:12px;padding:20px;min-width:260px;max-width:340px;width:90%;">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;font-weight:600;margin-bottom:14px;color:var(--text,#e2e8f0);">⚙ 自選產業清單</div>
-        <div id="rsmCustomList" style="max-height:320px;overflow-y:auto;color:var(--text,#e2e8f0);font-family:'IBM Plex Mono',monospace;"></div>
-        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
-          <button class="icon-btn" onclick="resetRsmCustom()" style="font-size:0.72rem;">重設預設</button>
-          <button class="icon-btn" onclick="closeRsmCustom()" style="font-size:0.72rem;">取消</button>
-          <button onclick="applyRsmCustom()" style="padding:5px 14px;border-radius:6px;background:var(--accent,#38bdf8);color:#0f172a;font-size:0.75rem;font-weight:700;border:none;cursor:pointer;font-family:'IBM Plex Mono',monospace;">套用</button>
-        </div>
-      </div>
-    </div>
-
     <!-- 多空訊號面板 -->
     <div id="signalPanel" style="display:none;">
       <div class="signal-header">
@@ -1089,6 +1077,18 @@ function showAlpha() {
 <script src="/js/chips.js"></script>
 <script src="/js/watchlist.js"></script>
 <script src="/js/utils.js"></script>
+<!-- 產業自選 Modal（body 最外層，確保 fixed 定位正確）-->
+<div id="rsmCustomModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#1e2533;border:1px solid rgba(148,163,184,0.15);border-radius:12px;padding:20px;min-width:260px;max-width:340px;width:90%;position:relative;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;font-weight:600;margin-bottom:14px;color:#e2e8f0;">⚙ 自選產業清單</div>
+    <div id="rsmCustomList" style="max-height:320px;overflow-y:auto;color:#e2e8f0;font-family:'IBM Plex Mono',monospace;"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+      <button class="icon-btn" onclick="resetRsmCustom()" style="font-size:0.72rem;">重設預設</button>
+      <button class="icon-btn" onclick="closeRsmCustom()" style="font-size:0.72rem;">取消</button>
+      <button onclick="applyRsmCustom()" style="padding:5px 14px;border-radius:6px;background:#38bdf8;color:#0f172a;font-size:0.75rem;font-weight:700;border:none;cursor:pointer;font-family:'IBM Plex Mono',monospace;">套用</button>
+    </div>
+  </div>
+</div>
 <script src="/js/sector_rsm.js"></script>
 </body>
 </html>
