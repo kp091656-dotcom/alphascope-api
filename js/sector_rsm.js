@@ -363,9 +363,9 @@ function openRsmCustom() {
 
   const body = modal.querySelector('#rsmCustomList');
   body.innerHTML = available.map(name => `
-    <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:0.78rem;">
+    <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:0.78rem;color:var(--text,#e2e8f0);">
       <input type="checkbox" value="${name}" ${current.includes(name)?'checked':''}>
-      <span>${RSM_LABEL[name]||name}</span>
+      <span style="color:var(--text,#e2e8f0);">${RSM_LABEL[name]||name}</span>
     </label>
   `).join('');
   modal.style.display = 'flex';
