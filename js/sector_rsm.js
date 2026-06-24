@@ -416,7 +416,8 @@ function _niceTicks(min, max, n) {
 }
 
 function _fmtVol(v) {
-  if (v >= 1e8) return (v/1e8).toFixed(1) + '億';
-  if (v >= 1e4) return (v/1e4).toFixed(0) + '萬';
-  return v.toFixed(0);
+  // volume 單位為億元
+  if (v >= 100) return v.toFixed(0) + '億';
+  if (v >= 1)   return v.toFixed(1) + '億';
+  return (v * 10000).toFixed(0) + '萬';
 }
