@@ -200,10 +200,11 @@ function _drawBubble(wrap, points) {
   const xMin = Math.min(...rsrVals) - 2, xMax = Math.max(...rsrVals) + 2;
   const yMin = Math.min(...rsmVals) - 2, yMax = Math.max(...rsmVals) + 2;
 
-  // 泡泡半徑 (成交量)
-  const vols   = points.map(p => p.avgVol).filter(v => v > 0);
-  const maxVol = vols.length ? Math.max(...vols) : 1;
-  const rScale = v => v > 0 ? 8 + (v / maxVol) * 22 : 12;
+  // 泡泡半徑 (RSM 動能值)
+  const rsmMin = Math.min(...points.map(p => p.rsm));
+  const rsmMax = Math.max(...points.map(p => p.rsm));
+  const rsmRange = rsmMax - rsmMin || 1;
+  const rScale = rsm => 8 + ((rsm - rsmMin) / rsmRange) * 20;
 
   // 座標轉換
   const px = v => PAD.l + (v - xMin) / (xMax - xMin) * CW;
@@ -321,7 +322,7 @@ function _drawBubble(wrap, points) {
 
   // 泡泡
   points.forEach(p => {
-    const x = px(p.rsr), y = py(p.rsm), r = rScale(p.avgVol);
+    const x = px(p.rsr), y = py(p.rsm), r = rScale(p.rsm);
 
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', r);
@@ -337,7 +338,6 @@ function _drawBubble(wrap, points) {
         <div style="font-weight:600;margin-bottom:4px;color:${p.color}">${p.name}</div>
         <div>RSR <span style="color:${p.rsr>=100?'#4ade80':'#f87171'}">${p.rsr.toFixed(2)}</span></div>
         <div>RSM <span style="color:${p.rsm>=100?'#4ade80':'#f87171'}">${p.rsm.toFixed(2)}</span></div>
-        ${p.avgVol>0?`<div style="color:rgba(148,163,184,0.8);font-size:0.7rem;margin-top:3px">均量 ${_fmtVol(p.avgVol)}</div>`:''}
       `;
     });
     circle.addEventListener('mousemove', (e) => {
