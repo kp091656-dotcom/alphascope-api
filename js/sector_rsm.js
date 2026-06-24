@@ -369,6 +369,8 @@ function openRsmCustom() {
     </label>
   `).join('');
   modal.style.display = 'flex';
+  // 點擊遮罩背景關閉
+  modal.onclick = (e) => { if (e.target === modal) closeRsmCustom(); };
 }
 
 function closeRsmCustom() {
