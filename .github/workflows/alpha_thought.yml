@@ -2,26 +2,49 @@ name: Alpha 隨筆生成
 
 on:
   schedule:
-    # 台灣時間 02:00（UTC 前一天 18:00），週日~週四觸發（對應週一~週五凌晨2點）
-    - cron: '0 18 * * 0-4'
     # 台灣時間 08:00（UTC 00:00），週一到週五
     - cron: '0 0 * * 1-5'
-    # 台灣時間 14:00（UTC 06:00），週一到週五
-    - cron: '0 6 * * 1-5'
-    # 台灣時間 20:00（UTC 12:00），週一到週五
-    - cron: '0 12 * * 1-5'
     # 台灣時間週五 16:00（UTC 08:00）→ 週報
     - cron: '0 8 * * 5'
-  workflow_dispatch:  # 手動觸發（測試用）
+  workflow_dispatch:
 
 jobs:
-  generate-thought:
+  agent1:
     runs-on: ubuntu-latest
     steps:
-      - name: 觸發 Alpha 隨筆生成
-        # UTC 08:00 只在週五觸發，是週報時間；其他整點觸發隨筆
+      - name: Agent 1 — 市場資料員
+        run: |
+          echo "▶ Agent 1：抓市場資料 + 技術指標 + 市場環境感知"
+          curl -s -X POST \
+            "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_agent1" \
+            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            | jq .
+
+  agent2:
+    runs-on: ubuntu-latest
+    needs: agent1
+    if: success()
+    steps:
+      - name: Agent 2 — 分析師
+        run: |
+          echo "▶ Agent 2：評分昨日預測 + 弱點分析 + 生成檢討篇"
+          curl -s -X POST \
+            "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_agent2" \
+            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            | jq .
+
+  agent3:
+    runs-on: ubuntu-latest
+    needs: [agent1, agent2]
+    if: success()
+    steps:
+      - name: Agent 3 — 撰稿員
         run: |
           HOUR=$(date -u +%H)
+          echo "UTC 現在：${HOUR}:00"
+
           if [ "$HOUR" = "08" ]; then
             echo "週五 16:00 → 觸發週報"
             curl -s -X POST \
@@ -30,7 +53,7 @@ jobs:
               -H "Content-Type: application/json" \
               | jq .
           else
-            echo "整點 → 觸發隨筆"
+            echo "→ 觸發 Alpha 隨筆"
             curl -s -X POST \
               "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_thought" \
               -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
