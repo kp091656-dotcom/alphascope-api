@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-22（對話十一）
+> 更新日期：2026-06-24（對話十二）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -20,6 +20,21 @@
 ## ⚠️ 已知問題
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
+
+### 對話十二新增（2026-06-24）
+
+- **多 Agent 分工重構**：`api/news.js` 新增 `alpha_agent1`、`alpha_agent2` 兩個 endpoint；`alpha_thought` 改為讀 agent1/2 快取，不再自己抓資料。
+- **`alpha_profile` 新增欄位**（已執行 migration）：
+  ```sql
+  ALTER TABLE public.alpha_profile
+    ADD COLUMN agent1_context       jsonb        NULL,
+    ADD COLUMN agent1_market_regime text         NULL,
+    ADD COLUMN agent1_updated_at    timestamptz  NULL,
+    ADD COLUMN agent2_wrong_items   jsonb        NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN agent2_streak        integer      NULL DEFAULT 0,
+    ADD COLUMN agent2_updated_at    timestamptz  NULL;
+  ```
+- **`alpha_thought.yml` 簡化**：移除 02:00/14:30/20:00 時段，只保留 08:00 完整跑三個 Agent（依序）+ 週五 16:00 週報。
 
 ### 對話十一新增（2026-06-22）
 
@@ -187,102 +202,63 @@ let futuresData, futuresSortKey
 |表名                       |來源               |內容                            |每日筆數     |備註   |
 |-------------------------|-----------------|------------------------------|---------|-----|
 |`stock_daily_twse`       |TWSE OpenAPI     |全上市股票收盤、成交量；含 stock_id='TAIEX'|~1231    |     |
-|`institutional_daily`    |FinMind          |三大法人現貨買賣超                     |1        |⚠️ 待刪 |
-|`margin_daily`           |FinMind          |融資/融券餘額                       |1        |     |
-|`options_daily`          |FinMind          |P/C Ratio、法人選擇權               |1        |⚠️ 待刪 |
-|`futures_daily`          |FinMind + Yahoo  |全球商品/指數                       |~35      |     |
-|`sector_index_daily`     |TWSE OpenAPI     |官方產業指數（76個）                   |76       |     |
-|`stock_valuation_daily`  |TWSE OpenAPI     |個股本益比/殖利率/PBR                 |~1071    |     |
-|`news_daily`             |RSS              |財經新聞快取（保留 48 小時）              |~150     |     |
-|`alpha_daily_report`     |Groq AI          |Alpha 交易員每日報告                 |1        |     |
-|`trader_positions`       |Alpha 自動         |Alpha 持倉紀錄                    |動態       |     |
-|`chips_daily`            |FinMind + TAIFEX |籌碼資料                          |1        |⚠️ 待刪 |
-|`market_chips_daily`     |FinMind + TAIFEX |新版籌碼                          |1        |🆕 雙寫中|
-|`options_analytics_daily`|FinMind          |選擇權分析                         |3        |🆕 雙寫中|
-|`shareholder_gifts`      |scrape_egift + 手動|股東紀念品                         |年度       |     |
-|`gift_scrape_log`        |scrape_gifts.js  |爬蟲進度追蹤                        |年度       |     |
-|`alpha_thoughts`         |Groq AI          |Alpha 隨筆專欄                    |每交易日約 6 筆|🆕 含預測/準確率/信心度/streak|
-|`alpha_profile`          |系統自動更新         |Alpha 成長檔案（頭銜/準確率/風格備忘/專長標籤）  |單列（id=1）  |🆕    |
+|`stock_valuation_daily`  |TWSE OpenAPI     |本益比、股價淨值比、殖利率                |~1231    |     |
+|`sector_index_daily`     |TWSE OpenAPI     |產業指數（35 個產業）                 |~35      |     |
+|`market_chips_daily`     |TWSE + FinMind   |三大法人現貨＋台指期＋散戶TMF             |1        |新表  |
+|`chips_daily`            |FinMind          |三大法人（舊表，過渡期保留）              |~1231    |待刪  |
+|`options_analytics_daily`|FinMind          |選擇權 PC Ratio / Max Pain       |~3       |新表  |
+|`options_daily`          |FinMind          |選擇權明細（舊表）                    |多        |待刪  |
+|`institutional_daily`    |FinMind          |法人舊表                         |~1231    |待刪  |
+|`margin_daily`           |FinMind          |融資融券                         |1        |     |
+|`news_daily`             |RSS + TheNewsAPI |財經新聞（中英文）                    |~50/日    |     |
+|`alpha_thoughts`         |Groq             |Alpha 隨筆（含預測/評分/信心度）         |4/日      |     |
+|`alpha_profile`          |系統維護            |Alpha 成長檔案（頭銜/命中率/弱點）        |1（id=1） |     |
+|`alpha_analyze`          |Groq             |個股/大盤 AI 分析報告               |1/日      |     |
+|`stock_gifts`            |爬蟲              |股東紀念品                        |不定      |     |
+|`egift_items`            |爬蟲              |電子禮券                         |不定      |     |
 
-### RLS 政策
+### alpha_profile schema（2026-06-24 更新）
 
-所有可讀表統一：`CREATE POLICY "anon read" ON {table} FOR SELECT TO anon, authenticated USING (true);`
-
-已修正表：alpha_daily_report, alpha_thoughts, alpha_profile, chips_daily, futures_daily, institutional_daily, margin_daily, news_daily, options_daily, sector_index_daily, shareholder_gifts, stock_daily_twse, stock_valuation_daily, trader_positions, market_chips_daily, options_analytics_daily
-
-### 各表實際欄位
-
-```
-stock_daily_twse      : date, stock_id, name, close, prev, chg_pct, volume, source, created_at
-
-alpha_daily_report    : id, report_date(unique), content, mood, created_at
-                        ⚠️ report_date 用台灣時間（todayTW()）
-
-trader_positions      : id, stock_id, stock_name, entry_price, target_price, stop_loss,
-                        shares, style, reason, status, exit_price, pnl, pnl_pct, opened_at, closed_at
-
-stock_valuation_daily : date, stock_id, name, pe_ratio, pb_ratio, dividend_yield
-
-institutional_daily   : date, foreign_net, trust_net, dealer_net, total_net
-                        ⚠️ trust_net（非 invest_net）；單位元，前端 ÷1e8 轉億
-                        ⚠️ 合計請用 market_chips_daily.spot_total_net
-
-margin_daily          : date, margin_balance, margin_chg, short_balance, short_chg
-
-options_daily         : date, pc_ratio_oi, call_oi, put_oi,
-                        pc_ratio_oi_monthly/wed/fri, call_oi_monthly/wed/fri, put_oi_monthly/wed/fri,
-                        max_pain, call/put_foreign/trust/dealer_net
-                        ⚠️ pc_ratio_vol 已移除；週五格式：202606F1
-                        ⚠️ 新開發請用 options_analytics_daily
-
-sector_index_daily    : date, index_name, close, change, chg_pct
-
-market_chips_daily    : date（PK）,
-                        現貨(億): spot_foreign/trust/dealer_buy/sell/net, spot_total_net,
-                        TX(口): fut_tx_foreign/trust/dealer_long/short/net, fut_tx_total_net,
-                        MTX(口): fut_mtx_foreign/trust/dealer_net, fut_mtx_total_net,
-                        TMF(口): fut_tmf_foreign/trust/dealer_net, fut_tmf_total_net, fut_tmf_total_oi,
-                        CALL(口): opt_call_foreign/trust/dealer_long/short/net,
-                        PUT(口):  opt_put_foreign/trust/dealer_long/short/net
-
-options_analytics_daily : date, contract_type('monthly'|'weekly_wed'|'weekly_fri'),
-                          pc_ratio_oi, call_oi, put_oi, max_pain,
-                          call/put_foreign/trust/dealer_net
-                          PK: (date, contract_type)
-                          ⚠️ renderMaxPainTrend() 查優先序：weekly_fri → weekly_wed → monthly
-
-shareholder_gifts     : id, stock_id, stock_name, year, gift_type, gift_desc,
-                        record_date, ex_date, is_egift, source_url, created_at
-
-futures_daily         : date, symbol, name, close, chg, chg_pct, source
-
-alpha_thoughts        : id(bigserial), content, mood(neutral|bullish|bearish|cautious), angle, created_at,
-                        prediction(bullish|bearish|neutral), pred_date(date), pred_result(pending|correct|wrong),
-                        rank_at_post(text),
-                        confidence(高|中|低),   ← 批次1新增
-                        streak(int),             ← 批次1新增（正=連勝，負=連錯）
-                        pred_target(text),       ← 批次4新增（TAIEX / 股票代號 / 板塊名）
-                        market_regime(text)      ← 對話8新增（記錄每篇生成當下的市場環境）
-
-alpha_profile         : id(int, PK=1, 單列), total_posts, correct_calls, total_calls,
-                        rank(text), style_memo(text), updated_at,
-                        specialties(jsonb),       ← 批次4新增（例：["外資動向敏感","善抓恐慌底部"]）
-                        market_regime(text),      ← 批次4新增（normal|volatile|trending_up|trending_down|consolidating）
-                        weakness_analysis(jsonb), ← 對話8新增（各market_regime命中率統計，樣本≥3才寫入）
-                        weakest_regime(text)      ← 對話8新增（命中率最低的環境）
-```
-
-### Supabase Migration（已完成，2026-06-16）
-
-批次 1~4 欄位（`confidence`、`streak`、`pred_target`、`specialties`、`market_regime`）已確認存在於資料表，資料正常寫入。
-
-### Supabase Migration（待執行，2026-06-17）
-
-對話8新增欄位，需手動執行：
 ```sql
+create table public.alpha_profile (
+  id integer not null default 1,
+  total_posts integer not null default 0,
+  correct_calls integer not null default 0,
+  total_calls integer not null default 0,
+  rank text not null default '菜鳥交易員',
+  style_memo text null,
+  updated_at timestamptz null default now(),
+  specialties jsonb null default '[]',
+  market_regime text null default 'normal',
+  weakness_analysis jsonb null default '{}',
+  weakest_regime text null,
+  -- Agent 快取欄位（對話十二新增）
+  agent1_context jsonb null,
+  agent1_market_regime text null,
+  agent1_updated_at timestamptz null,
+  agent2_wrong_items jsonb null default '[]',
+  agent2_streak integer null default 0,
+  agent2_updated_at timestamptz null,
+  constraint alpha_profile_pkey primary key (id),
+  constraint alpha_profile_id_check check (id = 1)
+);
+```
+
+### 歷史 Schema Migration
+
+```sql
+-- 對話8
 ALTER TABLE alpha_thoughts ADD COLUMN IF NOT EXISTS market_regime text;
 ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakness_analysis jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
+-- 對話十二
+ALTER TABLE public.alpha_profile
+  ADD COLUMN agent1_context jsonb NULL,
+  ADD COLUMN agent1_market_regime text NULL,
+  ADD COLUMN agent1_updated_at timestamptz NULL,
+  ADD COLUMN agent2_wrong_items jsonb NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN agent2_streak integer NULL DEFAULT 0,
+  ADD COLUMN agent2_updated_at timestamptz NULL;
 ```
 
 ### market_chips_daily 資料修正紀錄
@@ -298,12 +274,23 @@ ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
 |---------------------|--------------------|-----------------------------------------------------|-------|
 |`collect-twse.yml`   |週一~五 14:30          |TWSE 股價/估值/產業指數 + `collectChips()`（現貨失敗不覆蓋，只寫期貨）     |✅      |
 |`collect-finmind.yml`|週一~五 15:30          |FinMind 籌碼/選擇權/期貨；`collectInstitutional()` PATCH 現貨欄位|✅      |
-|`collect-alpha.yml`  |週一~五 16:00          |Alpha 每日報告                                           |✅      |
+|`collect-alpha.yml`  |FinMind 完成後觸發       |Alpha 每日報告（`alpha_analyze` endpoint）                 |✅      |
 |`collect-news.yml`   |每小時                 |財經新聞 RSS                                             |✅      |
 |`backup.yml`         |週日 09:00 + push main|Supabase + pCloud 備份                                 |✅      |
 |`scrape_gifts.yml`   |手動                  |爬股東紀念品                                               |✅（停用自動）|
 |`scrape_egift.yml`   |每週日 09:30           |爬 eGift                                              |✅      |
-|`alpha_thought.yml`  |週一~五 02:00/08:00/14:00/20:00 + 週五16:00週報|Alpha 隨筆生成 + 週報（整合在同一 yml，HOUR=08 週五觸發週報）|✅      |
+|`alpha_thought.yml`  |週一~五 08:00 + 週五16:00週報|三 job 依序：Agent1→Agent2→Agent3（撰稿）             |✅      |
+
+### alpha_thought.yml 三 Job 架構（對話十二）
+
+```
+agent1（市場資料員）→ agent2（分析師）→ agent3（撰稿員）
+```
+
+- Agent 1：抓 8 項市場資料 + 技術指標 + 市場環境感知 → 存 `alpha_profile.agent1_*`
+- Agent 2：評分昨日預測 + 弱點分析 + 生成檢討篇 → 存 `alpha_profile.agent2_*`
+- Agent 3：讀 agent1/2 快取 → 生成隨筆 → 寫入 `alpha_thoughts`
+- 任一 Agent 失敗，後續 job 停止（`if: success()`）
 
 -----
 
@@ -323,20 +310,29 @@ ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
 | 鐵血操盤手 ⚔️  | ≥100 篇 + 準確率 ≥55%         |
 | 傳奇預言家 🌟  | ≥300 篇 + 準確率 ≥55%         |
 
-### 後端邏輯（api/news.js）— 批次 1~4 完整版
+### 後端邏輯（api/news.js）— 對話十二重構後
 
-每次 POST `endpoint=alpha_thought` 觸發：
+每天 08:00 依序執行三個 Agent endpoint：
 
+**alpha_agent1（POST）：**
 1. 並行抓取 8 項市場資料（加權指數、籌碼、融資、選擇權、FGI+VIX、熱門股、新聞）
-2. **市場環境感知**（批次4）：從上述資料自動判斷 `marketRegime`（volatile/trending_up/trending_down/consolidating/normal），附加進 context 並注入語氣調整 prompt
-3. 撈最近 24 篇隨筆（含 pred_result/confidence）
-4. **計算 streak**（批次1）：從已評分隨筆計算連勝（正）/連錯（負），連勝≥5 注入謙遜提醒，連錯≤-3 觸發反省模式語氣
-5. 每 10 篇：風格自我分析（50字 styleMemo）+ **專長標籤分析**（批次4，2~3個 specialties）
-6. **評分昨日預測**（批次3 強化）：撈 pending 隨筆，依 pred_target 分流評分（TAIEX/個股）；wrong 時收集 wrongItems
-7. **自動生成檢討篇**（批次3）：wrongItems 中取最高信心那筆，生成 angle='reflection' 隨筆
-8. AI 輸出 JSON：`{ content, prediction, confidence, pred_target }`
-9. 寫入 `alpha_thoughts`（含 confidence/streak/pred_target）
-10. 更新 `alpha_profile`（含 specialties/market_regime）
+2. 後端自算 TAIEX 近120天技術指標（RSI14/KD/MACD/MA5.20.60/布林）
+3. 市場環境感知（volatile/trending_up/trending_down/consolidating/normal）
+4. 結果存入 `alpha_profile.agent1_context`、`agent1_market_regime`、`agent1_updated_at`
+
+**alpha_agent2（POST）：**
+1. 讀 agent1 輸出確認今日已執行
+2. 評分所有 pending 預測（分流 TAIEX/個股）
+3. 弱點分析（最近60篇各 regime 命中率）
+4. 若有 wrongItems → 生成 `angle=reflection` 檢討篇
+5. 計算 streak
+6. 結果存入 `alpha_profile.agent2_wrong_items`、`agent2_streak`、`agent2_updated_at`
+
+**alpha_thought（POST，Agent 3 撰稿員）：**
+1. 讀 `alpha_profile` 的 agent1/2 快取（contextLines、marketRegime、wrongItems、streak）
+2. 風格自我分析（每10篇）
+3. AI 生成隨筆 JSON
+4. 寫入 `alpha_thoughts` + 更新 `alpha_profile`
 
 **endpoint=weekly_recap（批次1）：**
 - GET：撈最新一篇 `angle=weekly_recap` 隨筆
@@ -402,12 +398,6 @@ ALTER TABLE alpha_profile ADD COLUMN IF NOT EXISTS weakest_regime text;
 - 全失敗時：`market_chips_daily` 只寫期貨欄位，不寫 spot_ 欄位
 - `collectInstitutional()`（15:30）用 PATCH 逐筆補填現貨欄位，不覆蓋 fut_ 欄位
 - ⚠️ 防呆：FinMind 回傳全零時略過不寫入（避免蓋掉 TWSE 正確值）
-
-### alpha_thought 背景資料（2026-06-10 擴充）
-
-每次生成並行抓取 8 項：加權指數、法人現貨三大（含多空口數）、散戶TMF、融資融券、選擇權（PC Ratio/Max Pain/外資CALL PUT）、Fear & Greed + VIX、成交量前5大個股、近8則新聞。市場環境感知從上述資料自動判斷，附加第9行 context。**第10行（對話九新增）**：後端自算 TAIEX 近120天技術指標（RSI14/KD/MACD/MA5.20.60/布林），注入技術面摘要供 Alpha 隨筆參考。
-
-每次生成同時：從最近 60 篇已評分隨筆計算各 market_regime 命中率 → 注入弱點自覺提示（對話8新增）。
 
 ### lastTradingDay() 時區修正（2026-06-11）
 
