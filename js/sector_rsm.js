@@ -204,9 +204,9 @@ function _drawBubble(wrap, points) {
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
   // 四象限背景漸層
   [
-    { id:'q1', x:px(100), y:PAD.t,   w:px(xMax)-px(100), h:py(100)-PAD.t,   c:'#16a34a' }, // 強勢加速
+    { id:'q1', x:px(100), y:PAD.t,   w:px(xMax)-px(100), h:py(100)-PAD.t,   c:'#dc2626' }, // 強勢加速
     { id:'q2', x:PAD.l,   y:PAD.t,   w:px(100)-PAD.l,    h:py(100)-PAD.t,   c:'#ca8a04' }, // 弱勢反彈
-    { id:'q3', x:PAD.l,   y:py(100), w:px(100)-PAD.l,    h:PAD.t+CH-py(100),'c':'#dc2626' }, // 弱勢惡化
+    { id:'q3', x:PAD.l,   y:py(100), w:px(100)-PAD.l,    h:PAD.t+CH-py(100),'c':'#16a34a' }, // 弱勢惡化
     { id:'q4', x:px(100), y:py(100), w:px(xMax)-px(100), h:PAD.t+CH-py(100),'c':'#2563eb' }, // 強勢減速
   ].forEach(q => {
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -234,9 +234,9 @@ function _drawBubble(wrap, points) {
 
   // 象限標籤
   const qLabels = [
-    { x: px(100)+6,  y: PAD.t+14, t: '強勢加速 ▲', c: '#4ade80' },
+    { x: px(100)+6,  y: PAD.t+14, t: '強勢加速 ▲', c: '#f87171' },
     { x: PAD.l+4,    y: PAD.t+14, t: '反彈觀察',   c: '#fbbf24' },
-    { x: PAD.l+4,    y: PAD.t+CH-6, t: '弱勢惡化 ▼', c: '#f87171' },
+    { x: PAD.l+4,    y: PAD.t+CH-6, t: '弱勢惡化 ▼', c: '#4ade80' },
     { x: px(100)+6,  y: PAD.t+CH-6, t: '強勢減速',  c: '#93c5fd' },
   ];
   qLabels.forEach(q => {
