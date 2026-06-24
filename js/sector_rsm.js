@@ -71,9 +71,9 @@ async function loadSectorRSM() {
 async function _fetchRsmData() {
   const sectors = _rsmCustomList || RSM_DEFAULT_SECTORS;
   const allNames = [RSM_BENCHMARK, ...sectors];
-  // 抓 400 天（含假日緩衝），確保有 52 個交易週
+  // 抓 100 天（含假日緩衝），確保有足夠交易日
   const since = new Date();
-  since.setDate(since.getDate() - 400);
+  since.setDate(since.getDate() - 100);
   const sinceStr = since.toISOString().slice(0, 10);
 
   const params = new URLSearchParams({
@@ -100,40 +100,30 @@ async function _fetchRsmData() {
 }
 
 // ── RSR/RSM 計算 ──────────────────────────────────────────────────────────────
-function _weeklyClose(dailyArr) {
-  // 取每週最後一個交易日的收盤價
-  const byWeek = {};
-  for (const d of dailyArr) {
-    const dt = new Date(d.date);
-    // ISO week key: year + week number
-    const jan1  = new Date(dt.getFullYear(), 0, 1);
-    const week  = Math.ceil(((dt - jan1) / 86400000 + jan1.getDay() + 1) / 7);
-    const key   = `${dt.getFullYear()}-${String(week).padStart(2,'0')}`;
-    // keep latest in week
-    if (!byWeek[key] || d.date > byWeek[key].date) byWeek[key] = d;
-  }
-  return Object.values(byWeek).sort((a,b) => a.date.localeCompare(b.date));
+function _sortDaily(dailyArr) {
+  // 直接用日資料，依日期排序
+  return [...dailyArr].sort((a,b) => a.date.localeCompare(b.date));
 }
 
-function _calcRSR(sectorWeeks, benchWeeks) {
-  // Align by date, take last 52 matching weeks
-  const bMap = Object.fromEntries(benchWeeks.map(w => [w.date, w.close]));
-  const pairs = sectorWeeks
-    .filter(w => bMap[w.date] && bMap[w.date] > 0)
-    .map(w => ({ date: w.date, ratio: w.close / bMap[w.date], volume: w.volume }));
+function _calcRSR(sectorDays, benchDays) {
+  // Align by date, use daily data
+  const bMap = Object.fromEntries(benchDays.map(d => [d.date, d.close]));
+  const pairs = sectorDays
+    .filter(d => bMap[d.date] && bMap[d.date] > 0)
+    .map(d => ({ date: d.date, ratio: d.close / bMap[d.date] }));
 
   if (pairs.length < 30) return null;
 
-  const last52 = pairs.slice(-52);
-  const R = last52.map(p => p.ratio);
+  const last60 = pairs.slice(-60);
+  const R = last60.map(p => p.ratio);
   const n = R.length;
 
-  // MA30 = 最後30週平均, MA10 = 最後10週平均
+  // MA30 = 最後30日均值, MA10 = 最後10日均值
   const ma30 = R.slice(-30).reduce((s,v) => s+v, 0) / 30;
   const ma10 = R.slice(-10).reduce((s,v) => s+v, 0) / 10;
   const rsr  = ma10 / ma30 * 100;
 
-  // RSM: 9期滾動RSR，J=1~9
+  // RSM: 9期滾動RSR（每期間隔1日）
   const rsrArr = [];
   for (let j = 1; j <= 9; j++) {
     const offset = 9 - j;  // j=9 → 最新
@@ -146,11 +136,7 @@ function _calcRSR(sectorWeeks, benchWeeks) {
   const rsrSum = rsrArr.reduce((s,v) => s+v, 0);
   const rsm    = rsrArr[8] / rsrSum * 900;
 
-  // 近期成交量均值（最後4週）
-  const recentVol = last52.slice(-4).map(p=>p.volume).filter(v=>v>0);
-  const avgVol    = recentVol.length ? recentVol.reduce((s,v)=>s+v,0)/recentVol.length : 0;
-
-  return { rsr, rsm, avgVol };
+  return { rsr, rsm, avgVol: 0 };
 }
 
 // ── 渲染泡泡圖 ────────────────────────────────────────────────────────────────
@@ -160,21 +146,21 @@ function renderRsmBubble() {
   wrap.querySelector('#rsmLoading').style.display = 'none';
 
   const sectors = _rsmCustomList || RSM_DEFAULT_SECTORS;
-  const benchW  = _weeklyClose(_rsmData.benchmark);
+  const benchW  = _sortDaily(_rsmData.benchmark);
 
   const points = [];
   let ci = 0;
   for (const name of sectors) {
     const arr = _rsmData.sectors[name];
     if (!arr) continue;
-    const result = _calcRSR(_weeklyClose(arr), benchW);
+    const result = _calcRSR(_sortDaily(arr), benchW);
     if (!result) continue;
     points.push({ name, label: RSM_LABEL[name]||name, color: RSM_COLORS[ci % RSM_COLORS.length], ...result });
     ci++;
   }
 
   if (!points.length) {
-    wrap.querySelector('#rsmError').textContent = '資料不足（需至少 30 週）';
+    wrap.querySelector('#rsmError').textContent = '資料不足（需至少 30 日）';
     wrap.querySelector('#rsmError').style.display = 'block';
     return;
   }
