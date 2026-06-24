@@ -203,6 +203,71 @@ async function collectSectorIndex() {
     }
     await sbUpsert('sector_index_daily', rows, 'date,index_name');
 
+    // ── 各類股成交金額（TWSE BFIAMU）→ 寫入 sector_index_daily.volume ──
+    try {
+      const SECTOR_VOL_MAP = {
+        '水泥工業':         '水泥類指數',
+        '食品工業':         '食品類指數',
+        '塑膠工業':         '塑膠類指數',
+        '紡織纖維':         '紡織纖維類指數',
+        '電機機械':         '電機機械類指數',
+        '電器電纜':         '電力及電纜類指數',
+        '化學工業':         '化學類指數',
+        '生技醫療':         '生技醫療類指數',
+        '玻璃陶瓷':         '玻璃陶瓷類指數',
+        '造紙工業':         '造紙類指數',
+        '鋼鐵工業':         '鋼鐵類指數',
+        '橡膠工業':         '橡膠類指數',
+        '汽車工業':         '汽車類指數',
+        '半導體業':         '半導體類指數',
+        '電腦及週邊設備業': '電腦及週邊設備類指數',
+        '光電業':           '光電類指數',
+        '通信網路業':       '通信網路類指數',
+        '電子零組件業':     '電子零組件類指數',
+        '電子通路業':       '電子通路類指數',
+        '資訊服務業':       '資訊服務類指數',
+        '其他電子業':       '其他電子類指數',
+        '建材營造':         '建材營造類指數',
+        '航運業':           '航運類指數',
+        '觀光餐旅':         '觀光餐旅類指數',
+        '金融保險':         '金融保險類指數',
+        '貿易百貨':         '貿易百貨類指數',
+        '綜合':             '綜合類指數',
+        '油電燃氣業':       '油電燃氣類指數',
+        '傳統產業':         '傳統產業類指數',
+        '電子工業':         '電子工業類指數',
+      };
+      const bfRaw  = await twseFetch('https://www.twse.com.tw/rwd/zh/afterTrading/BFIAMU?response=json');
+      const bfData = bfRaw?.data || [];
+      const volRows = [];
+      for (const row of bfData) {
+        const twseName  = (row[0] || '').trim();
+        const indexName = SECTOR_VOL_MAP[twseName];
+        if (!indexName) continue;
+        const amt = parseFloat((row[2] || '').replace(/,/g, '')) || 0;
+        if (amt <= 0) continue;
+        volRows.push({ date: tradeDate, index_name: indexName, volume: parseFloat((amt / 1e8).toFixed(2)) });
+      }
+      if (volRows.length > 0) {
+        await Promise.all(volRows.map(r =>
+          fetch(SUPABASE_URL + '/rest/v1/sector_index_daily?date=eq.' + r.date + '&index_name=eq.' + encodeURIComponent(r.index_name), {
+            method: 'PATCH',
+            headers: {
+              apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ volume: r.volume }),
+          })
+        ));
+        console.log('  💰 BFIAMU 成交金額 updated：' + volRows.length + ' 個產業');
+      } else {
+        console.log('  ⚠️  BFIAMU 無匹配資料（可能非交易日）');
+      }
+    } catch (e) {
+      console.warn('  ⚠️  BFIAMU 成交金額 失敗（不中斷主流程）：' + e.message);
+    }
+
     // ── 額外：把「發行量加權股價指數」寫入 stock_daily_twse（stock_id='TAIEX'）──
     const taiexRow = rows.find(r => r.index_name === '發行量加權股價指數');
     if (taiexRow) {
