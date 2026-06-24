@@ -64,7 +64,7 @@
   <div class="cat-tab-divider"></div>
   <button class="cat-tab cat-tab-tools" id="futuresTab" onclick="showFutures()">📊 全球商品</button>
   <button class="cat-tab cat-tab-tools" id="sentimentTab" onclick="showSentiment()">🌐 社群情緒</button>
-  <button class="cat-tab cat-tab-tools" id="heatmapTab" onclick="showHeatmap()">🇹🇼 台股熱圖</button>
+  <button class="cat-tab cat-tab-tools" id="heatmapTab" onclick="showHeatmap();loadSectorRSM()">🇹🇼 台股熱圖</button>
   <button class="cat-tab cat-tab-tools" id="signalTab" onclick="showSignal()">📡 多空訊號</button>
   <button class="cat-tab cat-tab-tools" id="screenerTab" onclick="openScreener()">🔍 選股篩選</button>
   <button class="cat-tab cat-tab-tools" id="giftsTab" onclick="showGifts()">🎁 紀念品</button>
@@ -287,10 +287,47 @@
         <div id="heatmapSvgWrap" style="display:none;">
           <svg id="heatmapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
+
+        <!-- ── 產業輪動 RSR/RSM 泡泡圖 ── -->
+        <div id="sectorRsmWrap" style="margin-top:28px;">
+          <div class="panel-header" style="margin-bottom:12px;">
+            <div class="panel-title" style="font-size:0.85rem;">📡 產業輪動強弱（RSR / RSM）</div>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+              <span id="rsmTs" class="ts-label"></span>
+              <button class="icon-btn" onclick="openRsmCustom()" title="自選產業清單" style="font-size:0.68rem;">⚙ 自選</button>
+              <button class="icon-btn" onclick="_rsmLoaded=false;loadSectorRSM()">↻ 更新</button>
+            </div>
+          </div>
+          <!-- 說明列 -->
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">X軸 RSR &gt; 100 = 近期跑贏大盤</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">Y軸 RSM &gt; 100 = 動能持續加速</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--muted);">泡泡大小 = 近4週均量</span>
+          </div>
+          <div id="rsmLoading" style="text-align:center;padding:2rem;color:var(--muted);font-size:0.78rem;">
+            <div class="spinner" style="margin:0 auto 10px;"></div>計算產業強弱中…
+          </div>
+          <div id="rsmError" style="display:none;color:#f87171;font-size:0.78rem;padding:1rem 0;font-family:'IBM Plex Mono',monospace;"></div>
+          <div id="rsmCanvas" style="display:none;position:relative;width:100%;"></div>
+          <div id="rsmTooltip" style="display:none;position:absolute;background:var(--card,#1e2533);border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:8px 12px;font-size:0.75rem;font-family:'IBM Plex Mono',monospace;pointer-events:none;z-index:100;color:var(--text,#e2e8f0);line-height:1.6;min-width:120px;"></div>
+        </div>
       </div>
     </div>
 
     <div id="hmTooltip"></div>
+
+    <!-- 產業自選 Modal -->
+    <div id="rsmCustomModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;">
+      <div style="background:var(--card,#1e2533);border:1px solid rgba(148,163,184,0.15);border-radius:12px;padding:20px;min-width:260px;max-width:340px;width:90%;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;font-weight:600;margin-bottom:14px;color:var(--text,#e2e8f0);">⚙ 自選產業清單</div>
+        <div id="rsmCustomList" style="max-height:320px;overflow-y:auto;color:var(--text,#e2e8f0);font-family:'IBM Plex Mono',monospace;"></div>
+        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+          <button class="icon-btn" onclick="resetRsmCustom()" style="font-size:0.72rem;">重設預設</button>
+          <button class="icon-btn" onclick="closeRsmCustom()" style="font-size:0.72rem;">取消</button>
+          <button onclick="applyRsmCustom()" style="padding:5px 14px;border-radius:6px;background:var(--accent,#38bdf8);color:#0f172a;font-size:0.75rem;font-weight:700;border:none;cursor:pointer;font-family:'IBM Plex Mono',monospace;">套用</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 多空訊號面板 -->
     <div id="signalPanel" style="display:none;">
@@ -1052,5 +1089,6 @@ function showAlpha() {
 <script src="/js/chips.js"></script>
 <script src="/js/watchlist.js"></script>
 <script src="/js/utils.js"></script>
+<script src="/js/sector_rsm.js"></script>
 </body>
 </html>
