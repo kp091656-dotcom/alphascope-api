@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-24（對話十二）
+> 更新日期：2026-06-25（對話十四）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 > 歷史改動請見 GitHub commit history。
 
@@ -20,6 +20,34 @@
 ## ⚠️ 已知問題
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零時略過不寫入，避免蓋掉 TWSE 已正確寫入的數字。
+
+### 對話十四新增（2026-06-25）
+
+- **`js/alpha.js`**：
+  - 修正「上次更新」時間：改從 `normalList` 中取 `created_at` 最大的一筆，不依賴後端排序
+  - 修正隨筆內容被截斷：`t.content` / `recap.content` 改用 `_escHtml()` 做 HTML escape（`K<D` 被瀏覽器解析為 tag 導致截斷）
+  - 新增 `_escHtml(str)` helper 函式
+- **`index.html`**：Alpha 隨筆 badge 從「每日4次更新」改為「每日更新」
+- **`.github/workflows/alpha_thought.yml`**：
+  - 移除 `cron: '0 0 * * 1-5'`（週一~五 08:00）
+  - 改由 `Collect Alpha Report` workflow 完成後自動觸發（`workflow_run` + `conclusion == 'success'`）
+  - 週五 16:00 週報 cron 保留
+- **`collect_market_data.js`**：BFIAMU 保留現有架構，`⚠️ BFIAMU 無匹配資料` 屬正常 warning，不中斷主流程
+
+### 對話十三新增（2026-06-24）
+
+- **新 Tab：產業輪動強弱（RSR/RSM 泡泡圖）**
+  - 新增 `js/sector_rsm.js`，嵌在台股熱圖 tab 下方
+  - 資料來源：`sector_index_daily`（日資料），基準：`發行量加權股價指數`
+  - X 軸 RSR = MA10/MA30×100（近10日 vs 近30日相對強弱），Y 軸 RSM = 最新RSR÷9期RSR均值×100
+  - 泡泡大小 = RSM 動能強度；象限色台股慣例：右上強勢加速→紅，左下弱勢惡化→綠
+  - ⚙ 自選清單：點遮罩關閉，文字顏色 hardcode `#e2e8f0`
+  - `index.html` 新增 `sectorRsmWrap` + `rsmCustomModal`（body 最外層）+ `sector_rsm.js` 引用
+  - `heatmapTab` onclick 改為 `showHeatmap();loadSectorRSM()`
+- **`sector_index_daily` 新增 `volume` 欄位**（已執行 migration）；目前全 null，BFIAMU endpoint 不存在暫緩
+- **`collect_market_data.js`**：`collectSectorIndex()` 保留 BFIAMU 架構但實際無資料
+- **`news_feed.js` 修正**：cat-tab click handler 補加隱藏 `alphaPanel`
+- **JS 載入順序**：`sector_rsm.js` 加在 `utils.js` 之後
 
 ### 對話十二新增（2026-06-24）
 
@@ -157,6 +185,7 @@
 <script src="/js/chips.js"></script>
 <script src="/js/watchlist.js"></script>
 <script src="/js/utils.js"></script>
+<script src="/js/sector_rsm.js"></script>
 ```
 
 ### signals.js 內含函式（2026-06-09 更新）
@@ -279,7 +308,7 @@ ALTER TABLE public.alpha_profile
 |`backup.yml`         |週日 09:00 + push main|Supabase + pCloud 備份                                 |✅      |
 |`scrape_gifts.yml`   |手動                  |爬股東紀念品                                               |✅（停用自動）|
 |`scrape_egift.yml`   |每週日 09:30           |爬 eGift                                              |✅      |
-|`alpha_thought.yml`  |週一~五 08:00 + 週五16:00週報|三 job 依序：Agent1→Agent2→Agent3（撰稿）             |✅      |
+|`alpha_thought.yml`  |Collect Alpha Report 完成後 + 週五16:00週報|三 job 依序：Agent1→Agent2→Agent3（撰稿）             |✅      |
 
 ### alpha_thought.yml 三 Job 架構（對話十二）
 
