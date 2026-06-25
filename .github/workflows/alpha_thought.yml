@@ -1,9 +1,10 @@
 name: Alpha 隨筆生成
 
 on:
+  workflow_run:
+    workflows: ["Collect Alpha Report"]
+    types: [completed]
   schedule:
-    # 台灣時間 08:00（UTC 00:00），週一到週五
-    - cron: '0 0 * * 1-5'
     # 台灣時間週五 16:00（UTC 08:00）→ 週報
     - cron: '0 8 * * 5'
   workflow_dispatch:
@@ -11,6 +12,7 @@ on:
 jobs:
   agent1:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
     steps:
       - name: Agent 1 — 市場資料員
         run: |
