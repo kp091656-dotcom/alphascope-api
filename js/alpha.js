@@ -649,6 +649,10 @@ const RANK_ICON = {
   '傳奇預言家': '🌟',
 };
 
+function _escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function _alphaTimeAgo(isoStr) {
   const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
   if (diff < 60)   return '剛剛';
@@ -932,7 +936,7 @@ async function loadAlphaThoughts() {
           <span style="font-size:0.62rem;padding:2px 7px;border-radius:99px;background:${m.bg};color:${m.color};border:1px solid ${m.border};font-weight:600;">${m.text}</span>
           <span style="font-size:0.62rem;color:var(--muted);margin-left:auto;">${ago}</span>
         </div>
-        <div style="font-size:0.875rem;color:var(--text);line-height:1.75;white-space:pre-line;">${recap.content}</div>
+        <div style="font-size:0.875rem;color:var(--text);line-height:1.75;white-space:pre-line;">${_escHtml(recap.content)}</div>
       </div>`;
     })() : '';
 
@@ -979,7 +983,7 @@ async function loadAlphaThoughts() {
           ${rankBadge}
           <span style="font-size:0.65rem;color:var(--muted);margin-left:auto;">${ago}</span>
         </div>
-        <div style="font-size:0.875rem;color:var(--text);line-height:1.75;white-space:pre-line;">${t.content}</div>
+        <div style="font-size:0.875rem;color:var(--text);line-height:1.75;white-space:pre-line;">${_escHtml(t.content)}</div>
         <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.5rem;flex-wrap:wrap;">
           ${t.angle && t.angle !== 'reflection' ? `<span style="font-size:0.62rem;color:var(--muted);opacity:0.6;">話題：${t.angle}</span>` : ''}
           ${t.pred_target && t.pred_target !== 'TAIEX' ? `<span style="font-size:0.62rem;padding:2px 7px;border-radius:3px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.15);">預測標的：${t.pred_target}</span>` : ''}
