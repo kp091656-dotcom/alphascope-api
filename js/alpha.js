@@ -608,8 +608,13 @@ function initAlphaIfNeeded() {
 }
 
 function toggleAlphaBacktest() {
-  const p = document.getElementById('alphaBacktestPanel');
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('alphaBacktestModal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAlphaBacktest() {
+  document.getElementById('alphaBacktestModal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 // ════════ 多空訊號回測（Supabase）════════
