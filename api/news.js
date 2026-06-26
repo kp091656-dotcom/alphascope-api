@@ -346,7 +346,53 @@ export default async function handler(req, res) {
       // ── 7. 整理新聞標題 ──
       const newsTitles = news.slice(0, 30).map(n => `[${n.source}] ${n.title}`).join('\n');
 
-      // ── 8. 組裝 Prompt ──
+      // ── 8. 讀取 alpha_profile（B. 動態權重 + C. 成功模式）──
+      let growthHint = '';
+      try {
+        const profR = await fetch(
+          `${SUPABASE_URL}/rest/v1/alpha_profile?id=eq.1&select=weakness_analysis,weakest_regime,specialties,market_regime,correct_calls,total_calls`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(4000) }
+        );
+        const profJson = await profR.json();
+        const prof = Array.isArray(profJson) && profJson[0] ? profJson[0] : null;
+        if (prof) {
+          const lines = [];
+          const wa = prof.weakness_analysis || {};
+          const currentRegime = prof.market_regime || 'normal';
+          const regimeLabel = { volatile: '高波動', trending_up: '上升趨勢', trending_down: '下跌趨勢', consolidating: '盤整', normal: '正常' };
+
+          // B. 動態 prompt 權重：當前環境命中率低 → 限制信心度
+          const curStat = wa[currentRegime];
+          if (curStat && curStat.total >= 3 && curStat.rate < 0.50) {
+            lines.push(`【⚠️ 動態風控 — 當前環境警示】`);
+            lines.push(`目前市場環境為「${regimeLabel[currentRegime] || currentRegime}」，歷史命中率僅 ${Math.round(curStat.rate * 100)}%（${curStat.correct}/${curStat.total}）。`);
+            lines.push(`在此環境下，所有推薦的 confidence 欄位最高只能填「低」，market_mood 傾向「謹慎」或「悲觀」，recommendations 中 action=買進 的數量不超過 2 檔。`);
+          } else if (curStat && curStat.total >= 3 && curStat.rate >= 0.65) {
+            lines.push(`【✅ 當前環境表現良好】`);
+            lines.push(`目前「${regimeLabel[currentRegime] || currentRegime}」環境命中率 ${Math.round(curStat.rate * 100)}%，可正常給出信心度評估。`);
+          }
+
+          // C. 成功模式學習：注入有效組合提示
+          const patterns = prof.specialties || [];
+          if (patterns.length > 0) {
+            lines.push(`\n【📈 歷史成功模式（請優先參考）】`);
+            for (const p of patterns) {
+              lines.push(`- 在「${regimeLabel[p.regime] || p.regime}」環境 + 信心「${p.confidence}」：命中率 ${Math.round(p.rate * 100)}%（${p.total} 次樣本）→ 這是你表現最好的組合，請善用。`);
+            }
+            lines.push(`給出推薦時，若當前環境符合上述成功模式，優先選擇對應的信心度，並在 reason 中說明訊號吻合之處。`);
+          }
+
+          // 整體準確率提示
+          if (prof.total_calls >= 10) {
+            const overallRate = Math.round((prof.correct_calls / prof.total_calls) * 100);
+            lines.push(`\n【整體歷史命中率】${overallRate}%（${prof.correct_calls}/${prof.total_calls}）— 請以此為基準校準今日信心度。`);
+          }
+
+          if (lines.length) growthHint = '\n\n' + lines.join('\n');
+        }
+      } catch(_) { /* 讀取失敗不影響主流程 */ }
+
+      // ── 9. 組裝 Prompt ──
       const stockTable = topStocks.map(s =>
         `${s.id} ${s.name} 收${s.close} 漲跌${s.chgPct ?? 'N/A'}% 量${s.volume} PE${s.pe ?? '-'} PB${s.pb ?? '-'} 殖${s.dy ?? '-'}%`
       ).join('\n');
@@ -432,7 +478,7 @@ export default async function handler(req, res) {
   ],
   "alpha_note": "Alpha 給投資人的一句話警語或觀察"
 }
-recommendations 必須包含 3-5 檔，action=買進 至少 2 檔。`;
+recommendations 必須包含 3-5 檔，action=買進 至少 2 檔。${growthHint}`;
 
       const userPrompt = `【市場情緒指標】
 ${marketContext || '資料暫無'}
@@ -727,6 +773,35 @@ ${redditTitles || '無'}
         }
       } catch(e) { /* 弱點提示失敗不中斷 */ }
 
+      // ── B. 動態 prompt 權重：當前環境命中率差 → 限制信心度 ──
+      let dynamicWeightHint = '';
+      try {
+        const wa = profile._weaknessAnalysis || profile.weakness_analysis || {};
+        const curStat = wa[marketRegime];
+        const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
+        if (curStat && curStat.total >= 3 && curStat.rate < 0.50) {
+          dynamicWeightHint = `\n\n【⚠️ 動態風控】當前「${REGIME_ZH[marketRegime] || marketRegime}」環境命中率 ${Math.round(curStat.rate * 100)}%，低於五成。本篇 confidence 欄位必須填「低」，預測措詞要保守，禁止給出強烈方向性判斷。`;
+        } else if (curStat && curStat.total >= 3 && curStat.rate >= 0.65) {
+          dynamicWeightHint = `\n\n【✅ 當前環境順風】「${REGIME_ZH[marketRegime] || marketRegime}」命中率 ${Math.round(curStat.rate * 100)}%，你在這種環境表現不錯，可以正常給出信心度。`;
+        }
+      } catch(e) {}
+
+      // ── C. 成功模式學習：注入有效組合提示 ──
+      let successHint = '';
+      try {
+        const patterns = profile.specialties || [];
+        // specialties 可能是舊格式（字串陣列）或新格式（物件陣列），只處理新格式
+        const validPatterns = patterns.filter(p => p && typeof p === 'object' && p.regime && p.confidence);
+        if (validPatterns.length > 0) {
+          const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
+          const matchCurrent = validPatterns.filter(p => p.regime === marketRegime);
+          if (matchCurrent.length > 0) {
+            const best = matchCurrent.sort((a, b) => b.rate - a.rate)[0];
+            successHint = `\n\n【📈 成功模式提示】你在「${REGIME_ZH[best.regime] || best.regime}」環境 + 信心「${best.confidence}」的組合歷史命中率 ${Math.round(best.rate * 100)}%（${best.total} 次）。今天正是這種環境，請優先考慮給出「${best.confidence}」信心度的預測。`;
+          }
+        }
+      } catch(e) {}
+
       const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。頭銜：${newRank}。
 個性：直接、有點毒舌、偶爾自嘲，但永遠誠實。你不講廢話，不給模糊建議，說話像在跟老朋友講話。
 你有自己的觀點，不怕跟主流唱反調，但判斷永遠基於數據和盤面。
@@ -736,7 +811,7 @@ ${redditTitles || '無'}
 {"content":"你的隨筆內容","prediction":"bullish|bearish|neutral","confidence":"高|中|低","pred_target":"TAIEX"}
 prediction 是你對明天方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
 confidence 是你對這次預測的信心程度（高=你有把握、中=普通、低=不確定）。
-pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}${weaknessHint}`;
+pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}${weaknessHint}${dynamicWeightHint}${successHint}`;
 
       const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出明日方向預測。`;
 
@@ -1092,6 +1167,25 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         const weakestRegime = Object.entries(weaknessAnalysis).sort((a,b) => a[1].rate - b[1].rate)[0]?.[0] || null;
         profile._weaknessAnalysis = weaknessAnalysis;
         profile._weakestRegime = weakestRegime;
+
+        // ── C. 成功模式學習：統計各 regime × confidence 組合命中率 ──
+        const patternStats = {};
+        for (const row of weakRows) {
+          const key = `${row.market_regime || 'normal'}__${row.confidence || '中'}`;
+          if (!patternStats[key]) patternStats[key] = { total: 0, correct: 0 };
+          patternStats[key].total++;
+          if (row.pred_result === 'correct') patternStats[key].correct++;
+        }
+        // 只保留樣本 >= 3、命中率 >= 60% 的「有效組合」作為成功模式
+        const successPatterns = Object.entries(patternStats)
+          .filter(([, s]) => s.total >= 3 && s.correct / s.total >= 0.60)
+          .map(([key, s]) => {
+            const [regime, confidence] = key.split('__');
+            return { regime, confidence, rate: parseFloat((s.correct / s.total).toFixed(2)), total: s.total };
+          })
+          .sort((a, b) => b.rate - a.rate)
+          .slice(0, 5);  // 最多保留 5 個模式
+        profile._successPatterns = successPatterns;
       }
     } catch(_) {}
 
@@ -1148,6 +1242,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         total_calls:        profile.total_calls,
         weakness_analysis:  profile._weaknessAnalysis || profile.weakness_analysis || {},
         weakest_regime:     profile._weakestRegime    || profile.weakest_regime    || null,
+        specialties:        profile._successPatterns  || profile.specialties       || [],
         agent2_wrong_items: wrongItems,
         agent2_streak:      currentStreak,
         agent2_updated_at:  new Date().toISOString(),
