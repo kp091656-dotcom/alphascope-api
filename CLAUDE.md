@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-25（對話十四）
+> 更新日期：2026-06-26（對話十五）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -228,11 +228,16 @@ create table public.alpha_profile (
 - `renderChallengeStats()` — 挑戰模式面板
 - `_resetChallenge()` — 全域函式（**不可改名**）
 
-### 弱點自覺系統
+### 弱點自覺 + 動態成長系統
 
 - `alpha_thoughts.market_regime`：每篇記錄生成當下環境（volatile/trending_up/trending_down/consolidating/normal）
 - 評分後自動統計最近 60 篇各 regime 命中率（樣本 ≥ 3 才計入）
-- 最弱環境命中率 < 50% → 注入 system prompt 提示
+- `alpha_profile.specialties`：`[{ regime, confidence, rate, total }, ...]` 成功模式物件陣列（Agent 2 每日更新）
+- **三層提示同時注入 Agent 3（alpha_thought）+ alpha_analyze**：
+  - `weaknessHint`：最弱環境 < 50% → 警示
+  - `dynamicWeightHint`（B）：當前環境 < 50% → 強制 confidence「低」；≥ 65% → 正常
+  - `successHint`（C）：當前環境符合成功模式 → 提示最佳信心度
+- systemPrompt 注入順序：styleHint → streakHint → regimeHint → weaknessHint → dynamicWeightHint → successHint
 
 ### 產業輪動 RSM（sector_rsm.js）
 
@@ -269,3 +274,11 @@ create table public.alpha_profile (
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表，不可提前刪除）
+
+---
+
+## 對話十五更新（2026-06-26）
+
+- `alphascope_data_analysis.html`：全面更新（資料表 13→15、新增 05b/05c 章節、行動清單 14 項）
+- `index.html` + `alpha.js`：30天回測從行內卡片改為 Modal（`alphaBacktestModal`）；`toggleAlphaBacktest()` 開 Modal；新增 `closeAlphaBacktest()`
+- `api/news.js`：Alpha 自我成長機制串接（B 動態風控 + C 成功模式），Agent 2 / Agent 3 / alpha_analyze 三端同步注入
