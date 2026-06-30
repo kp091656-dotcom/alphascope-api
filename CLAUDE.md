@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-26（對話十五）
+> 更新日期：2026-06-30（對話十六）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -282,3 +282,33 @@ create table public.alpha_profile (
 - `alphascope_data_analysis.html`：全面更新（資料表 13→15、新增 05b/05c 章節、行動清單 14 項）
 - `index.html` + `alpha.js`：30天回測從行內卡片改為 Modal（`alphaBacktestModal`）；`toggleAlphaBacktest()` 開 Modal；新增 `closeAlphaBacktest()`
 - `api/news.js`：Alpha 自我成長機制串接（B 動態風控 + C 成功模式），Agent 2 / Agent 3 / alpha_analyze 三端同步注入
+
+## 對話十六更新（2026-06-30）
+
+### 問題發現
+`alpha_daily_report`（今日市場情緒，圖1）與 `alpha_thoughts`（Agent 3 隨筆，圖2）方向不一致，使用者誤以為矛盾。
+追查後發現根本原因：Agent 3 隨筆的 `prediction` 是「對明天方向的預測」，`pred_date` 被設成隔天，跟 `alpha_daily_report.report_date`（今天）天生對不上日期，等於是在比較「今天的情緒」vs「對明天的預測」，本質上問的是不同問題。
+
+### 修正內容（`api/news.js`，`endpoint === 'alpha_thought'` 區塊）
+
+1. **一般隨筆 `pred_date`**：移除 `+1天` 與跳過週末邏輯，改為直接用台灣當天日期，與 `alpha_daily_report.report_date` 對齊。
+2. **systemPrompt / userPrompt 措辭**：「對明天方向的預測」→「對『今天』大盤方向的預測」，避免 LLM 生成內容仍以「明天」措辭（與資料庫日期不符）。
+3. **檢討篇（reflection）`pred_date`**：同步移除 `twNext`（隔天）邏輯，改用當天日期；`prediction` 維持固定 `'neutral'`（檢討文本身不具方向判斷意義，純為符合 schema）。
+
+### 資料修正（手動執行於 Supabase）
+
+既有 2 筆 pending 隨筆（id 51, 52）`pred_date` 用台灣時區重新校正：
+
+```sql
+UPDATE alpha_thoughts
+SET pred_date = (created_at AT TIME ZONE 'Asia/Taipei')::date
+WHERE pred_result = 'pending'
+  AND angle != 'weekly_recap';
+```
+
+⚠️ 注意：`created_at` 是 UTC 時間，必須先轉 `Asia/Taipei` 時區再取日期，否則會差一天（UTC 23:xx 換算台灣時間已經是隔天早上）。
+
+### 注意事項
+
+- 之後新生成的隨筆會直接用「今天」當 `pred_date`，不需再手動修正。
+- Agent 2 評分邏輯（`pred_date=lte.今天`）不受影響，本來就相容於「同天評分」設計。
