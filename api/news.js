@@ -809,11 +809,11 @@ ${redditTitles || '無'}
 字數限制：100~180字，不多不少。
 輸出格式：純JSON，格式如下，不含任何 markdown：
 {"content":"你的隨筆內容","prediction":"bullish|bearish|neutral","confidence":"高|中|低","pred_target":"TAIEX"}
-prediction 是你對明天方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
+prediction 是你對「今天」大盤方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
 confidence 是你對這次預測的信心程度（高=你有把握、中=普通、低=不確定）。
 pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}${weaknessHint}${dynamicWeightHint}${successHint}`;
 
-      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出明日方向預測。`;
+      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出今日方向預測。`;
 
       try {
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -855,12 +855,8 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         else if (/機會|看好|多頭|突破|強勢|買|漲/.test(content))     mood = 'bullish';
         else if (/悲觀|出清|跑路|慘|崩盤/.test(content))             mood = 'bearish';
 
-        // 計算隔日日期（pred_date）
+        // pred_date = 今天（與 alpha_daily_report.report_date 對齊，皆為當日盤前判斷）
         const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-        twNow.setDate(twNow.getDate() + 1);
-        // 跳過週末
-        if (twNow.getDay() === 0) twNow.setDate(twNow.getDate() + 1);
-        if (twNow.getDay() === 6) twNow.setDate(twNow.getDate() + 2);
         const predDate = twNow.toISOString().slice(0, 10);
 
         // 寫入隨筆
@@ -1206,13 +1202,11 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           const rData = await rRes.json();
           const rRaw = rData.choices?.[0]?.message?.content?.trim() || '';
           const rParsed = JSON.parse(rRaw.replace(/```json|```/g,'').trim());
-          const twNext = new Date(twNow); twNext.setDate(twNext.getDate()+1);
-          if (twNext.getDay()===0) twNext.setDate(twNext.getDate()+1);
-          if (twNext.getDay()===6) twNext.setDate(twNext.getDate()+2);
+          // pred_date = 今天（與其他隨筆 / alpha_daily_report 對齊）
           await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
             method: 'POST',
             headers: { ...hdrs, Prefer: 'return=minimal' },
-            body: JSON.stringify({ content: rParsed.content || rRaw, mood: 'bearish', angle: 'reflection', prediction: 'neutral', pred_date: twNext.toISOString().slice(0,10), pred_result: 'pending', confidence: '低', market_regime: profile.agent1_market_regime || profile.market_regime || 'normal' }),
+            body: JSON.stringify({ content: rParsed.content || rRaw, mood: 'bearish', angle: 'reflection', prediction: 'neutral', pred_date: twNow.toISOString().slice(0,10), pred_result: 'pending', confidence: '低', market_regime: profile.agent1_market_regime || profile.market_regime || 'normal' }),
           });
           reflectionGenerated = true;
         }
