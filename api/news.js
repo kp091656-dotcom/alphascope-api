@@ -811,7 +811,8 @@ ${redditTitles || '無'}
 {"content":"你的隨筆內容","prediction":"bullish|bearish|neutral","confidence":"高|中|低","pred_target":"TAIEX"}
 prediction 是你對「今天」大盤方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
 confidence 是你對這次預測的信心程度（高=你有把握、中=普通、低=不確定）。
-pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}${weaknessHint}${dynamicWeightHint}${successHint}`;
+pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。
+若市場狀況中包含「今日市場情緒報告」，那是同網站當天稍早發布的官方市場情緒判讀，你的隨筆是同一個人對同一個盤勢的個人觀點，請避免方向直接相反（例如報告寫樂觀，你卻寫看跌）；可以有不同切角或保留程度，但核心方向應呼應，若你因風控考量趨於保守，請在內容中簡短說明原因（如「雖然盤面氣氛不錯，但我這個位置不想追」），而不是讓讀者誤以為兩邊在打架。${styleHint}${streakHint}${regimeHint}${weaknessHint}${dynamicWeightHint}${successHint}`;
 
       const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出今日方向預測。`;
 
@@ -911,13 +912,14 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
     let contextLines = [];
     try {
       const [
-        taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData,
+        taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData, dailyReportRes,
       ] = await Promise.allSettled([
         fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=1&select=date,close,chg_pct`, { headers: hdrs }),
         fetch(`${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,fut_tx_foreign_net,fut_tx_foreign_long,fut_tx_foreign_short,fut_tmf_total_oi,fut_tmf_foreign_net`, { headers: hdrs }),
         fetch(`${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=8&select=title_zh,source`, { headers: hdrs }),
         fetch(`${SB_URL}/rest/v1/margin_daily?order=date.desc&limit=2&select=date,margin_balance,margin_chg,short_balance,short_chg`, { headers: hdrs }),
         fetch(`${SB_URL}/rest/v1/options_analytics_daily?order=date.desc&limit=3&select=date,contract_type,pc_ratio_oi,max_pain,call_foreign_net,put_foreign_net`, { headers: hdrs }),
+        fetch(`${SB_URL}/rest/v1/alpha_daily_report?order=report_date.desc&limit=1&select=report_date,market_mood,market_summary,dominant_player`, { headers: hdrs }),
         (async () => {
           const dateRes = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?order=date.desc&limit=1&select=date`, { headers: hdrs });
           const dateJson = await dateRes.json();
@@ -1014,6 +1016,21 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       if (newsRes.status === 'fulfilled') {
         const newsRows = await newsRes.value.json();
         if (newsRows.length) contextLines.push(`近期新聞：${newsRows.map(n => n.title_zh || '').filter(Boolean).join('；')}`);
+      }
+
+      // 今日市場情緒報告（alpha_daily_report，供 Agent 3 對齊方向參考，避免兩處結論矛盾）
+      if (dailyReportRes.status === 'fulfilled') {
+        const drRows = await dailyReportRes.value.json();
+        const dr = Array.isArray(drRows) ? drRows[0] : null;
+        const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        const todayDate = twNow.toISOString().slice(0, 10);
+        if (dr && dr.report_date === todayDate) {
+          const parts = [];
+          if (dr.market_mood) parts.push(`氛圍：${dr.market_mood}`);
+          if (dr.dominant_player) parts.push(`主導者：${dr.dominant_player}`);
+          if (dr.market_summary) parts.push(dr.market_summary);
+          if (parts.length) contextLines.push(`今日市場情緒報告（alpha_daily_report）｜${parts.join('　')}`);
+        }
       }
     } catch(e) {
       contextLines.push('（市場資料暫時無法取得）');
