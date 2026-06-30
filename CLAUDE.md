@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-30（對話十六）
+> 更新日期：2026-06-30（對話十七）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -222,11 +222,6 @@ create table public.alpha_profile (
 - `_renderAccuracyChart(canvasId, thoughts)` — Canvas 折線圖
 - `_streakBadge(streak)` — 連勝/連錯徽章
 - `_confBadge(conf)` — 信心度標籤
-- `renderBetBar(thoughtId, alphaPrediction, predResult)` — 押注欄 HTML
-- `placeBet(thoughtId, direction, alphaPrediction)` — 全域函式（onclick 用，**不可改名**）
-- `_injectBetBars(normalList)` — 批次注入押注欄 + 同步挑戰統計
-- `renderChallengeStats()` — 挑戰模式面板
-- `_resetChallenge()` — 全域函式（**不可改名**）
 
 ### 弱點自覺 + 動態成長系統
 
@@ -312,3 +307,28 @@ WHERE pred_result = 'pending'
 
 - 之後新生成的隨筆會直接用「今天」當 `pred_date`，不需再手動修正。
 - Agent 2 評分邏輯（`pred_date=lte.今天`）不受影響，本來就相容於「同天評分」設計。
+
+## 對話十七更新（2026-06-30）
+
+### 1. 移除 Alpha 挑戰模式 + 讀者押注系統
+
+- `alpha.js`：刪除整個「讀者押注系統」與「Alpha 挑戰模式」區塊，包含 `_getBet`/`_saveBet`/`renderBetBar`/`placeBet`/`_getChallengeStats`/`_challengeRecord`/`_syncChallengeFromThoughts`/`renderChallengeStats`/`_resetChallenge`/`_injectBetBars`，共約 207 行；同步移除卡片上的 `data-bet-id`/`data-pred-result` 屬性與渲染流程中對 `_injectBetBars` 的呼叫。
+- `index.html`：移除 `alphaChallengeStats` 容器 div。
+- 兩檔皆已通過 `node --check` / 語法驗證。
+
+### 2. 修正 `alpha_report` 與 `alpha_thought` 方向矛盾問題
+
+**問題**：`alpha_daily_report`（市場情緒報告，由 `collect_market_data.js` 的 `collectAlphaReport()` 生成）與 `alpha_thought`（Agent 3 隨筆）是兩條完全獨立的資料管線與 LLM 判讀邏輯，互不參照，且 Agent 3 疊加了 `weaknessHint`／`dynamicWeightHint` 等風控降溫機制，導致即使底層資料重疊，兩邊結論仍可能方向相反（例如報告樂觀、隨筆謹慎）。
+
+**修正內容**（`api/news.js`，`endpoint === 'alpha_agent1'` 區塊）：
+
+1. Agent 1 的 `Promise.allSettled` 新增一筆查詢，抓取當天 `alpha_daily_report`（`market_mood`／`market_summary`／`dominant_player`），僅當 `report_date` 等於台灣時區今日日期才採用。
+2. 抓到的話會多一行 `今日市場情緒報告（alpha_daily_report）｜氛圍：xxx 主導者：xxx 摘要` 寫入 `contextLines`，隨 `agent1_context` 存入 `alpha_profile`，供 Agent 3 讀取。
+3. `alpha_thought` 的 systemPrompt 新增提示：若市場狀況中包含「今日市場情緒報告」，隨筆方向不可與報告直接相反；若因風控考量趨於保守，需在內容中簡短說明原因，避免讀者誤以為兩邊矛盾。
+
+**資料來源比對**（`collectAlphaReport()` vs Agent 1）：兩者皆讀 `market_chips_daily`，但 `collectAlphaReport()` 多了總經指標（SOX/DXY/美債/聯準會利率）、PTT 熱門文、產業指數強弱、新聞量較多（30 vs 8）；Agent 1 則多了技術指標（RSI/KD/MACD/MA/布林）與 VIX。選擇權資料表也不同（`options_daily` 舊表 vs `options_analytics_daily` 新表）。
+
+### 注意事項
+
+- `news.js` 改動僅限 `alpha_agent1` 區塊，未影響其他 endpoint。
+- 若之後 `alpha_daily_report` 的欄位（`market_mood`/`market_summary`/`dominant_player`）改名或棄用，需同步調整 Agent 1 查詢與 contextLines 組裝邏輯。
