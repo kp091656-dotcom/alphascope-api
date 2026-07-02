@@ -39,3 +39,20 @@ if ('serviceWorker' in navigator) {
     }, 3000);
   }
 })();
+
+// ── 每日 08:30（台灣時間）自動刷新 ──
+(function() {
+  let reloadedDate = null;
+
+  setInterval(() => {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const h = now.getHours();
+    const m = now.getMinutes();
+    const today = now.toDateString();
+
+    if (h === 8 && m === 30 && reloadedDate !== today) {
+      reloadedDate = today;
+      location.reload();
+    }
+  }, 60 * 1000);
+})();
