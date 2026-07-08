@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-06-30（對話十七）
+> 更新日期：2026-07-08（對話十八）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -332,3 +332,19 @@ WHERE pred_result = 'pending'
 
 - `news.js` 改動僅限 `alpha_agent1` 區塊，未影響其他 endpoint。
 - 若之後 `alpha_daily_report` 的欄位（`market_mood`/`market_summary`/`dominant_player`）改名或棄用，需同步調整 Agent 1 查詢與 contextLines 組裝邏輯。
+
+## 對話十八更新（2026-07-08）
+
+### 1. `utils.js`：每日 08:30 自動重新整理
+
+在 `utils.js` 尾端新增定時器，每分鐘比對台灣時間（`Asia/Taipei`），偵測到 08:30 時觸發 `location.reload()`，並以 `reloadedDate` 記錄今日已刷新，避免同一天重複觸發。
+
+### 2. `sentiment.js`：修正 BY SOURCE 長條圖百分比計算錯誤
+
+**問題**：BY SOURCE 三色長條圖視覺與右側數字（多/中/空）嚴重不符（例如 PTT 多6中2空2，但空頭綠色佔長條最大塊）。
+
+**根因**：`total` 使用 `sp.length`（該來源所有貼文數），但部分貼文在 AI 分析前 `sentiment` 仍為 `null`，導致分母偏大，三段百分比加起來遠小於 100%，殘差 `ePct = 100 - bPct - nPct` 把所有未分析的空間全歸給空頭（第三段），造成空頭長條異常寬。
+
+**修正**（`sentiment.js` 第 59-62 行）：
+- `total` 改為 `bull + neu + bear`（只計算已有 sentiment 的篇數）
+- `ePct` 改為 `Math.round(bear/total*100)`，三段各自獨立計算，不再使用殘差
