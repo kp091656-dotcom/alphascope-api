@@ -56,10 +56,10 @@ function sentRenderDashboard(posts) {
     const bull  = sp.filter(p => p.sentiment === 'bull').length;
     const neu   = sp.filter(p => p.sentiment === 'neutral').length;
     const bear  = sp.filter(p => p.sentiment === 'bear').length;
-    const total = sp.length || 1;
+    const total = (bull + neu + bear) || 1;
     const bPct  = Math.round(bull/total*100);
     const nPct  = Math.round(neu/total*100);
-    const ePct  = 100 - bPct - nPct;
+    const ePct  = Math.round(bear/total*100);
     const lbl   = src === 'ptt' ? 'PTT' : src === 'wsb' ? 'WSB' : 'INV';
     const badgeBg  = src === 'ptt' ? '#fee2e2' : src === 'wsb' ? '#ede9fe' : '#dbeafe';
     const badgeClr = src === 'ptt' ? '#8b1a1a' : src === 'wsb' ? '#7c3010' : '#0c447c';
