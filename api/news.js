@@ -2350,19 +2350,53 @@ ${weekSummary}
       }
       return null;
     };
-    const getNextWeekday = (targetDay) => {
-      const d = new Date(tradeDateObj);
-      for (let i = 0; i < 7; i++) { if (d.getDay() === targetDay) return d; d.setUTCDate(d.getUTCDate() + 1); }
+    // 週三選：從 contract_code 解析第幾個週三（例如 202606W4 → 6月第4個週三）
+    const getWeeklyWedExpiry = (cd) => {
+      const mm = cd.match(/^(\d{4})(\d{2})W(\d)$/);
+      if (!mm) return null;
+      const [, y, mo, nth] = mm;
+      let count = 0;
+      for (let day = 1; day <= 31; day++) {
+        const d = new Date(Date.UTC(+y, +mo - 1, day));
+        if (d.getMonth() !== +mo - 1) break;
+        if (d.getDay() === 3) { count++; if (count === +nth) return d; }
+      }
+      return null;
+    };
+    // 週五選：從 contract_code 解析第幾個週五（例如 202606F3 → 6月第3個週五）
+    const getWeeklyFriExpiry = (cd) => {
+      const mm = cd.match(/^(\d{4})(\d{2})F(\d)$/);
+      if (!mm) return null;
+      const [, y, mo, nth] = mm;
+      let count = 0;
+      for (let day = 1; day <= 31; day++) {
+        const d = new Date(Date.UTC(+y, +mo - 1, day));
+        if (d.getMonth() !== +mo - 1) break;
+        if (d.getDay() === 5) { count++; if (count === +nth) return d; }
+      }
       return null;
     };
 
     const mpCandidates = [];
-    if (nearMonthCD) { const exp = getMonthlyExpiry(nearMonthCD); if (exp) mpCandidates.push({ byStrike: monthly.byStrike, expiry: exp }); }
-    if (nearWedCD)   { const exp = getNextWeekday(3); if (exp) mpCandidates.push({ byStrike: wed.byStrike, expiry: exp }); }
-    if (nearFriCD)   { const exp = getNextWeekday(5); if (exp) mpCandidates.push({ byStrike: fri.byStrike, expiry: exp }); }
+    // 到期當天（結算日）視為已結算，不納入 Max Pain 計算
+    if (nearMonthCD) {
+      const exp = getMonthlyExpiry(nearMonthCD);
+      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
+        mpCandidates.push({ byStrike: monthly.byStrike, expiry: exp });
+    }
+    if (nearWedCD) {
+      const exp = getWeeklyWedExpiry(nearWedCD);
+      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
+        mpCandidates.push({ byStrike: wed.byStrike, expiry: exp });
+    }
+    if (nearFriCD) {
+      const exp = getWeeklyFriExpiry(nearFriCD);
+      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
+        mpCandidates.push({ byStrike: fri.byStrike, expiry: exp });
+    }
 
     const validCandidates = mpCandidates.filter(c => c.expiry >= tradeDateObj).sort((a, b) => a.expiry - b.expiry);
-    const mpCandidate = validCandidates[0] || mpCandidates[0] || null;
+    const mpCandidate = validCandidates[0] || null;
 
     let maxPain = null;
     if (mpCandidate) {
