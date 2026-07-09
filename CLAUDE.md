@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-07-08（對話十八）
+> 更新日期：2026-07-09（對話十九）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -348,3 +348,28 @@ WHERE pred_result = 'pending'
 **修正**（`sentiment.js` 第 59-62 行）：
 - `total` 改為 `bull + neu + bear`（只計算已有 sentiment 的篇數）
 - `ePct` 改為 `Math.round(bear/total*100)`，三段各自獨立計算，不再使用殘差
+
+## 對話十九更新（2026-07-09）
+
+### Max Pain 卡片數字與趨勢圖不一致問題
+
+**問題**：Max Pain 卡片主數字（46,400）與近 5 日趨勢圖最新一點（44,700）方向/數值對不上，使用者誤以為矛盾。
+
+**根因**：卡片數字來自 `api/news.js` 的 `endpoint=options`（即時打 FinMind API 現算，有 60 分鐘快取）；趨勢圖數字來自 Supabase `options_analytics_daily` 表（`collect_market_data.js` 於每日 15:30 批次算好寫入）。兩份程式碼各自實作了一套「近週選合約到期日」判斷邏輯，且不一致：
+
+- `collect_market_data.js`：用 `getWeeklyWedExpiry` / `getWeeklyFriExpiry` 直接解析 `contract_code`（如 `202606F3`）算出該合約實際是當月第幾個週三/週五，並有「到期當天（結算日）視為已結算，改用次近合約」的排除判斷。
+- `news.js`（修正前）：用 `getNextWeekday` 只算「今天起最近的週三/週五」，未核對合約代碼實際到期日，也完全沒有結算日排除判斷。
+
+兩邊邏輯不同，在特定情況下會選到不同合約去算 Max Pain，導致數字不一致。
+
+**修正內容：**
+
+1. `signals.js`：`renderMaxPainTrend()` 算出趨勢圖最新一筆數值後，回頭覆寫卡片主數字（`maxPainVal` / `ms_maxPain`），確保畫面顯示統一改用 Supabase 批次計算值（與趨勢圖同源）。若 Supabase 資料不足 2 天（`renderMaxPainTrend` 提前 return），卡片維持即時值不覆寫。
+2. `api/news.js`（`endpoint === 'options'` 區塊）：將 `getNextWeekday` 換成與 `collect_market_data.js` 完全一致的 `getWeeklyWedExpiry` / `getWeeklyFriExpiry`，直接解析 `contract_code`；並補上「到期當天視為已結算、改用次近合約」的排除判斷（移除原本 `validCandidates[0] || mpCandidates[0]` 的 fallback，因候選清單本身已排除結算日）。
+
+兩檔皆已通過 `node --check` 語法驗證。
+
+### 注意事項
+
+- `signals.js` 的卡片覆寫是雙重保險；`news.js` 的到期日邏輯修正是根因修正。理論上之後即時運算與批次運算應選到同一口合約，數字會一致（前提是抓到的當日 OI 資料本身相同）。
+- 若之後兩邊仍偶爾出現微小差異，可能是即時抓取與批次收集之間 FinMind 資料被盤後修正所致，屬正常時間差，非合約選擇邏輯問題。
