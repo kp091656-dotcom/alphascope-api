@@ -804,6 +804,15 @@ async function renderMaxPainTrend(containerId) {
     const diff   = latest - prev;
     const diffColor = diff > 0 ? 'var(--up)' : diff < 0 ? 'var(--down)' : 'var(--muted)';
 
+    // 同步卡片主數字，統一改用趨勢圖同一批（Supabase 批次計算）資料，避免與即時運算數字不一致
+    const mpValElId = containerId === 'maxPainTrendChart' ? 'maxPainVal'
+                     : containerId === 'ms_maxPainTrend'  ? 'ms_maxPain'
+                     : null;
+    if (mpValElId) {
+      const mpValEl = document.getElementById(mpValElId);
+      if (mpValEl) mpValEl.textContent = latest.toLocaleString() + (mpValElId === 'ms_maxPain' ? ' 點' : '');
+    }
+
     const W = 200, H = 52;
     const DPR = window.devicePixelRatio || 1;
     const canvas = document.createElement('canvas');
