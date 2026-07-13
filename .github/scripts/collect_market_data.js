@@ -124,6 +124,34 @@ async function twseFetch(url, retries = 3, delay = 8000) {
   }
 }
 
+// TWSE 舊版 CSV 端點 fallback（openapi.twse.com.tw 掛掉/維護時使用）
+// 回傳格式為雙引號包裹的 CSV，逐列解析成陣列（不含表頭）
+function parseCSVLine(line) {
+  if (line.includes('"')) return (line.match(/"([^"]*)"/g) || []).map(s => s.slice(1, -1));
+  return line.split(',');
+}
+
+async function twseFetchLegacyCSV(url, retries = 2, delay = 8000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (text.trimStart().startsWith('<')) throw new Error('HTML response（可能被封鎖或維護中）');
+      const lines = text.trim().split('\n').filter(l => l.trim());
+      if (lines.length < 2) throw new Error('CSV 內容為空');
+      return lines.slice(1).map(parseCSVLine); // 跳過表頭
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      console.log(`  ⚠️  舊版端點第 ${i + 1} 次失敗（${e.message}），${delay / 1000}s 後重試…`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+}
+
 async function sbUpsert(table, rows, onConflict) {
   if (!SB_KEY) throw new Error('SUPABASE_SERVICE_KEY 未設定');
   if (!rows.length) { console.log(`  ⏭ ${table}：0 筆，略過`); return; }
@@ -157,19 +185,41 @@ async function sbUpsert(table, rows, onConflict) {
 async function collectTWSEDaily() {
   console.log('📊 台股個股收盤（TWSE OpenAPI）...');
   try {
-    const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
-    const tradeDate = await lastTradingDay();
-    console.log(`  📅 寫入日期：${tradeDate}`);
-    const rows = raw
-      .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
-      .map(r => {
-        const close  = parseFloat(r.ClosingPrice?.replace(/,/g, '')) || 0;
-        const change = parseFloat(r.Change?.replace(/,/g, ''))       || 0;
-        const prev   = close > 0 ? parseFloat((close - change).toFixed(2)) : 0;
-        const chgPct = prev  > 0 ? parseFloat((change / prev).toFixed(6))  : 0;
-        return { date: tradeDate, stock_id: r.Code, name: r.Name || '',
-          close, prev, chg_pct: chgPct, volume: parseInt(r.TradeVolume?.replace(/,/g, '')) || 0, source: 'twse' };
-      }).filter(r => r.close > 0);
+    let rows;
+    try {
+      // ── 主要來源：openapi.twse.com.tw ──
+      const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
+      const tradeDate = await lastTradingDay();
+      console.log(`  📅 寫入日期：${tradeDate}`);
+      rows = raw
+        .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
+        .map(r => {
+          const close  = parseFloat(r.ClosingPrice?.replace(/,/g, '')) || 0;
+          const change = parseFloat(r.Change?.replace(/,/g, ''))       || 0;
+          const prev   = close > 0 ? parseFloat((close - change).toFixed(2)) : 0;
+          const chgPct = prev  > 0 ? parseFloat((change / prev).toFixed(6))  : 0;
+          return { date: tradeDate, stock_id: r.Code, name: r.Name || '',
+            close, prev, chg_pct: chgPct, volume: parseInt(r.TradeVolume?.replace(/,/g, '')) || 0, source: 'twse' };
+        }).filter(r => r.close > 0);
+    } catch (primaryErr) {
+      // ── Fallback：openapi 失敗（常見於週一/維護時段）時改打舊版 CSV 端點 ──
+      console.warn(`  ⚠️  openapi.twse.com.tw 失敗（${primaryErr.message}），改用舊版端點 fallback…`);
+      const csvRows = await twseFetchLegacyCSV('https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json');
+      const tradeDate = await lastTradingDay();
+      console.log(`  📅 寫入日期（fallback）：${tradeDate}`);
+      // 欄位順序：日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數
+      rows = csvRows
+        .filter(c => c[1] && /^\d{4,5}$/.test(c[1]))
+        .map(c => {
+          const close  = parseFloat((c[8] || '').replace(/,/g, '')) || 0;
+          const change = parseFloat((c[9] || '').replace(/,/g, '')) || 0;
+          const prev   = close > 0 ? parseFloat((close - change).toFixed(2)) : 0;
+          const chgPct = prev  > 0 ? parseFloat((change / prev).toFixed(6))  : 0;
+          return { date: tradeDate, stock_id: c[1], name: c[2] || '',
+            close, prev, chg_pct: chgPct, volume: parseInt((c[3] || '').replace(/,/g, '')) || 0, source: 'twse' };
+        }).filter(r => r.close > 0);
+      console.log(`  ✅ fallback 成功：${rows.length} 筆`);
+    }
     await sbUpsert('stock_daily_twse', rows, 'date,stock_id');
     return { ok: true, count: rows.length };
   } catch (e) { console.error(`  ❌ 台股個股 失敗：${e.message}`); return { ok: false, error: e.message }; }
