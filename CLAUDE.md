@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-07-09（對話十九）
+> 更新日期：2026-07-13（對話二十）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -20,6 +20,7 @@
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零略過不寫入。
 - **BFIAMU**：`⚠️ BFIAMU 無匹配資料` 屬正常 warning，不中斷主流程。
+- **openapi.twse.com.tw 週一早上偶爾整批回傳 HTML（維護中）**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域，曾在 Jul 6、Jul 13 兩個週一連續失敗（含手動重跑仍失敗，持續 2 小時以上）。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。目前**只有 `collectTWSEDaily` 加了 fallback**（見下方「對話二十」），`collectSectorIndex`／`collectValuation` 仍會直接失敗，需要時再手動重跑。
 
 ---
 
@@ -189,6 +190,14 @@ create table public.alpha_profile (
 - `nowTW()` 加 8h，用 `getUTCHours()` 即為台灣時間
 - 三層偵測：① Supabase `stock_daily_twse` ② TWSE `STOCK_DAY`（2330）③ fallback 週末跳過
 - 全域快取 `_lastTradingDayCache`：同一次執行只呼叫一次
+
+### collectTWSEDaily() openapi 失敗 fallback
+
+- `openapi.twse.com.tw` 失敗（HTML response）時，自動改打舊版端點 `www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`（回傳 CSV，非 JSON）
+- 新增 `parseCSVLine()` / `twseFetchLegacyCSV()` 兩個輔助函式；重試 2 次、間隔 8 秒
+- 欄位對應（CSV 無表頭語意，靠固定順序）：`c[1]`=證券代號、`c[2]`=證券名稱、`c[3]`=成交股數、`c[8]`=收盤價、`c[9]`=漲跌價差
+- 已用真實抓到的 CSV 資料手動驗算過（台積電、台泥、元大50、瑞祺電通漲停、材料*-KY 特殊符號代號等案例），計算與過濾邏輯均正確
+- ⚠️ **`collectSectorIndex`（MI_INDEX）、`collectValuation`（BWIBBU_ALL）尚未加 fallback**：查過 `www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX` 回傳是巢狀多子表格 JSON，跟 openapi 版本（扁平陣列）結構完全不同，沒實際打過無法保證解析正確，怕做出「不報錯但寫入錯誤資料」的更糟情況，先不動；`BWIBBU_ALL` 舊版路徑則還沒查到。之後要做的話，必須先手動打一次 API 看真實回應格式再寫解析邏輯。
 
 ### Schema 過渡期（待舊表資料穩定 1~2 個月後刪除）
 
@@ -373,3 +382,31 @@ WHERE pred_result = 'pending'
 
 - `signals.js` 的卡片覆寫是雙重保險；`news.js` 的到期日邏輯修正是根因修正。理論上之後即時運算與批次運算應選到同一口合約，數字會一致（前提是抓到的當日 OI 資料本身相同）。
 - 若之後兩邊仍偶爾出現微小差異，可能是即時抓取與批次收集之間 FinMind 資料被盤後修正所致，屬正常時間差，非合約選擇邏輯問題。
+
+## 對話二十更新（2026-07-13）
+
+### 問題發現：Collect TWSE 週一早上常失敗
+
+使用者回報 GitHub Actions `Collect TWSE` workflow 週一容易失敗。比對 Actions 執行紀錄：Jul 6（週一）#40/#41/#42 三次（含手動重跑）皆失敗，Jul 7~10（週二~五）#43~#46 全部成功，Jul 13（週一）#47（排程）/#48（手動重跑）又失敗，兩次間隔 2 小時 15 分。
+
+拉 log 比對，兩次失敗（#47 06:44、#48 09:01）錯誤完全一致：`twseDaily`／`sectorIndex`／`valuation` 三支都回傳「HTML response（可能被封鎖或維護中）」，重試 2 次仍失敗；`chips`（走 FinMind/TAIFEX）不受影響。
+
+### 根因排查
+
+`lastTradingDay()` 內部第二層偵測打的是 `www.twse.com.tw/exchangeReport/STOCK_DAY`（舊版網域），在同一次失敗的執行裡是**成功**的——代表壞的不是 TWSE 全站，是 `openapi.twse.com.tw`（新版 OpenAPI v1 子網域）本身。搜尋未找到 TWSE 官方維護公告，根因無法 100% 確認，但已排除「全站掛掉」的可能。
+
+### 修正內容（`collect_market_data.js`）
+
+只針對 `collectTWSEDaily()`（`STOCK_DAY_ALL`）加上 fallback：`openapi.twse.com.tw` 失敗時改打 `www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`（CSV 格式，欄位順序見上方「collect_market_data.js 重要備忘」）。新增 `parseCSVLine()` / `twseFetchLegacyCSV()`。`sectorIndex`／`valuation` 因舊版端點格式跟 openapi 版差異太大（巢狀多表格 JSON vs 扁平陣列）且未實際驗證過，怕引入「不報錯但資料錯」的風險，這次先不動。
+
+### 驗證
+
+1. 語法驗證 `node --check` 通過
+2. 使用者實際觸發一次 workflow（此時 openapi 剛好正常），確認**主要路徑（非 fallback）沒被改壞**，`twseDaily`/`sectorIndex`/`valuation` 皆成功（1198/132/1078 筆）
+3. 抓真實 TWSE 舊版 CSV 資料，把 fallback 分支的解析／欄位對應程式碼原封不動拿出來跑，手動驗算多筆案例（台積電、台泥、元大50、瑞祺電通漲停、材料*-KY 特殊符號代號）確認計算與過濾邏輯皆正確
+4. ⚠️ **fallback 觸發路徑本身（try/catch 真的走進 catch 分支）尚未在真實失敗情境下驗證過**，需等下次 openapi 真的掛掉時看 log 確認
+
+### 待辦
+
+- [ ] 下次遇到 openapi.twse.com.tw 失敗時，確認 log 有出現「⚠️ openapi.twse.com.tw 失敗...改用舊版端點 fallback...」+「✅ fallback 成功：xxxx 筆」，驗證 fallback 路徑真的有跑
+- [ ] 有空手動打一次 `www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=YYYYMMDD&type=ALLBUT0999&response=json` 和 `BWIBBU_ALL` 對應端點，把真實回應貼給 Claude，才能補上 `sectorIndex`／`valuation` 的 fallback
