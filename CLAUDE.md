@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-07-13（對話二十）
+> 更新日期：2026-07-16（對話二十一）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -20,7 +20,7 @@
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零略過不寫入。
 - **BFIAMU**：`⚠️ BFIAMU 無匹配資料` 屬正常 warning，不中斷主流程。
-- **openapi.twse.com.tw 週一早上偶爾整批回傳 HTML（維護中）**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域，曾在 Jul 6、Jul 13 兩個週一連續失敗（含手動重跑仍失敗，持續 2 小時以上）。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。目前**只有 `collectTWSEDaily` 加了 fallback**（見下方「對話二十」），`collectSectorIndex`／`collectValuation` 仍會直接失敗，需要時再手動重跑。
+- **openapi.twse.com.tw 偶爾整批回傳 HTML（維護中），不限週一**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域。曾在 Jul 6、Jul 13 兩個週一失敗（含手動重跑仍失敗，持續 2 小時以上），**Jul 16（週四）早上又失敗一次**，證實不是「週一限定」，樣本太少導致之前誤判規律。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。`collectTWSEDaily` 的 fallback（見「對話二十」）已於 Jul 16 實戰驗證成功（log 出現預期訊息，1198 筆 upsert）。`collectSectorIndex`／`collectValuation` 仍未加 fallback，會直接失敗，需要時再手動重跑。
 
 ---
 
@@ -410,3 +410,27 @@ WHERE pred_result = 'pending'
 
 - [ ] 下次遇到 openapi.twse.com.tw 失敗時，確認 log 有出現「⚠️ openapi.twse.com.tw 失敗...改用舊版端點 fallback...」+「✅ fallback 成功：xxxx 筆」，驗證 fallback 路徑真的有跑
 - [ ] 有空手動打一次 `www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=YYYYMMDD&type=ALLBUT0999&response=json` 和 `BWIBBU_ALL` 對應端點，把真實回應貼給 Claude，才能補上 `sectorIndex`／`valuation` 的 fallback
+
+## 對話二十一更新（2026-07-16）
+
+### fallback 路徑實戰驗證成功
+
+Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失敗，log 完整印出預期訊息：
+
+```
+⚠️  openapi.twse.com.tw 失敗（HTML response（可能被封鎖或維護中）），改用舊版端點 fallback…
+✅ fallback 成功：1198 筆
+✅ stock_daily_twse：1198 筆 upserted
+```
+
+「對話二十」待辦的第一項（驗證 fallback 真的有走進 catch 分支）確認完成，`collectTWSEDaily` fallback 機制正式驗證有效。
+
+### 新發現：失敗不限週一
+
+這次失敗發生在週四，推翻「只有週一早上會失敗」的假設（原本只有 Jul 6、Jul 13 兩個週一樣本，樣本數太少）。已同步更新上方「已知問題」段落敘述。
+
+`sectorIndex`／`valuation` 兩支這次依然直接失敗（尚未加 fallback），`chips`（FinMind/TAIFEX）不受影響。
+
+### 待辦
+
+- [ ] 補上 `collectSectorIndex`／`collectValuation` 的 fallback（等待使用者提供 `MI_INDEX`／`BWIBBU_ALL` 舊版端點真實回應）
