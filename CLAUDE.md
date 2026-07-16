@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-07-16（對話二十一）
+> 更新日期：2026-07-16（對話二十一，含 sectorIndex/valuation fallback）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -20,7 +20,7 @@
 
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零略過不寫入。
 - **BFIAMU**：`⚠️ BFIAMU 無匹配資料` 屬正常 warning，不中斷主流程。
-- **openapi.twse.com.tw 偶爾整批回傳 HTML（維護中），不限週一**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域。曾在 Jul 6、Jul 13 兩個週一失敗（含手動重跑仍失敗，持續 2 小時以上），**Jul 16（週四）早上又失敗一次**，證實不是「週一限定」，樣本太少導致之前誤判規律。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。`collectTWSEDaily` 的 fallback（見「對話二十」）已於 Jul 16 實戰驗證成功（log 出現預期訊息，1198 筆 upsert）。`collectSectorIndex`／`collectValuation` 仍未加 fallback，會直接失敗，需要時再手動重跑。
+- **openapi.twse.com.tw 偶爾整批回傳 HTML（維護中），不限週一**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域。曾在 Jul 6、Jul 13 兩個週一失敗（含手動重跑仍失敗，持續 2 小時以上），**Jul 16（週四）早上又失敗一次**，證實不是「週一限定」，樣本太少導致之前誤判規律。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。`collectTWSEDaily` 的 fallback（見「對話二十」）已於 Jul 16 實戰驗證成功（log 出現預期訊息，1198 筆 upsert）。`collectSectorIndex`／`collectValuation` 已於「對話二十一」補上 fallback，但**尚未在真實失敗情境下驗證過**（只用截圖資料離線模擬過解析邏輯），需要時再手動重跑觀察 log。
 
 ---
 
@@ -397,7 +397,7 @@ WHERE pred_result = 'pending'
 
 ### 修正內容（`collect_market_data.js`）
 
-只針對 `collectTWSEDaily()`（`STOCK_DAY_ALL`）加上 fallback：`openapi.twse.com.tw` 失敗時改打 `www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`（CSV 格式，欄位順序見上方「collect_market_data.js 重要備忘」）。新增 `parseCSVLine()` / `twseFetchLegacyCSV()`。`sectorIndex`／`valuation` 因舊版端點格式跟 openapi 版差異太大（巢狀多表格 JSON vs 扁平陣列）且未實際驗證過，怕引入「不報錯但資料錯」的風險，這次先不動。
+只針對 `collectTWSEDaily()`（`STOCK_DAY_ALL`）加上 fallback：`openapi.twse.com.tw` 失敗時改打 `www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`（CSV 格式，欄位順序見上方「collect_market_data.js 重要備忘」）。新增 `parseCSVLine()` / `twseFetchLegacyCSV()`。`sectorIndex`／`valuation` 因舊版端點格式跟 openapi 版差異太大（巢狀多表格 JSON vs 扁平陣列）且未實際驗證過，怕引入「不報錯但資料錯」的風險，這次先不動（已於「對話二十一」補上，見下方）。
 
 ### 驗證
 
@@ -431,6 +431,16 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 
 `sectorIndex`／`valuation` 兩支這次依然直接失敗（尚未加 fallback），`chips`（FinMind/TAIFEX）不受影響。
 
+### `collectSectorIndex` / `collectValuation` 補上 fallback（`collect_market_data.js`）
+
+使用者提供 `MI_INDEX`／`BWIBBU_ALL` 舊版端點真實回應截圖後完成：
+
+1. **`collectSectorIndex()`**：openapi 失敗時改打 `www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=YYYYMMDD&type=ALLBUT0999&response=json`，解析巢狀 `tables[0].data`（非 openapi 版本的扁平陣列）；漲跌符號藏在 HTML 標籤內（如 `<p style='color:red'>+</p>`），用 regex `/<p[^>]*>([+-])<\/p>/` 抓取還原正負號，未變動則為空字串（視為 0）
+2. **`collectValuation()`**：openapi 失敗時改打 `BWIBBU_ALL?date=YYYYMMDD&response=json`，解析扁平 `data` 陣列（欄位順序：股票代號/名稱/本益比/殖利率/股價淨值比）；無資料以 `"-"` 表示，`parseFloat("-")` 為 `NaN`，沿用原本 `isNaN` 判斷邏輯即可自動轉為 `null`，不需額外處理
+3. 兩個舊版端點都需要帶 `date=YYYYMMDD` 參數（openapi 版本不需要），用 `tradeDate.replace(/-/g,'')` 轉換
+4. `BFIAMU` 成交金額補值邏輯（寫入 `sector_index_daily.volume`）不受影響，維持原樣
+5. 已用截圖真實資料離線模擬解析（`node` 乾跑），數值、正負號、null 判斷皆正確；`node --check` 語法驗證通過
+
 ### 待辦
 
-- [ ] 補上 `collectSectorIndex`／`collectValuation` 的 fallback（等待使用者提供 `MI_INDEX`／`BWIBBU_ALL` 舊版端點真實回應）
+- [ ] fallback 觸發路徑本身尚未在真實失敗情境下驗證過（這次是離線模擬資料，非實際打 API 失敗觸發），下次 openapi 真的掛掉時需看 log 確認 catch 分支有走進去、且兩張表 Supabase upsert 成功
