@@ -228,28 +228,60 @@ async function collectTWSEDaily() {
 async function collectSectorIndex() {
   console.log('📈 產業指數（TWSE MI_INDEX）...');
   try {
-    const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX');
-    if (!raw.length) throw new Error('API 回傳空陣列');
-    console.log(`  🔍 欄位：${Object.keys(raw[0]).join(', ')}`);
     const tradeDate = await lastTradingDay();
-    const rows = raw
-      .filter(r => {
-        const name = r['指數'] || '';
-        return name && !name.includes('報酬') && !name.includes('槓桿') && !name.includes('反向');
-      })
-      .map(r => {
-        const indexName = r['指數']       || '';
-        const close     = parseFloat((r['收盤指數'] || '').replace(/,/g, '')) || 0;
-        const sign      = (r['漲跌']      || '').trim();
-        const chgPts    = parseFloat((r['漲跌點數'] || '').replace(/,/g, '')) || 0;
-        const rawPct    = parseFloat((r['漲跌百分比'] || '').replace(/,/g, '')) || 0;
-        const chgPct    = sign === '-' ? -rawPct : rawPct;
-        const change    = sign === '-' ? -chgPts : chgPts;
-        return { date: tradeDate, index_name: indexName, close, change, chg_pct: chgPct };
-      })
-      .filter(r => r.close > 0 && r.index_name);
+    let rows, debugSample;
+    try {
+      // ── 主要來源：openapi.twse.com.tw ──
+      const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX');
+      if (!raw.length) throw new Error('API 回傳空陣列');
+      console.log(`  🔍 欄位：${Object.keys(raw[0]).join(', ')}`);
+      debugSample = raw[0];
+      rows = raw
+        .filter(r => {
+          const name = r['指數'] || '';
+          return name && !name.includes('報酬') && !name.includes('槓桿') && !name.includes('反向');
+        })
+        .map(r => {
+          const indexName = r['指數']       || '';
+          const close     = parseFloat((r['收盤指數'] || '').replace(/,/g, '')) || 0;
+          const sign      = (r['漲跌']      || '').trim();
+          const chgPts    = parseFloat((r['漲跌點數'] || '').replace(/,/g, '')) || 0;
+          const rawPct    = parseFloat((r['漲跌百分比'] || '').replace(/,/g, '')) || 0;
+          const chgPct    = sign === '-' ? -rawPct : rawPct;
+          const change    = sign === '-' ? -chgPts : chgPts;
+          return { date: tradeDate, index_name: indexName, close, change, chg_pct: chgPct };
+        })
+        .filter(r => r.close > 0 && r.index_name);
+    } catch (primaryErr) {
+      // ── Fallback：openapi 失敗時改打舊版端點（巢狀 tables[0].data JSON，需帶 date 參數）──
+      // 漲跌符號藏在 HTML：<p style='color:red'>+</p> 或 <p style='color:green'>-</p>，未變動則為空字串
+      console.warn(`  ⚠️  openapi.twse.com.tw 失敗（${primaryErr.message}），改用舊版端點 fallback…`);
+      const dateParam = tradeDate.replace(/-/g, '');
+      const legacy = await twseFetch(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${dateParam}&type=ALLBUT0999&response=json`);
+      const table = legacy?.tables?.[0];
+      if (!table || !Array.isArray(table.data)) throw new Error('舊版端點回傳格式異常');
+      debugSample = table.data[0];
+      rows = table.data
+        .filter(c => {
+          const name = c[0] || '';
+          return name && !name.includes('報酬') && !name.includes('槓桿') && !name.includes('反向');
+        })
+        .map(c => {
+          const indexName  = c[0] || '';
+          const close      = parseFloat((c[1] || '').replace(/,/g, '')) || 0;
+          const signMatch  = /<p[^>]*>([+-])<\/p>/.exec(c[2] || '');
+          const sign       = signMatch ? signMatch[1] : '';
+          const chgPts     = parseFloat((c[3] || '').replace(/,/g, '')) || 0;
+          const rawPct     = parseFloat((c[4] || '').replace(/,/g, '')) || 0;
+          const chgPct     = sign === '-' ? -rawPct : rawPct;
+          const change     = sign === '-' ? -chgPts : chgPts;
+          return { date: tradeDate, index_name: indexName, close, change, chg_pct: chgPct };
+        })
+        .filter(r => r.close > 0 && r.index_name);
+      console.log(`  ✅ fallback 成功：${rows.length} 筆`);
+    }
     if (!rows.length) {
-      console.error(`  ⚠️ 0 筆（原始 ${raw.length} 筆），第一筆：${JSON.stringify(raw[0])}`);
+      console.error(`  ⚠️ 0 筆，第一筆原始資料：${JSON.stringify(debugSample)}`);
     }
     await sbUpsert('sector_index_daily', rows, 'date,index_name');
 
@@ -343,26 +375,56 @@ async function collectSectorIndex() {
 async function collectValuation() {
   console.log('💹 個股估值（TWSE BWIBBU_ALL）...');
   try {
-    const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL');
     const tradeDate = await lastTradingDay();
-    const rows = raw
-      .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
-      .map(r => ({
-        date: tradeDate, stock_id: r.Code,
-        name: r.Name || null,
-        pe_ratio: (() => {
-          const v = parseFloat(r.PEratio);
-          return (!isNaN(v) && v > 0 && v <= 200) ? v : null;
-        })(),
-        pb_ratio: (() => {
-          const v = parseFloat(r.PBratio);
-          return (!isNaN(v) && v > 0) ? v : null;
-        })(),
-        dividend_yield: (() => {
-          const v = parseFloat(r.DividendYield);
-          return (!isNaN(v) && v >= 0) ? v : null;
-        })(),
-      })).filter(r => r.pb_ratio != null || r.pe_ratio != null);
+    let rows;
+    try {
+      // ── 主要來源：openapi.twse.com.tw ──
+      const raw = await twseFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL');
+      rows = raw
+        .filter(r => r.Code && /^\d{4,5}$/.test(r.Code))
+        .map(r => ({
+          date: tradeDate, stock_id: r.Code,
+          name: r.Name || null,
+          pe_ratio: (() => {
+            const v = parseFloat(r.PEratio);
+            return (!isNaN(v) && v > 0 && v <= 200) ? v : null;
+          })(),
+          pb_ratio: (() => {
+            const v = parseFloat(r.PBratio);
+            return (!isNaN(v) && v > 0) ? v : null;
+          })(),
+          dividend_yield: (() => {
+            const v = parseFloat(r.DividendYield);
+            return (!isNaN(v) && v >= 0) ? v : null;
+          })(),
+        })).filter(r => r.pb_ratio != null || r.pe_ratio != null);
+    } catch (primaryErr) {
+      // ── Fallback：openapi 失敗時改打舊版端點（扁平 data 陣列，需帶 date 參數）──
+      // 欄位順序：股票代號, 股票名稱, 本益比, 殖利率(%), 股價淨值比；無資料以 "-" 表示
+      console.warn(`  ⚠️  openapi.twse.com.tw 失敗（${primaryErr.message}），改用舊版端點 fallback…`);
+      const dateParam = tradeDate.replace(/-/g, '');
+      const legacy = await twseFetch(`https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_ALL?date=${dateParam}&response=json`);
+      if (legacy?.stat !== 'OK' || !Array.isArray(legacy.data)) throw new Error('舊版端點回傳格式異常');
+      rows = legacy.data
+        .filter(c => c[0] && /^\d{4,5}$/.test(c[0]))
+        .map(c => ({
+          date: tradeDate, stock_id: c[0],
+          name: c[1] || null,
+          pe_ratio: (() => {
+            const v = parseFloat(c[2]);
+            return (!isNaN(v) && v > 0 && v <= 200) ? v : null;
+          })(),
+          dividend_yield: (() => {
+            const v = parseFloat(c[3]);
+            return (!isNaN(v) && v >= 0) ? v : null;
+          })(),
+          pb_ratio: (() => {
+            const v = parseFloat(c[4]);
+            return (!isNaN(v) && v > 0) ? v : null;
+          })(),
+        })).filter(r => r.pb_ratio != null || r.pe_ratio != null);
+      console.log(`  ✅ fallback 成功：${rows.length} 筆`);
+    }
     await sbUpsert('stock_valuation_daily', rows, 'date,stock_id');
     return { ok: true, count: rows.length };
   } catch (e) { console.error(`  ❌ 估值 失敗：${e.message}`); return { ok: false, error: e.message }; }
