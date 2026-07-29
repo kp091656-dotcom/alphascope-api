@@ -916,7 +916,12 @@ async function loadAlphaThoughts() {
         <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">${nextLabel}</div>
         ${specialties.length ? `
         <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.5rem;">
-          ${specialties.map(s => `<span style="font-size:0.62rem;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.18);">${s}</span>`).join('')}
+          ${specialties.map(s => {
+            const label = typeof s === 'string'
+              ? s
+              : (s && (s.label || s.name || s.tag || s.specialty || s.text)) || (s ? Object.values(s).find(v => typeof v === 'string') : '') || '';
+            return label ? `<span style="font-size:0.62rem;padding:2px 8px;border-radius:99px;background:rgba(99,102,241,0.08);color:#818cf8;border:1px solid rgba(99,102,241,0.18);">${label}</span>` : '';
+          }).join('')}
         </div>` : ''}
         <div style="margin-top:0.5rem;">
           <div style="font-size:0.62rem;color:var(--muted);margin-bottom:0.25rem;">預測命中率趨勢（滾動 10 篇）</div>
