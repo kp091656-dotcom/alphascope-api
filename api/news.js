@@ -350,7 +350,7 @@ export default async function handler(req, res) {
       let growthHint = '';
       try {
         const profR = await fetch(
-          `${SUPABASE_URL}/rest/v1/alpha_profile?id=eq.1&select=weakness_analysis,weakest_regime,specialties,market_regime,correct_calls,total_calls`,
+          `${SUPABASE_URL}/rest/v1/alpha_profile?id=eq.1&select=weakness_analysis,weakest_regime,success_patterns,market_regime,correct_calls,total_calls`,
           { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(4000) }
         );
         const profJson = await profR.json();
@@ -373,7 +373,7 @@ export default async function handler(req, res) {
           }
 
           // C. 成功模式學習：注入有效組合提示
-          const patterns = prof.specialties || [];
+          const patterns = prof.success_patterns || [];
           if (patterns.length > 0) {
             lines.push(`\n【📈 歷史成功模式（請優先參考）】`);
             for (const p of patterns) {
@@ -789,8 +789,7 @@ ${redditTitles || '無'}
       // ── C. 成功模式學習：注入有效組合提示 ──
       let successHint = '';
       try {
-        const patterns = profile.specialties || [];
-        // specialties 可能是舊格式（字串陣列）或新格式（物件陣列），只處理新格式
+        const patterns = profile.success_patterns || profile._successPatterns || [];
         const validPatterns = patterns.filter(p => p && typeof p === 'object' && p.regime && p.confidence);
         if (validPatterns.length > 0) {
           const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
@@ -1253,7 +1252,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         total_calls:        profile.total_calls,
         weakness_analysis:  profile._weaknessAnalysis || profile.weakness_analysis || {},
         weakest_regime:     profile._weakestRegime    || profile.weakest_regime    || null,
-        specialties:        profile._successPatterns  || profile.specialties       || [],
+        success_patterns:   profile._successPatterns  || profile.success_patterns  || [],
         agent2_wrong_items: wrongItems,
         agent2_streak:      currentStreak,
         agent2_updated_at:  new Date().toISOString(),
