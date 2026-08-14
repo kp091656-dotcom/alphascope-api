@@ -312,12 +312,15 @@ async function translateArticles() {
 
   // 分批翻譯（每批 6 篇），避免 max_tokens 截斷
   // 全部一批送出（只翻標題，token 量小，無需分批）
+  let translatedCount = 0;
+  let translateError = null;
   try {
     const lines = targets.map((a, j) =>
       `${j+1}. ${a.title.replace(/[|\n]/g,' ')}`
     ).join('\n');
     const prompt = `將以下財經新聞標題翻譯為繁體中文，規則：①股票代號（如NVDA、TSMC）維持英文 ②公司名稱用台灣常用譯名 ③數字與單位保留原文 ④每行僅輸出「編號. 翻譯後標題」，不加任何說明。\n\n${lines}`;
     const raw = await callGroq(prompt, 600, 0.3);
+    if (!raw || !raw.trim()) throw new Error('Groq 回傳內容為空');
     raw.trim().split('\n')
       .filter(l => l.match(/^\d+\./))
       .forEach(line => {
@@ -327,13 +330,21 @@ async function translateArticles() {
         const art = targets[idx];
         if (!art) return;
         const t = line.replace(/^\d+\.\s*/, '').trim();
-        if (t && t.length > 2 && /[一-鿿]/.test(t)) art.title = t;
+        if (t && t.length > 2 && /[一-鿿]/.test(t)) { art.title = t; translatedCount++; }
       });
+    if (translatedCount === 0) throw new Error('Groq 未回傳有效翻譯（可能被截斷）');
   } catch(e) {
+    translateError = e.message;
     console.warn('Groq 翻譯失敗:', e.message);
   }
 
-  setStatus(`✓ 翻譯完成（熱門 ${targets.length} 篇），共 ${allArticles.length} 則`, 'ok');
+  if (translateError) {
+    setStatus(`⚠ 翻譯失敗（${translateError}），標題維持原文，共 ${allArticles.length} 則`, 'err');
+  } else if (translatedCount < targets.length) {
+    setStatus(`⚠ 部分翻譯成功（${translatedCount}/${targets.length} 篇），共 ${allArticles.length} 則`, 'ok');
+  } else {
+    setStatus(`✓ 翻譯完成（熱門 ${targets.length} 篇），共 ${allArticles.length} 則`, 'ok');
+  }
   renderFeed(getFiltered());
   renderTrending();
   generateBrief();
