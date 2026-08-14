@@ -21,6 +21,7 @@
 - **FinMind `TaiwanStockTotalInstitutionalInvestors` 資料延遲**：有時回傳全 0，`collectInstitutional()` 已加防呆，全零略過不寫入。
 - **BFIAMU**：`⚠️ BFIAMU 無匹配資料` 屬正常 warning，不中斷主流程。
 - **openapi.twse.com.tw 偶爾整批回傳 HTML（維護中），不限週一**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域。曾在 Jul 6、Jul 13 兩個週一失敗（含手動重跑仍失敗，持續 2 小時以上），**Jul 16（週四）早上又失敗一次**，證實不是「週一限定」，樣本太少導致之前誤判規律。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。`collectTWSEDaily` 的 fallback（見「對話二十」）已於 Jul 16 實戰驗證成功（log 出現預期訊息，1198 筆 upsert）。`collectSectorIndex`／`collectValuation` 已於「對話二十一」補上 fallback，但**尚未在真實失敗情境下驗證過**（只用截圖資料離線模擬過解析邏輯），需要時再手動重跑觀察 log。
+- ~~`alpha_profile.specialties` 被 Agent 2 覆寫成物件陣列，畫面顯示 `[object Object]`／市場環境代碼~~：已於「對話二十二」修正，改用獨立的 `success_patterns` 欄位，`specialties` 只留給 Agent 3 寫入專長字串。
 
 ---
 
@@ -444,3 +445,64 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 ### 待辦
 
 - [ ] fallback 觸發路徑本身尚未在真實失敗情境下驗證過（這次是離線模擬資料，非實際打 API 失敗觸發），下次 openapi 真的掛掉時需看 log 確認 catch 分支有走進去、且兩張表 Supabase upsert 成功
+
+## 對話二十二更新（2026-08-02）
+
+### Bug 修正：`specialties` 欄位被兩條 pipeline 互相覆蓋
+
+**現象：** Alpha 隨筆頭銜卡片下方的徽章顯示 `[object Object]`，修完物件渲染防呆後又發現顯示成 `consolidating`／`normal` 這種市場環境代碼，而不是專長字串。
+
+**根因：** `alpha_profile.specialties` 欄位被兩個不同用途的寫入路徑共用：
+1. **Agent 3**（`alpha_thought` endpoint）：每 10 篇觸發一次，寫入 AI 生成的專長字串陣列（如 `["外資動向敏感","善抓恐慌底部"]`）——這是畫面該顯示的內容。
+2. **Agent 2**（`alpha_agent2` endpoint）：**每次評分都執行**，把「環境×信心度組合命中率」物件陣列（`_successPatterns`，格式 `{regime, confidence, rate, total}`）也寫進同一個 `specialties` 欄位，蓋掉 Agent 3 寫的字串。因為 Agent 2 執行頻率遠高於 Agent 3，畫面顯示的幾乎都是 Agent 2 寫入的物件，前端強制轉字串後就變成 `[object Object]`，加防呆後又意外把物件裡的 `regime` 值（如 `consolidating`）當成字串顯示出來。
+
+**修正內容：**
+- `api/news.js`：新增獨立欄位 `success_patterns`，Agent 1／Agent 2 的「成功模式學習」邏輯改讀寫 `success_patterns`，不再碰 `specialties`；`specialties` 欄位之後只由 Agent 3 寫入真正的專長字串。
+- `js/alpha.js`：徽章渲染加上防呆，相容字串與物件兩種格式（保留作為雙重保險，非根本修法）。
+- Supabase 需手動執行：
+  ```sql
+  ALTER TABLE alpha_profile ADD COLUMN success_patterns jsonb DEFAULT '[]';
+  UPDATE alpha_profile SET specialties = '[]' WHERE id = 1;
+  ```
+  （清空舊的髒資料，等 Agent 3 下次每 10 篇觸發時重新填入正確字串）
+
+### 構想記錄：Utility Screen（尚未實作）
+
+使用者提出參考 Mark Minervini 的 Utility Screen 概念，作為 AlphaScope 未來可能新增的濾網功能，目前僅為構想、尚未排入開發：
+
+- **用途**：在大盤修正期間找出抗跌、可能是下一波領頭羊的個股，比固定一年期 RS 更即時。
+- **觸發條件**：大盤距 200 日高點超過 20 個交易日未創新高才啟動；若距高點超過 200 個交易日，直接退回原本一年期 RS 濾網。
+- **核心邏輯**：RS 計算區間 = 大盤自 200 日高點以來的交易日數，每日隨天數同步滾動延長（例：今天距高點 23 天則用 23 天區間算 RS，明天變 24 天）。直到大盤創新高或距高點超過 200 個交易日為止。
+- **濾網條件**：沿用原本權重公式，只是計算區間改成動態值；拿掉「一年低點」相關條件，其餘不變（RS > 85、股價 > MA200、MA50 > MA200、成交額 > 1 億、距 200 日高點 < 25%）。
+- **技術備註**：這種「浮動視窗、每日重算」的邏輯用 Python + 排程自動化比較容易做，之前用其他工具開發時只能做季 RS 替代。若之後要實作，適合放進 `collect_market_data.js` 的 alpha 分析流程或獨立的排程 script，需要每日大盤歷史高點/交易日數資料與可動態指定區間的 RS 計算函式。
+
+## 對話二十三更新（2026-08-14）
+
+### Groq 模型遷移：`llama-3.1-8b-instant` → `openai/gpt-oss-20b`
+
+**觸發原因：** Groq 官方公告 `llama-3.1-8b-instant` 於 2026-08-16 停用，官方推薦替代模型為 `openai/gpt-oss-20b`。
+
+**受影響範圍確認：**
+- `api/news.js` 的 `endpoint === 'groq'`（通用 AI proxy，前端透過 `js/news_feed.js` 的 `callGroq()` 呼叫）：唯一直接寫死 `llama-3.1-8b-instant` 的地方，共 2 處（正常呼叫 + 429 重試）
+- `alpha_analyze`／`alpha_agent1/2/3` 等 Alpha 隨筆主流程：用的是 `llama-3.3-70b-versatile`，**未停用，不受影響，未改動**
+- `collect_market_data.js` 內建的 Groq 呼叫：同樣是 `llama-3.3-70b-versatile`，**未改動**
+- `js/alpha.js`：不直接呼叫 Groq，走 `alpha_*` endpoint，**未改動**
+- `index.html`：首頁 UI 提示文字 `llama-3.1-8b` 已同步改為 `gpt-oss-20b`（純顯示用途，不影響功能）
+
+**Bug：換模型後翻譯與簡報「假成功」**
+
+**現象：** 上線後英文新聞標題沒被翻譯成中文，美股/台股簡報顯示「無法生成內容」，但翻譯區塊的狀態文字仍顯示綠色「✓ 翻譯完成」。
+
+**根因：** `openai/gpt-oss-20b` 是**推理模型**，預設 `reasoning_effort: medium`，呼叫時會先在內部產生一段思維鏈再輸出最終答案，這段思考過程本身會消耗 `max_tokens` 額度。原本針對 `llama-3.1-8b-instant`（非推理模型）設計的 `max_tokens`（翻譯 600、簡報用量更小）不夠讓模型「想完又答完」，導致 `message.content` 被截斷成空字串。`js/news_feed.js` 的 `translateArticles()` 又沒有檢查 `callGroq()` 是否真的回傳有效內容，空字串直接被空迴圈吞掉，最後仍無條件顯示「✓ 翻譯完成」，造成畫面「假成功」。
+
+**修正內容：**
+- `api/news.js`：2 處 Groq 呼叫皆加上 `reasoning_effort: 'low'`，讓模型少花 token 在思考鏈，把額度留給實際輸出
+- `js/news_feed.js` 的 `translateArticles()`：
+  - `callGroq()` 回傳空字串時主動拋錯（原本會被靜默吞掉）
+  - 新增 `translatedCount` 追蹤實際成功翻譯篇數，依結果分三種狀態顯示：全部成功／部分成功（`X/N 篇`）／完全失敗（顯示失敗原因，標題維持原文），完全失敗與部分失敗都用專案既有的 `'err'` class（非自創的 `'error'`）
+
+**待觀察：** `reasoning_effort: 'low'` 上線後是否完全解決截斷問題，若簡報仍偶發失敗，可考慮：① 適度調高 `maxTokens` 當緩衝 ② 在 `api/news.js` 回應解析處加 log，方便排查是 token 不足還是其他原因。
+
+**模型差異速記（供之後排查參考）：** `gpt-oss-20b` 是 MoE 架構、有推理鏈機制，`llama-3.1-8b-instant` 是傳統 dense 架構、無推理鏈。前者跑分/品質明顯較好，Groq 上實測速度更快、綜合成本更低，但呼叫方式不能直接無縫替換——任何未來要換成推理模型（reasoning model）的 Groq 呼叫，都要記得處理 `reasoning_effort` 與 token 額度，否則會重演這次「空內容」的坑。
+
+
