@@ -1720,7 +1720,8 @@ ${weekSummary}
             { role: 'user', content: prompt }
           ],
           max_tokens: maxTokens,
-          temperature
+          temperature,
+          reasoning_effort: 'low'
         })
       });
       const data = await r.json();
@@ -1734,7 +1735,7 @@ ${weekSummary}
           console.warn(`[Groq] 429 rate limit — waiting ${retrySec}s then retry`);
           await new Promise(r => setTimeout(r, retrySec * 1000));
           // 重試一次
-          const r2   = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` }, body: JSON.stringify({ model: 'openai/gpt-oss-20b', messages: [{ role: 'system', content: `你是資深股票研究分析師，專精台灣與全球金融市場。\n語言規則：務必使用繁體中文，嚴禁使用簡體中文。` }, { role: 'user', content: prompt }], max_tokens: maxTokens, temperature }) });
+          const r2   = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` }, body: JSON.stringify({ model: 'openai/gpt-oss-20b', messages: [{ role: 'system', content: `你是資深股票研究分析師，專精台灣與全球金融市場。\n語言規則：務必使用繁體中文，嚴禁使用簡體中文。` }, { role: 'user', content: prompt }], max_tokens: maxTokens, temperature, reasoning_effort: 'low' }) });
           const d2   = await r2.json();
           if (d2.error) {
             console.error('[Groq] Retry also failed:', JSON.stringify(d2.error));
