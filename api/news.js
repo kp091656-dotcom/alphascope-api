@@ -346,53 +346,7 @@ export default async function handler(req, res) {
       // ── 7. 整理新聞標題 ──
       const newsTitles = news.slice(0, 30).map(n => `[${n.source}] ${n.title}`).join('\n');
 
-      // ── 8. 讀取 alpha_profile（B. 動態權重 + C. 成功模式）──
-      let growthHint = '';
-      try {
-        const profR = await fetch(
-          `${SUPABASE_URL}/rest/v1/alpha_profile?id=eq.1&select=weakness_analysis,weakest_regime,success_patterns,market_regime,correct_calls,total_calls`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(4000) }
-        );
-        const profJson = await profR.json();
-        const prof = Array.isArray(profJson) && profJson[0] ? profJson[0] : null;
-        if (prof) {
-          const lines = [];
-          const wa = prof.weakness_analysis || {};
-          const currentRegime = prof.market_regime || 'normal';
-          const regimeLabel = { volatile: '高波動', trending_up: '上升趨勢', trending_down: '下跌趨勢', consolidating: '盤整', normal: '正常' };
-
-          // B. 動態 prompt 權重：當前環境命中率低 → 限制信心度
-          const curStat = wa[currentRegime];
-          if (curStat && curStat.total >= 3 && curStat.rate < 0.50) {
-            lines.push(`【⚠️ 動態風控 — 當前環境警示】`);
-            lines.push(`目前市場環境為「${regimeLabel[currentRegime] || currentRegime}」，歷史命中率僅 ${Math.round(curStat.rate * 100)}%（${curStat.correct}/${curStat.total}）。`);
-            lines.push(`在此環境下，所有推薦的 confidence 欄位最高只能填「低」，market_mood 傾向「謹慎」或「悲觀」，recommendations 中 action=買進 的數量不超過 2 檔。`);
-          } else if (curStat && curStat.total >= 3 && curStat.rate >= 0.65) {
-            lines.push(`【✅ 當前環境表現良好】`);
-            lines.push(`目前「${regimeLabel[currentRegime] || currentRegime}」環境命中率 ${Math.round(curStat.rate * 100)}%，可正常給出信心度評估。`);
-          }
-
-          // C. 成功模式學習：注入有效組合提示
-          const patterns = prof.success_patterns || [];
-          if (patterns.length > 0) {
-            lines.push(`\n【📈 歷史成功模式（請優先參考）】`);
-            for (const p of patterns) {
-              lines.push(`- 在「${regimeLabel[p.regime] || p.regime}」環境 + 信心「${p.confidence}」：命中率 ${Math.round(p.rate * 100)}%（${p.total} 次樣本）→ 這是你表現最好的組合，請善用。`);
-            }
-            lines.push(`給出推薦時，若當前環境符合上述成功模式，優先選擇對應的信心度，並在 reason 中說明訊號吻合之處。`);
-          }
-
-          // 整體準確率提示
-          if (prof.total_calls >= 10) {
-            const overallRate = Math.round((prof.correct_calls / prof.total_calls) * 100);
-            lines.push(`\n【整體歷史命中率】${overallRate}%（${prof.correct_calls}/${prof.total_calls}）— 請以此為基準校準今日信心度。`);
-          }
-
-          if (lines.length) growthHint = '\n\n' + lines.join('\n');
-        }
-      } catch(_) { /* 讀取失敗不影響主流程 */ }
-
-      // ── 9. 組裝 Prompt ──
+      // ── 8. 組裝 Prompt ──
       const stockTable = topStocks.map(s =>
         `${s.id} ${s.name} 收${s.close} 漲跌${s.chgPct ?? 'N/A'}% 量${s.volume} PE${s.pe ?? '-'} PB${s.pb ?? '-'} 殖${s.dy ?? '-'}%`
       ).join('\n');
@@ -402,44 +356,6 @@ export default async function handler(req, res) {
         vixNow   !== null ? `VIX: ${vixNow}` : '',
         twFuture          ? `台指期: ${twFuture.name} ${twFuture.close ?? ''}` : '',
       ].filter(Boolean).join(' | ');
-
-      // ── 技術指標（拉 120 天 TAIEX 自算）──
-      let techSummary = '';
-      try {
-        const techR = await fetch(
-          `${SUPABASE_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.asc&limit=120&select=close`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, signal: AbortSignal.timeout(6000) }
-        );
-        const techRows = await techR.json();
-        const closes = techRows.map(r => r.close);
-        const N = closes.length;
-        if (N >= 26) {
-          const diffs = closes.slice(-15).map((v,i,a)=>i===0?0:v-a[i-1]).slice(1);
-          const avgG = diffs.filter(d=>d>0).reduce((s,v)=>s+v,0)/14;
-          const avgL = diffs.filter(d=>d<0).reduce((s,v)=>s+Math.abs(v),0)/14;
-          const rsi14 = +(avgL===0 ? 100 : 100-100/(1+avgG/avgL)).toFixed(1);
-          let k=50,d=50;
-          for(let i=Math.max(0,N-30);i<N;i++){
-            const ww=closes.slice(Math.max(0,i-8),i+1);
-            const wH=Math.max(...ww),wL=Math.min(...ww);
-            const rsv=wH===wL?50:(closes[i]-wL)/(wH-wL)*100;
-            k=(k*2+rsv)/3; d=(d*2+k)/3;
-          }
-          const emaFn=(arr,p)=>{const kk=2/(p+1);return arr.reduce((e,v)=>v*kk+e*(1-kk));};
-          const macdVal = emaFn(closes.slice(-12),12)-emaFn(closes.slice(-26),26);
-          const ma5  = closes.slice(-5).reduce((s,v)=>s+v,0)/5;
-          const ma20 = closes.slice(-20).reduce((s,v)=>s+v,0)/20;
-          const ma60 = N>=60 ? closes.slice(-60).reduce((s,v)=>s+v,0)/60 : null;
-          const bArr=closes.slice(-20), bMa=bArr.reduce((s,v)=>s+v,0)/20;
-          const bStd=Math.sqrt(bArr.reduce((s,v)=>s+(v-bMa)**2,0)/20);
-          const bbU=Math.round(bMa+2*bStd), bbL=Math.round(bMa-2*bStd);
-          const rsiLbl  = rsi14>=70?'超買':rsi14<=30?'超賣':rsi14>=55?'偏多':'偏空';
-          const kdLbl   = k>d?'K>D黃金叉':'K<D死亡叉';
-          const macdLbl = macdVal>0?'MACD零軸上':'MACD零軸下';
-          const maLbl   = ma5>ma20?'MA5>MA20多排':'MA5<MA20空排';
-          techSummary = `RSI(14)：${rsi14}（${rsiLbl}）｜KD：K=${k.toFixed(0)} D=${d.toFixed(0)}（${kdLbl}）｜${macdLbl}｜${maLbl}｜布林：${bbL}~${bbU}`;
-        }
-      } catch(_e) { /* 技術指標失敗不影響主流程 */ }
 
       const systemPrompt = `你是 Alpha，一位經驗豐富的台股交易員。
 你的分析風格：冷靜、數據導向、不隨波逐流。
@@ -458,7 +374,7 @@ export default async function handler(req, res) {
 - 回傳嚴格 JSON，不含任何 markdown 或說明文字
 - JSON 格式如下（不可有多餘欄位）：
 {
-  "market_summary": "80字以內的市場總結，須涵蓋技術面訊號（RSI/KD/MA）",
+  "market_summary": "50字以內的市場總結",
   "market_mood": "樂觀|中性|謹慎|悲觀",
   "recommendations": [
     {
@@ -478,13 +394,10 @@ export default async function handler(req, res) {
   ],
   "alpha_note": "Alpha 給投資人的一句話警語或觀察"
 }
-recommendations 必須包含 3-5 檔，action=買進 至少 2 檔。${growthHint}`;
+recommendations 必須包含 3-5 檔，action=買進 至少 2 檔。`;
 
       const userPrompt = `【市場情緒指標】
 ${marketContext || '資料暫無'}
-
-【技術面指標（加權指數）】
-${techSummary || '資料暫無'}
 
 【台股量價估值（前50大成交量）】
 ${stockTable}
@@ -620,36 +533,147 @@ ${redditTitles || '無'}
       if (ownerToken !== process.env.OWNER_TOKEN)
         return res.status(403).json({ error: 'Forbidden' });
 
-      // ── Agent 3（撰稿員）：直接讀 Agent 1/2 輸出，不自己抓資料 ──
+      // 撈最新市場資料作為背景（並行抓取）
       let contextLines = [];
-      let marketRegime  = 'normal';
-      let wrongItems    = [];
-      let currentStreak = 0;
       try {
-        const agentRes  = await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1&select=agent1_context,agent1_market_regime,agent2_wrong_items,agent2_streak`, { headers: hdrs });
-        const agentJson = await agentRes.json();
-        const agentState = agentJson[0] || {};
-        if (Array.isArray(agentState.agent1_context) && agentState.agent1_context.length) {
-          contextLines = agentState.agent1_context;
-        } else {
-          contextLines.push('（市場資料暫時無法取得，Agent 1 可能尚未執行）');
+        const [
+          taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData,
+        ] = await Promise.allSettled([
+          // 加權指數
+          fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=1&select=date,close,chg_pct`, { headers: hdrs }),
+          // 籌碼（現貨 + 期貨 + TMF散戶）
+          fetch(`${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,fut_tx_foreign_net,fut_tx_foreign_long,fut_tx_foreign_short,fut_tmf_total_oi,fut_tmf_foreign_net`, { headers: hdrs }),
+          // 新聞（8則）
+          fetch(`${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=8&select=title_zh,source`, { headers: hdrs }),
+          // 融資融券
+          fetch(`${SB_URL}/rest/v1/margin_daily?order=date.desc&limit=2&select=date,margin_balance,margin_chg,short_balance,short_chg`, { headers: hdrs }),
+          // 選擇權（優先週五→週三→月）
+          fetch(`${SB_URL}/rest/v1/options_analytics_daily?order=date.desc&limit=3&select=date,contract_type,pc_ratio_oi,max_pain,call_foreign_net,put_foreign_net`, { headers: hdrs }),
+          // 熱門股前5（成交量）
+          (async () => {
+            const dateRes = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?order=date.desc&limit=1&select=date`, { headers: hdrs });
+            const dateJson = await dateRes.json();
+            const latestDate = dateJson[0]?.date;
+            if (!latestDate) return null;
+            return fetch(`${SB_URL}/rest/v1/stock_daily_twse?date=eq.${latestDate}&stock_id=neq.TAIEX&order=volume.desc&limit=5&select=stock_id,name,close,chg_pct,volume`, { headers: hdrs });
+          })(),
+          // Fear & Greed
+          fetchFGI().catch(() => null),
+          // VIX
+          fetchVIX().catch(() => null),
+        ]);
+
+        // 加權指數
+        if (taiexRes.status === 'fulfilled') {
+          const taiex = (await taiexRes.value.json())[0];
+          if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
         }
-        marketRegime  = agentState.agent1_market_regime || 'normal';
-        wrongItems    = Array.isArray(agentState.agent2_wrong_items) ? agentState.agent2_wrong_items : [];
-        currentStreak = agentState.agent2_streak ?? 0;
+
+        // 籌碼
+        if (chipsRes.status === 'fulfilled') {
+          const chips = (await chipsRes.value.json())[0];
+          if (chips) {
+            contextLines.push(`法人現貨｜外資：${chips.spot_foreign_net}億 投信：${chips.spot_trust_net}億 自營：${chips.spot_dealer_net}億`);
+            contextLines.push(`台指期｜外資淨口：${chips.fut_tx_foreign_net}口（多${chips.fut_tx_foreign_long}口／空${chips.fut_tx_foreign_short}口）`);
+            if (chips.fut_tmf_total_oi != null) contextLines.push(`散戶台指微（TMF）｜外資淨：${chips.fut_tmf_foreign_net}口 散戶未平倉：${chips.fut_tmf_total_oi}口`);
+          }
+        }
+
+        // 融資融券
+        if (marginRes.status === 'fulfilled') {
+          const rows = await marginRes.value.json();
+          if (rows.length) {
+            const m = rows[0];
+            contextLines.push(`融資餘額：${(m.margin_balance/1e8).toFixed(0)}億（${m.margin_chg >= 0 ? '+' : ''}${(m.margin_chg/1e8).toFixed(0)}億） 融券：${(m.short_balance/1e3).toFixed(0)}千張（${m.short_chg >= 0 ? '+' : ''}${(m.short_chg/1e3).toFixed(0)}千張）`);
+          }
+        }
+
+        // 選擇權
+        if (optionsRes.status === 'fulfilled') {
+          const rows = await optionsRes.value.json();
+          const priority = ['weekly_fri','weekly_wed','monthly'];
+          const opt = priority.map(t => rows.find(r => r.contract_type === t)).find(Boolean);
+          if (opt) contextLines.push(`選擇權（${opt.contract_type}）｜PC Ratio：${opt.pc_ratio_oi} Max Pain：${opt.max_pain} 外資CALL淨：${opt.call_foreign_net}口 PUT淨：${opt.put_foreign_net}口`);
+        }
+
+        // Fear & Greed + VIX
+        const fgi = fgiData.status === 'fulfilled' ? fgiData.value : null;
+        const vix = vixData.status === 'fulfilled' ? vixData.value : null;
+        const fgiScore = fgi?.fear_and_greed?.score ?? fgi?.score ?? null;
+        const fgiLabel = fgi?.fear_and_greed?.rating ?? '';
+        const vixNow = vix?.data?.find(v => v.symbol === '^VIX')?.price ?? null;
+        if (fgiScore !== null || vixNow !== null) {
+          const parts = [];
+          if (fgiScore !== null) parts.push(`Fear & Greed：${fgiScore}（${fgiLabel}）`);
+          if (vixNow !== null) parts.push(`VIX：${vixNow}`);
+          contextLines.push(`市場情緒｜${parts.join(' ')}`);
+        }
+
+        // 熱門股
+        if (topStocksRes.status === 'fulfilled' && topStocksRes.value) {
+          const stocksJson = await topStocksRes.value.json();
+          if (Array.isArray(stocksJson) && stocksJson.length) {
+            const list = stocksJson.map(s => `${s.name}(${s.stock_id}) ${s.close}（${s.chg_pct >= 0 ? '+' : ''}${s.chg_pct}%）`).join('、');
+            contextLines.push(`成交量前5大：${list}`);
+          }
+        }
+
+        // 新聞
+        if (newsRes.status === 'fulfilled') {
+          const newsRows = await newsRes.value.json();
+          if (newsRows.length) contextLines.push(`近期新聞：${newsRows.map(n => n.title_zh || '').filter(Boolean).join('；')}`);
+        }
+
       } catch(e) {
-        contextLines.push('（讀取 Agent 狀態失敗）');
+        contextLines.push('（市場資料暫時無法取得）');
       }
 
       const context = contextLines.join('\n');
 
-      // ── Agent 3：撈 alpha_profile（成長檔案）+ 風格學習 ──
+      // ── 市場環境感知（從 context data 自動判斷）──
+      // 依據：VIX、FGI、近5日加權漲跌、法人方向 → 判斷震盪/趨勢/高波動
+      let marketRegime = 'normal'; // normal | trending_up | trending_down | volatile | consolidating
+      let marketRegimeLabel = '正常盤整';
+      try {
+        // 從 contextLines 解析關鍵數字
+        const taiexLine  = contextLines.find(l => l.startsWith('加權指數'));
+        const chipsLine  = contextLines.find(l => l.startsWith('法人現貨'));
+        const emotionLine = contextLines.find(l => l.startsWith('市場情緒'));
+
+        const chgMatch  = taiexLine?.match(/\(([+-]?\d+\.?\d*)%\)/);
+        const chgPct    = chgMatch ? parseFloat(chgMatch[1]) : null;
+        const fgiMatch  = emotionLine?.match(/Fear & Greed：(\d+)/);
+        const fgiVal    = fgiMatch ? parseInt(fgiMatch[1]) : null;
+        const vixMatch  = emotionLine?.match(/VIX：([\d.]+)/);
+        const vixVal    = vixMatch ? parseFloat(vixMatch[1]) : null;
+        const foreignMatch = chipsLine?.match(/外資：([+-]?\d+\.?\d*)億/);
+        const foreignNet = foreignMatch ? parseFloat(foreignMatch[1]) : null;
+
+        if (vixVal !== null && vixVal >= 25) {
+          marketRegime = 'volatile'; marketRegimeLabel = '高波動恐慌';
+        } else if (fgiVal !== null && fgiVal >= 75) {
+          marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭（過熱）';
+        } else if (fgiVal !== null && fgiVal <= 25) {
+          marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭（恐慌）';
+        } else if (chgPct !== null && chgPct > 1.0 && foreignNet !== null && foreignNet > 0) {
+          marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭';
+        } else if (chgPct !== null && chgPct < -1.0 && foreignNet !== null && foreignNet < 0) {
+          marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭';
+        } else if (Math.abs(chgPct || 0) < 0.3) {
+          marketRegime = 'consolidating'; marketRegimeLabel = '窄幅震盪';
+        }
+        // 寫入 contextLines，讓 AI 知道當下環境
+        contextLines.push(`市場環境判斷：${marketRegimeLabel}（regime=${marketRegime}）`);
+      } catch(e) { /* 環境感知失敗不中斷 */ }
+
+
       const RANKS = [
         { min: 0,   acc: 0,    label: '菜鳥交易員' },
         { min: 10,  acc: 0,    label: '盤中觀察者' },
         { min: 30,  acc: 0,    label: '資深操盤手' },
         { min: 100, acc: 0,    label: '市場老狐狸' },
         { min: 300, acc: 0,    label: 'Alpha 傳奇' },
+        // 準確率加成頭銜（覆蓋）
         { min: 0,   acc: 0.55, label: '精準狙擊手' },
         { min: 0,   acc: 0.70, label: '市場預言家' },
         { min: 100, acc: 0.55, label: '鐵血操盤手' },
@@ -658,6 +682,7 @@ ${redditTitles || '無'}
 
       function calcRank(total, correct, total_calls) {
         const acc = total_calls >= 10 ? correct / total_calls : 0;
+        // 找同時滿足 posts 門檻 + 準確率門檻的最高頭銜
         let best = '菜鳥交易員';
         for (const r of RANKS) {
           if (total >= r.min && acc >= r.acc) best = r.label;
@@ -665,54 +690,231 @@ ${redditTitles || '無'}
         return best;
       }
 
-      // 撈完整 profile（用於頭銜計算、風格學習）
-      let profile = { total_posts: 0, correct_calls: 0, total_calls: 0, rank: '菜鳥交易員', style_memo: '', weakness_analysis: {}, weakest_regime: null };
+      // ── 撈 alpha_profile（成長檔案）──
+      let profile = { total_posts: 0, correct_calls: 0, total_calls: 0, rank: '菜鳥交易員', style_memo: '' };
       try {
         const profRes = await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1&select=*`, { headers: hdrs });
         const profJson = await profRes.json();
         if (profJson[0]) profile = profJson[0];
-      } catch(e) {}
+      } catch(e) { /* 用預設值 */ }
 
-      // 撈最近 24 篇（風格學習用）
+      // ── 撈最近 24 篇隨筆（風格學習 + streak 計算用）──
       let recentThoughts = [];
       try {
-        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result,confidence,market_regime`, { headers: hdrs });
+        const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=content,mood,angle,pred_result,confidence`, { headers: hdrs });
         recentThoughts = await recRes.json();
-      } catch(e) {}
+      } catch(e) { /* 忽略 */ }
 
-      const isOnLosingStreak = currentStreak <= -3;
+      // ── 計算連勝/連錯 streak ──
+      // 只計算已評分的預測（correct / wrong），忽略 pending
+      function calcStreak(thoughts) {
+        const rated = thoughts.filter(t => t.pred_result === 'correct' || t.pred_result === 'wrong');
+        if (!rated.length) return 0;
+        const last = rated[0].pred_result; // 最新一筆
+        let streak = 0;
+        for (const t of rated) {
+          if (t.pred_result === last) streak++;
+          else break;
+        }
+        // 連勝為正，連錯為負
+        return last === 'correct' ? streak : -streak;
+      }
+      const currentStreak = calcStreak(recentThoughts);
+      const isOnLosingStreak = currentStreak <= -3; // 連錯 3 次以上進入反省模式
 
-      // ── 風格自我分析（每 10 篇觸發一次）── 
+      // ── 風格自我分析（每 10 篇觸發一次）──
       let styleMemo = profile.style_memo || '';
-      let specialties = profile.specialties || [];
+      let specialties = profile.specialties || [];        // 專長標籤陣列
       if (recentThoughts.length >= 10 && profile.total_posts % 10 === 0) {
         try {
           const stylePrompt = `以下是我最近說過的話（${recentThoughts.length}篇）：\n${recentThoughts.map(t => `[${t.mood}][${t.pred_result}] ${t.content}`).join('\n---\n')}\n\n請用50字以內分析：我最近的語氣風格、偏多還是偏空、有沒有什麼口頭禪或習慣，以及預測準確率如何。純文字，不要條列。`;
           const styleRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
-            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: stylePrompt }], max_tokens: 150, temperature: 0.5 }),
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: stylePrompt }],
+              max_tokens: 150,
+              temperature: 0.5,
+            }),
             signal: AbortSignal.timeout(10000),
           });
           const styleData = await styleRes.json();
           styleMemo = styleData.choices?.[0]?.message?.content?.trim() || styleMemo;
-        } catch(e) {}
+        } catch(e) { /* 風格分析失敗不影響主流程 */ }
+
+        // ── 專長標籤分析（和 style_memo 同批觸發）──
         try {
-          const specPrompt = `你是分析師，根據以下交易員隨筆，用最精簡的詞（每個 4~8 字）列出他 2~3 個最明顯的市場專長或習慣特徵。\n格式：只回傳 JSON 陣列，例如 ["外資動向敏感","善抓恐慌底部","偏好短線波段"]，不要任何其他文字。\n\n隨筆內容：\n${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
+          const specPrompt = `你是分析師，根據以下交易員隨筆，用最精簡的詞（每個 4~8 字）列出他 2~3 個最明顯的市場專長或習慣特徵。
+格式：只回傳 JSON 陣列，例如 ["外資動向敏感","善抓恐慌底部","偏好短線波段"]，不要任何其他文字。
+
+隨筆內容：
+${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
           const specRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
-            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: specPrompt }], max_tokens: 80, temperature: 0.4 }),
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: specPrompt }],
+              max_tokens: 80,
+              temperature: 0.4,
+            }),
             signal: AbortSignal.timeout(10000),
           });
           const specData = await specRes.json();
           const specRaw = specData.choices?.[0]?.message?.content?.trim() || '';
           const specParsed = JSON.parse(specRaw.replace(/```json|```/g, '').trim());
-          if (Array.isArray(specParsed) && specParsed.length) specialties = specParsed.slice(0, 3).map(s => String(s).slice(0, 10));
-        } catch(e) {}
+          if (Array.isArray(specParsed) && specParsed.length) {
+            specialties = specParsed.slice(0, 3).map(s => String(s).slice(0, 10));
+          }
+        } catch(e) { /* 專長標籤失敗不影響主流程 */ }
       }
 
-            // ── 計算新頭銜 ──
+      // ── 評分昨日預測（補跑）──
+      const wrongItems = [];
+      try {
+        const twToday = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
+          .replace(/\//g, '-').replace(/(\d+)-(\d+)-(\d+)/, (_, y, m, d) => `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+        // 加入 pred_target 欄位
+        const pendingRes = await fetch(
+          `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&angle=neq.weekly_recap&select=id,prediction,pred_date,content,confidence,pred_target`,
+          { headers: hdrs }
+        );
+        const pending = await pendingRes.json();
+        if (Array.isArray(pending) && pending.length) {
+          const dates = [...new Set(pending.map(p => p.pred_date))];
+
+          // 撈加權指數
+          const taiexRows = await Promise.all(dates.map(async d => {
+            const r = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&date=eq.${d}&select=date,chg_pct`, { headers: hdrs });
+            const j = await r.json();
+            return j[0] || null;
+          }));
+          const taiexMap = {};
+          taiexRows.forEach(row => { if (row) taiexMap[row.date] = row.chg_pct; });
+
+          // 撈個股（pred_target 為 4 位代號的）
+          const stockTargets = [...new Set(pending
+            .map(p => p.pred_target)
+            .filter(t => t && t !== 'TAIEX' && /^\d{4}$/.test(t))
+          )];
+          const stockMap = {}; // { 'date_stockId': chg_pct }
+          if (stockTargets.length > 0) {
+            await Promise.all(dates.map(async d => {
+              const r = await fetch(
+                `${SB_URL}/rest/v1/stock_daily_twse?date=eq.${d}&stock_id=in.(${stockTargets.join(',')})&select=date,stock_id,chg_pct`,
+                { headers: hdrs }
+              );
+              const rows = await r.json();
+              if (Array.isArray(rows)) rows.forEach(row => { stockMap[`${row.date}_${row.stock_id}`] = row.chg_pct; });
+            }));
+          }
+
+          let newCorrect = 0;
+          for (const p of pending) {
+            const target = p.pred_target || 'TAIEX';
+            // 取對應漲跌幅
+            let chg;
+            if (target === 'TAIEX' || !/^\d{4}$/.test(target)) {
+              // TAIEX 或板塊名：都用加權指數評分（板塊暫無獨立資料）
+              chg = taiexMap[p.pred_date];
+            } else {
+              chg = stockMap[`${p.pred_date}_${target}`] ?? taiexMap[p.pred_date];
+            }
+            if (chg === undefined) continue;
+            const actual = chg > 0.3 ? 'bullish' : chg < -0.3 ? 'bearish' : 'neutral';
+            const result = p.prediction === actual ? 'correct' : 'wrong';
+            if (result === 'correct') newCorrect++;
+            await fetch(`${SB_URL}/rest/v1/alpha_thoughts?id=eq.${p.id}`, {
+              method: 'PATCH',
+              headers: { ...hdrs, Prefer: 'return=minimal' },
+              body: JSON.stringify({ pred_result: result }),
+            });
+            if (result === 'wrong' && Math.abs(chg) > 0.3) {
+              wrongItems.push({ ...p, actual, chg });
+            }
+          }
+          profile.correct_calls += newCorrect;
+          profile.total_calls += pending.filter(p => {
+            const t = p.pred_target || 'TAIEX';
+            return (/^\d{4}$/.test(t) && t !== 'TAIEX')
+              ? stockMap[`${p.pred_date}_${t}`] !== undefined || taiexMap[p.pred_date] !== undefined
+              : taiexMap[p.pred_date] !== undefined;
+          }).length;
+        }
+      } catch(e) { /* 評分失敗不中斷 */ }
+
+      // ── 被打臉記錄：wrong 時自動生成檢討篇 ──
+      // 每次最多觸發 1 篇（避免連錯時洗版），優先選 confidence=高 的
+      try {
+        if (wrongItems.length > 0) {
+          const target = wrongItems.find(w => w.confidence === '高') || wrongItems[0];
+          const dirMap = { bullish: '↑多', bearish: '↓空', neutral: '→中性' };
+          const actualDir = target.chg > 0 ? '↑漲' : '↓跌';
+          const reflectSystem = `你是 Alpha，台股職業交易員。頭銜：${profile.rank || '菜鳥交易員'}。
+個性：直接、有點毒舌、偶爾自嘲，永遠誠實。
+這篇是「被打臉檢討」：你之前預測錯了，現在要誠實面對。
+語氣：帶點苦笑和自嘲，不要推卸責任，說話還是像在跟老朋友聊。
+字數：80~140字，不多不少。
+輸出格式：純JSON，不含 markdown：
+{"content":"檢討全文","mood":"cautious"}`;
+          const reflectUser = `你之前說：「${(target.content||'').slice(0,80)}」
+你預測：${dirMap[target.prediction]||target.prediction}，結果：${actualDir}（${target.chg > 0 ? '+' : ''}${target.chg?.toFixed(2)}%）
+信心度：${target.confidence || '中'}
+
+請用你的風格寫一篇檢討：說清楚你錯在哪，市場給了你什麼教訓，語氣帶點苦笑，但不要太哭哭啼啼。`;
+
+          const rRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                { role: 'system', content: reflectSystem },
+                { role: 'user',   content: reflectUser },
+              ],
+              max_tokens: 300,
+              temperature: 0.8,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (rRes.ok) {
+            const rData = await rRes.json();
+            let rRaw = rData.choices?.[0]?.message?.content?.trim() || '';
+            let rContent = rRaw, rMood = 'cautious';
+            try {
+              const rParsed = JSON.parse(rRaw.replace(/```json|```/g, '').trim());
+              rContent = rParsed.content || rRaw;
+              rMood    = rParsed.mood    || 'cautious';
+            } catch(e) { rContent = rRaw; }
+
+            // 計算隔日 pred_date
+            const twNow2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+            twNow2.setDate(twNow2.getDate() + 1);
+            if (twNow2.getDay() === 0) twNow2.setDate(twNow2.getDate() + 1);
+            if (twNow2.getDay() === 6) twNow2.setDate(twNow2.getDate() + 2);
+            const reflectPredDate = twNow2.toISOString().slice(0, 10);
+
+            await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
+              method: 'POST',
+              headers: { ...hdrs, Prefer: 'return=minimal' },
+              body: JSON.stringify({
+                content:      rContent,
+                mood:         rMood,
+                angle:        'reflection',
+                prediction:   'neutral',
+                pred_date:    reflectPredDate,
+                pred_result:  'pending',
+                rank_at_post: profile.rank || '菜鳥交易員',
+                confidence:   '低',
+                streak:       currentStreak,
+              }),
+            });
+          }
+        }
+      } catch(e) { /* 檢討篇失敗不中斷主流程 */ }
+
+      // ── 計算新頭銜 ──
       const newTotal = profile.total_posts + 1;
       const newRank  = calcRank(newTotal, profile.correct_calls, profile.total_calls);
 
@@ -748,59 +950,6 @@ ${redditTitles || '無'}
         normal:         '',
       }[marketRegime] || '';
 
-      // ── 弱點自覺提示（注入 system prompt）──
-      let weaknessHint = '';
-      try {
-        const wa = profile._weaknessAnalysis || {};
-        const wr = profile._weakestRegime;
-        const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
-        if (wr && wa[wr] && wa[wr].rate < 0.5) {
-          const wrLabel = REGIME_ZH[wr] || wr;
-          const wrRate  = Math.round(wa[wr].rate * 100);
-          const curIsWeak = marketRegime === wr;
-          weaknessHint = `\n\n【你的弱點自覺】你在「${wrLabel}」環境下的歷史命中率只有 ${wrRate}%（${wa[wr].correct}/${wa[wr].total}）。`;
-          if (curIsWeak) {
-            weaknessHint += `今天正是這種環境——請特別謹慎，信心度不應超過「中」，措詞也要更保守。`;
-          } else {
-            weaknessHint += `今天環境還好，但要記住這個弱點，避免在類似盤況過度自信。`;
-          }
-          // 若有多個弱環境，補充最強環境
-          const bestEntry = Object.entries(wa).filter(([k]) => k !== wr).sort((a,b) => b[1].rate - a[1].rate)[0];
-          if (bestEntry && bestEntry[1].rate >= 0.6) {
-            const bestLabel = REGIME_ZH[bestEntry[0]] || bestEntry[0];
-            weaknessHint += `反之你在「${bestLabel}」環境表現最好（${Math.round(bestEntry[1].rate*100)}%），可以更有把握。`;
-          }
-        }
-      } catch(e) { /* 弱點提示失敗不中斷 */ }
-
-      // ── B. 動態 prompt 權重：當前環境命中率差 → 限制信心度 ──
-      let dynamicWeightHint = '';
-      try {
-        const wa = profile._weaknessAnalysis || profile.weakness_analysis || {};
-        const curStat = wa[marketRegime];
-        const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
-        if (curStat && curStat.total >= 3 && curStat.rate < 0.50) {
-          dynamicWeightHint = `\n\n【⚠️ 動態風控】當前「${REGIME_ZH[marketRegime] || marketRegime}」環境命中率 ${Math.round(curStat.rate * 100)}%，低於五成。本篇 confidence 欄位必須填「低」，預測措詞要保守，禁止給出強烈方向性判斷。`;
-        } else if (curStat && curStat.total >= 3 && curStat.rate >= 0.65) {
-          dynamicWeightHint = `\n\n【✅ 當前環境順風】「${REGIME_ZH[marketRegime] || marketRegime}」命中率 ${Math.round(curStat.rate * 100)}%，你在這種環境表現不錯，可以正常給出信心度。`;
-        }
-      } catch(e) {}
-
-      // ── C. 成功模式學習：注入有效組合提示 ──
-      let successHint = '';
-      try {
-        const patterns = profile.success_patterns || profile._successPatterns || [];
-        const validPatterns = patterns.filter(p => p && typeof p === 'object' && p.regime && p.confidence);
-        if (validPatterns.length > 0) {
-          const REGIME_ZH = { volatile:'高波動恐慌', trending_up:'趨勢多頭', trending_down:'趨勢空頭', consolidating:'窄幅震盪', normal:'正常盤整' };
-          const matchCurrent = validPatterns.filter(p => p.regime === marketRegime);
-          if (matchCurrent.length > 0) {
-            const best = matchCurrent.sort((a, b) => b.rate - a.rate)[0];
-            successHint = `\n\n【📈 成功模式提示】你在「${REGIME_ZH[best.regime] || best.regime}」環境 + 信心「${best.confidence}」的組合歷史命中率 ${Math.round(best.rate * 100)}%（${best.total} 次）。今天正是這種環境，請優先考慮給出「${best.confidence}」信心度的預測。`;
-          }
-        }
-      } catch(e) {}
-
       const systemPrompt = `你是 Alpha，一位在台股市場打滾超過十年的職業交易員。頭銜：${newRank}。
 個性：直接、有點毒舌、偶爾自嘲，但永遠誠實。你不講廢話，不給模糊建議，說話像在跟老朋友講話。
 你有自己的觀點，不怕跟主流唱反調，但判斷永遠基於數據和盤面。
@@ -808,12 +957,11 @@ ${redditTitles || '無'}
 字數限制：100~180字，不多不少。
 輸出格式：純JSON，格式如下，不含任何 markdown：
 {"content":"你的隨筆內容","prediction":"bullish|bearish|neutral","confidence":"高|中|低","pred_target":"TAIEX"}
-prediction 是你對「今天」大盤方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
+prediction 是你對明天方向的預測（漲>0.3%=bullish，跌>0.3%=bearish，否則neutral）。
 confidence 是你對這次預測的信心程度（高=你有把握、中=普通、低=不確定）。
-pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。
-若市場狀況中包含「今日市場情緒報告」，那是同網站當天稍早發布的官方市場情緒判讀，你的隨筆是同一個人對同一個盤勢的個人觀點，請避免方向直接相反（例如報告寫樂觀，你卻寫看跌）；可以有不同切角或保留程度，但核心方向應呼應，若你因風控考量趨於保守，請在內容中簡短說明原因（如「雖然盤面氣氛不錯，但我這個位置不想追」），而不是讓讀者誤以為兩邊在打架。${styleHint}${streakHint}${regimeHint}${weaknessHint}${dynamicWeightHint}${successHint}`;
+pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特定板塊填板塊名（例如"半導體"），若是個股填股票代號（例如"2330"）。${styleHint}${streakHint}${regimeHint}`;
 
-      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出今日方向預測。`;
+      const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出明日方向預測。`;
 
       try {
         const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -855,15 +1003,19 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         else if (/機會|看好|多頭|突破|強勢|買|漲/.test(content))     mood = 'bullish';
         else if (/悲觀|出清|跑路|慘|崩盤/.test(content))             mood = 'bearish';
 
-        // pred_date = 今天（與 alpha_daily_report.report_date 對齊，皆為當日盤前判斷）
+        // 計算隔日日期（pred_date）
         const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        twNow.setDate(twNow.getDate() + 1);
+        // 跳過週末
+        if (twNow.getDay() === 0) twNow.setDate(twNow.getDate() + 1);
+        if (twNow.getDay() === 6) twNow.setDate(twNow.getDate() + 2);
         const predDate = twNow.toISOString().slice(0, 10);
 
         // 寫入隨筆
         const insertRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
           method: 'POST',
           headers: { ...hdrs, Prefer: 'return=representation' },
-          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank, confidence, streak: currentStreak, pred_target: predTarget, market_regime: marketRegime }),
+          body: JSON.stringify({ content, mood, angle, prediction, pred_date: predDate, pred_result: 'pending', rank_at_post: newRank, confidence, streak: currentStreak, pred_target: predTarget }),
         });
         const inserted = await insertRes.json();
 
@@ -872,16 +1024,14 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           method: 'PATCH',
           headers: { ...hdrs, Prefer: 'return=minimal' },
           body: JSON.stringify({
-            total_posts:        newTotal,
-            correct_calls:      profile.correct_calls,
-            total_calls:        profile.total_calls,
-            rank:               newRank,
-            style_memo:         styleMemo,
-            specialties:        specialties,
-            market_regime:      marketRegime,
-            weakness_analysis:  profile._weaknessAnalysis || profile.weakness_analysis || {},
-            weakest_regime:     profile._weakestRegime || profile.weakest_regime || null,
-            updated_at:         new Date().toISOString(),
+            total_posts:   newTotal,
+            correct_calls: profile.correct_calls,
+            total_calls:   profile.total_calls,
+            rank:          newRank,
+            style_memo:    styleMemo,
+            specialties:   specialties,
+            market_regime: marketRegime,
+            updated_at:    new Date().toISOString(),
           }),
         });
 
@@ -892,376 +1042,6 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // ════════════════════════════════════════════════════════════
-  // ── Agent 1：市場資料員 ──
-  // 每天 14:30 由 GitHub Actions 呼叫（POST）
-  // 抓市場資料 + 技術指標 + 市場環境感知 → 存 alpha_profile
-  // ════════════════════════════════════════════════════════════
-  if (endpoint === 'alpha_agent1') {
-    const SB_URL  = process.env.SUPABASE_URL || 'https://fdxedcwtmlurumfjmlys.supabase.co';
-    const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
-    if (!SB_KEY) return res.status(500).json({ error: 'SUPABASE_SERVICE_KEY not configured' });
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const ownerToken = req.headers['x-owner-token'];
-    if (ownerToken !== process.env.OWNER_TOKEN) return res.status(403).json({ error: 'Forbidden' });
-    const hdrs = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
-
-    let contextLines = [];
-    try {
-      const [
-        taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData, dailyReportRes,
-      ] = await Promise.allSettled([
-        fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=1&select=date,close,chg_pct`, { headers: hdrs }),
-        fetch(`${SB_URL}/rest/v1/market_chips_daily?order=date.desc&limit=1&select=date,spot_foreign_net,spot_trust_net,spot_dealer_net,fut_tx_foreign_net,fut_tx_foreign_long,fut_tx_foreign_short,fut_tmf_total_oi,fut_tmf_foreign_net`, { headers: hdrs }),
-        fetch(`${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=8&select=title_zh,source`, { headers: hdrs }),
-        fetch(`${SB_URL}/rest/v1/margin_daily?order=date.desc&limit=2&select=date,margin_balance,margin_chg,short_balance,short_chg`, { headers: hdrs }),
-        fetch(`${SB_URL}/rest/v1/options_analytics_daily?order=date.desc&limit=3&select=date,contract_type,pc_ratio_oi,max_pain,call_foreign_net,put_foreign_net`, { headers: hdrs }),
-        fetch(`${SB_URL}/rest/v1/alpha_daily_report?order=report_date.desc&limit=1&select=report_date,market_mood,market_summary,dominant_player`, { headers: hdrs }),
-        (async () => {
-          const dateRes = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?order=date.desc&limit=1&select=date`, { headers: hdrs });
-          const dateJson = await dateRes.json();
-          const latestDate = dateJson[0]?.date;
-          if (!latestDate) return null;
-          return fetch(`${SB_URL}/rest/v1/stock_daily_twse?date=eq.${latestDate}&stock_id=neq.TAIEX&order=volume.desc&limit=5&select=stock_id,name,close,chg_pct,volume`, { headers: hdrs });
-        })(),
-        fetchFGI().catch(() => null),
-        fetchVIX().catch(() => null),
-      ]);
-
-      // 加權指數 + 技術指標
-      if (taiexRes.status === 'fulfilled') {
-        const taiex = (await taiexRes.value.json())[0];
-        if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
-        try {
-          const techR = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.asc&limit=120&select=date,close`, { headers: hdrs, signal: AbortSignal.timeout(6000) });
-          const techRows = await techR.json();
-          const closes = techRows.map(r => r.close);
-          const N = closes.length;
-          if (N >= 26) {
-            const diffs = closes.slice(-15).map((v,i,a)=>i===0?0:v-a[i-1]).slice(1);
-            const avgG = diffs.filter(d=>d>0).reduce((s,v)=>s+v,0)/14;
-            const avgL = diffs.filter(d=>d<0).reduce((s,v)=>s+Math.abs(v),0)/14;
-            const rsi14 = +(avgL===0 ? 100 : 100-100/(1+avgG/avgL)).toFixed(1);
-            let k=50,d=50;
-            for(let i=Math.max(0,N-30);i<N;i++){
-              const ww=closes.slice(Math.max(0,i-8),i+1);
-              const wH=Math.max(...ww),wL=Math.min(...ww);
-              const rsv=wH===wL?50:(closes[i]-wL)/(wH-wL)*100;
-              k=(k*2+rsv)/3; d=(d*2+k)/3;
-            }
-            const emaFn=(arr,p)=>{const kk=2/(p+1);return arr.reduce((e,v)=>v*kk+e*(1-kk));};
-            const macdVal = emaFn(closes.slice(-12),12)-emaFn(closes.slice(-26),26);
-            const ma5  = closes.slice(-5).reduce((s,v)=>s+v,0)/5;
-            const ma20 = closes.slice(-20).reduce((s,v)=>s+v,0)/20;
-            const ma60 = N>=60 ? closes.slice(-60).reduce((s,v)=>s+v,0)/60 : null;
-            const bArr=closes.slice(-20), bMa=bArr.reduce((s,v)=>s+v,0)/20;
-            const bStd=Math.sqrt(bArr.reduce((s,v)=>s+(v-bMa)**2,0)/20);
-            const bbU=Math.round(bMa+2*bStd), bbL=Math.round(bMa-2*bStd);
-            const rsiLbl  = rsi14>=70?'超買':rsi14<=30?'超賣':rsi14>=55?'偏多':'偏空';
-            const kdLbl   = k>d?'K>D黃金叉':'K<D死亡叉';
-            const macdLbl = macdVal>0?'MACD零軸上':'MACD零軸下';
-            const maLbl   = ma5>ma20?'MA5>MA20多排':'MA5<MA20空排';
-            contextLines.push(`技術面｜RSI(14)：${rsi14}（${rsiLbl}）KD：K=${k.toFixed(0)} D=${d.toFixed(0)}（${kdLbl}）${macdLbl}｜${maLbl}｜布林：${bbL}~${bbU}｜MA5 ${Math.round(ma5)} MA20 ${Math.round(ma20)}${ma60?' MA60 '+Math.round(ma60):''}`);
-          }
-        } catch(_) {}
-      }
-
-      if (chipsRes.status === 'fulfilled') {
-        const chips = (await chipsRes.value.json())[0];
-        if (chips) {
-          contextLines.push(`法人現貨｜外資：${chips.spot_foreign_net}億 投信：${chips.spot_trust_net}億 自營：${chips.spot_dealer_net}億`);
-          contextLines.push(`台指期｜外資淨口：${chips.fut_tx_foreign_net}口（多${chips.fut_tx_foreign_long}口／空${chips.fut_tx_foreign_short}口）`);
-          if (chips.fut_tmf_total_oi != null) contextLines.push(`散戶台指微（TMF）｜外資淨：${chips.fut_tmf_foreign_net}口 散戶未平倉：${chips.fut_tmf_total_oi}口`);
-        }
-      }
-
-      if (marginRes.status === 'fulfilled') {
-        const rows = await marginRes.value.json();
-        if (rows.length) {
-          const m = rows[0];
-          contextLines.push(`融資餘額：${(m.margin_balance/1e8).toFixed(0)}億（${m.margin_chg >= 0 ? '+' : ''}${(m.margin_chg/1e8).toFixed(0)}億） 融券：${(m.short_balance/1e3).toFixed(0)}千張（${m.short_chg >= 0 ? '+' : ''}${(m.short_chg/1e3).toFixed(0)}千張）`);
-        }
-      }
-
-      if (optionsRes.status === 'fulfilled') {
-        const rows = await optionsRes.value.json();
-        const priority = ['weekly_fri','weekly_wed','monthly'];
-        const opt = priority.map(t => rows.find(r => r.contract_type === t)).find(Boolean);
-        if (opt) contextLines.push(`選擇權（${opt.contract_type}）｜PC Ratio：${opt.pc_ratio_oi} Max Pain：${opt.max_pain} 外資CALL淨：${opt.call_foreign_net}口 PUT淨：${opt.put_foreign_net}口`);
-      }
-
-      const fgi = fgiData.status === 'fulfilled' ? fgiData.value : null;
-      const vix = vixData.status === 'fulfilled' ? vixData.value : null;
-      const fgiScore = fgi?.fear_and_greed?.score ?? fgi?.score ?? null;
-      const fgiLabel = fgi?.fear_and_greed?.rating ?? '';
-      const vixNow = vix?.data?.find(v => v.symbol === '^VIX')?.price ?? null;
-      if (fgiScore !== null || vixNow !== null) {
-        const parts = [];
-        if (fgiScore !== null) parts.push(`Fear & Greed：${fgiScore}（${fgiLabel}）`);
-        if (vixNow !== null) parts.push(`VIX：${vixNow}`);
-        contextLines.push(`市場情緒｜${parts.join(' ')}`);
-      }
-
-      if (topStocksRes.status === 'fulfilled' && topStocksRes.value) {
-        const stocksJson = await topStocksRes.value.json();
-        if (Array.isArray(stocksJson) && stocksJson.length) {
-          const list = stocksJson.map(s => `${s.name}(${s.stock_id}) ${s.close}（${s.chg_pct >= 0 ? '+' : ''}${s.chg_pct}%）`).join('、');
-          contextLines.push(`成交量前5大：${list}`);
-        }
-      }
-
-      if (newsRes.status === 'fulfilled') {
-        const newsRows = await newsRes.value.json();
-        if (newsRows.length) contextLines.push(`近期新聞：${newsRows.map(n => n.title_zh || '').filter(Boolean).join('；')}`);
-      }
-
-      // 今日市場情緒報告（alpha_daily_report，供 Agent 3 對齊方向參考，避免兩處結論矛盾）
-      if (dailyReportRes.status === 'fulfilled') {
-        const drRows = await dailyReportRes.value.json();
-        const dr = Array.isArray(drRows) ? drRows[0] : null;
-        const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-        const todayDate = twNow.toISOString().slice(0, 10);
-        if (dr && dr.report_date === todayDate) {
-          const parts = [];
-          if (dr.market_mood) parts.push(`氛圍：${dr.market_mood}`);
-          if (dr.dominant_player) parts.push(`主導者：${dr.dominant_player}`);
-          if (dr.market_summary) parts.push(dr.market_summary);
-          if (parts.length) contextLines.push(`今日市場情緒報告（alpha_daily_report）｜${parts.join('　')}`);
-        }
-      }
-    } catch(e) {
-      contextLines.push('（市場資料暫時無法取得）');
-    }
-
-    // 市場環境感知
-    let marketRegime = 'normal';
-    let marketRegimeLabel = '正常盤整';
-    try {
-      const taiexLine   = contextLines.find(l => l.startsWith('加權指數'));
-      const chipsLine   = contextLines.find(l => l.startsWith('法人現貨'));
-      const emotionLine = contextLines.find(l => l.startsWith('市場情緒'));
-      const chgMatch    = taiexLine?.match(/\(([+-]?\d+\.?\d*)%\)/);
-      const chgPct      = chgMatch ? parseFloat(chgMatch[1]) : null;
-      const fgiMatch    = emotionLine?.match(/Fear & Greed：(\d+)/);
-      const fgiVal      = fgiMatch ? parseInt(fgiMatch[1]) : null;
-      const vixMatch    = emotionLine?.match(/VIX：([\d.]+)/);
-      const vixVal      = vixMatch ? parseFloat(vixMatch[1]) : null;
-      const foreignMatch = chipsLine?.match(/外資：([+-]?\d+\.?\d*)億/);
-      const foreignNet  = foreignMatch ? parseFloat(foreignMatch[1]) : null;
-      if (vixVal !== null && vixVal >= 25) { marketRegime = 'volatile'; marketRegimeLabel = '高波動恐慌'; }
-      else if (fgiVal !== null && fgiVal >= 75) { marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭（過熱）'; }
-      else if (fgiVal !== null && fgiVal <= 25) { marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭（恐慌）'; }
-      else if (chgPct !== null && chgPct > 1.0 && foreignNet !== null && foreignNet > 0) { marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭'; }
-      else if (chgPct !== null && chgPct < -1.0 && foreignNet !== null && foreignNet < 0) { marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭'; }
-      else if (Math.abs(chgPct || 0) < 0.3) { marketRegime = 'consolidating'; marketRegimeLabel = '窄幅震盪'; }
-      contextLines.push(`市場環境判斷：${marketRegimeLabel}（regime=${marketRegime}）`);
-    } catch(_) {}
-
-    // 存入 alpha_profile
-    await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1`, {
-      method: 'PATCH',
-      headers: { ...hdrs, Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        agent1_context:       contextLines,
-        agent1_market_regime: marketRegime,
-        agent1_updated_at:    new Date().toISOString(),
-        market_regime:        marketRegime,
-      }),
-    });
-
-    console.log(`[Agent 1] 完成，market_regime=${marketRegime}，contextLines=${contextLines.length} 行`);
-    return res.status(200).json({ ok: true, market_regime: marketRegime, lines: contextLines.length });
-  }
-
-  // ════════════════════════════════════════════════════════════
-  // ── Agent 2：分析師 ──
-  // Agent 1 完成後由 GitHub Actions 呼叫（POST）
-  // 評分昨日預測 + 弱點分析 + 生成檢討篇 → 存 alpha_profile
-  // ════════════════════════════════════════════════════════════
-  if (endpoint === 'alpha_agent2') {
-    const SB_URL  = process.env.SUPABASE_URL || 'https://fdxedcwtmlurumfjmlys.supabase.co';
-    const SB_KEY  = process.env.SUPABASE_SERVICE_KEY;
-    const GROQ_KEY = process.env.GROQ_API_KEY;
-    if (!SB_KEY)   return res.status(500).json({ error: 'SUPABASE_SERVICE_KEY not configured' });
-    if (!GROQ_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const ownerToken = req.headers['x-owner-token'];
-    if (ownerToken !== process.env.OWNER_TOKEN) return res.status(403).json({ error: 'Forbidden' });
-    const hdrs = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
-
-    // 讀 alpha_profile（含 agent1 輸出）
-    let profile = { total_posts: 0, correct_calls: 0, total_calls: 0, rank: '菜鳥交易員', style_memo: '', agent1_market_regime: 'normal' };
-    try {
-      const profRes = await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1&select=*`, { headers: hdrs });
-      const profJson = await profRes.json();
-      if (profJson[0]) profile = profJson[0];
-    } catch(_) {}
-
-    // 確認 Agent 1 今天有跑
-    const agent1UpdatedAt = profile.agent1_updated_at ? new Date(profile.agent1_updated_at) : null;
-    const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-    const todayStr = twNow.toISOString().slice(0, 10);
-    if (!agent1UpdatedAt || agent1UpdatedAt.toISOString().slice(0, 10) !== todayStr) {
-      console.warn('[Agent 2] Agent 1 今天尚未執行，繼續但資料可能過舊');
-    }
-
-    // 評分昨日預測
-    const wrongItems = [];
-    let newCorrect = 0, newTotalCalls = 0;
-    try {
-      const twToday = twNow.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
-        .replace(/\//g, '-').replace(/(\d+)-(\d+)-(\d+)/, (_, y, m, d) => `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
-      const pendingRes = await fetch(
-        `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&angle=neq.weekly_recap&select=id,prediction,pred_date,content,confidence,pred_target`,
-        { headers: hdrs }
-      );
-      const pending = await pendingRes.json();
-      if (Array.isArray(pending) && pending.length) {
-        const dates = [...new Set(pending.map(p => p.pred_date))];
-        const taiexRows = await Promise.all(dates.map(async d => {
-          const r = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&date=eq.${d}&select=date,chg_pct`, { headers: hdrs });
-          return (await r.json())[0] || null;
-        }));
-        const taiexMap = {};
-        taiexRows.forEach(row => { if (row) taiexMap[row.date] = row.chg_pct; });
-        const stockTargets = [...new Set(pending.map(p => p.pred_target).filter(t => t && t !== 'TAIEX' && /^\d{4}$/.test(t)))];
-        const stockMap = {};
-        if (stockTargets.length > 0) {
-          await Promise.all(dates.map(async d => {
-            const r = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?date=eq.${d}&stock_id=in.(${stockTargets.join(',')})&select=date,stock_id,chg_pct`, { headers: hdrs });
-            const rows = await r.json();
-            if (Array.isArray(rows)) rows.forEach(row => { stockMap[`${row.date}_${row.stock_id}`] = row.chg_pct; });
-          }));
-        }
-        for (const p of pending) {
-          const target = p.pred_target || 'TAIEX';
-          const chg = (/^\d{4}$/.test(target) && target !== 'TAIEX')
-            ? (stockMap[`${p.pred_date}_${target}`] ?? taiexMap[p.pred_date])
-            : taiexMap[p.pred_date];
-          if (chg === undefined) continue;
-          const actual = chg > 0.3 ? 'bullish' : chg < -0.3 ? 'bearish' : 'neutral';
-          const result = p.prediction === actual ? 'correct' : 'wrong';
-          if (result === 'correct') newCorrect++;
-          newTotalCalls++;
-          await fetch(`${SB_URL}/rest/v1/alpha_thoughts?id=eq.${p.id}`, {
-            method: 'PATCH',
-            headers: { ...hdrs, Prefer: 'return=minimal' },
-            body: JSON.stringify({ pred_result: result }),
-          });
-          if (result === 'wrong' && Math.abs(chg) > 0.3) wrongItems.push({ ...p, actual, chg });
-        }
-        profile.correct_calls += newCorrect;
-        profile.total_calls   += newTotalCalls;
-      }
-    } catch(_) {}
-
-    // 弱點分析
-    try {
-      const weakRes = await fetch(
-        `${SB_URL}/rest/v1/alpha_thoughts?pred_result=in.(correct,wrong)&angle=neq.weekly_recap&order=created_at.desc&limit=60&select=pred_result,confidence,market_regime`,
-        { headers: hdrs }
-      );
-      const weakRows = await weakRes.json();
-      if (Array.isArray(weakRows) && weakRows.length >= 5) {
-        const regimeStats = {};
-        for (const row of weakRows) {
-          const regime = row.market_regime || 'normal';
-          if (!regimeStats[regime]) regimeStats[regime] = { total: 0, correct: 0 };
-          regimeStats[regime].total++;
-          if (row.pred_result === 'correct') regimeStats[regime].correct++;
-        }
-        const weaknessAnalysis = {};
-        for (const [regime, s] of Object.entries(regimeStats)) {
-          if (s.total >= 3) weaknessAnalysis[regime] = { total: s.total, correct: s.correct, rate: parseFloat((s.correct/s.total).toFixed(2)) };
-        }
-        const weakestRegime = Object.entries(weaknessAnalysis).sort((a,b) => a[1].rate - b[1].rate)[0]?.[0] || null;
-        profile._weaknessAnalysis = weaknessAnalysis;
-        profile._weakestRegime = weakestRegime;
-
-        // ── C. 成功模式學習：統計各 regime × confidence 組合命中率 ──
-        const patternStats = {};
-        for (const row of weakRows) {
-          const key = `${row.market_regime || 'normal'}__${row.confidence || '中'}`;
-          if (!patternStats[key]) patternStats[key] = { total: 0, correct: 0 };
-          patternStats[key].total++;
-          if (row.pred_result === 'correct') patternStats[key].correct++;
-        }
-        // 只保留樣本 >= 3、命中率 >= 60% 的「有效組合」作為成功模式
-        const successPatterns = Object.entries(patternStats)
-          .filter(([, s]) => s.total >= 3 && s.correct / s.total >= 0.60)
-          .map(([key, s]) => {
-            const [regime, confidence] = key.split('__');
-            return { regime, confidence, rate: parseFloat((s.correct / s.total).toFixed(2)), total: s.total };
-          })
-          .sort((a, b) => b.rate - a.rate)
-          .slice(0, 5);  // 最多保留 5 個模式
-        profile._successPatterns = successPatterns;
-      }
-    } catch(_) {}
-
-    // 生成檢討篇（wrong 時，每次最多 1 篇）
-    let reflectionGenerated = false;
-    if (wrongItems.length > 0) {
-      try {
-        const target = wrongItems.find(w => w.confidence === '高') || wrongItems[0];
-        const dirMap = { bullish:'看多', bearish:'看空', neutral:'中性' };
-        const reflectPrompt = `你是 Alpha，台股老手。你昨天預測「${target.pred_target || 'TAIEX'}」會${dirMap[target.prediction] || target.prediction}，結果實際${target.chg > 0 ? '上漲' : '下跌'}${Math.abs(target.chg).toFixed(2)}%，你預測錯了。\n\n你當時說的是：「${target.content}」\n\n請用你一貫的口吻（直接、偶爾自嘲、不廢話）寫一篇 80~120 字的檢討，說說你認為判斷哪裡出了問題、市場給你什麼教訓。不要假裝沒事，要誠實。\n\n輸出純 JSON：{"content":"...","mood":"bearish"}`;
-        const rRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
-          body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: reflectPrompt }], max_tokens: 300, temperature: 0.7 }),
-          signal: AbortSignal.timeout(15000),
-        });
-        if (rRes.ok) {
-          const rData = await rRes.json();
-          const rRaw = rData.choices?.[0]?.message?.content?.trim() || '';
-          const rParsed = JSON.parse(rRaw.replace(/```json|```/g,'').trim());
-          // pred_date = 今天（與其他隨筆 / alpha_daily_report 對齊）
-          await fetch(`${SB_URL}/rest/v1/alpha_thoughts`, {
-            method: 'POST',
-            headers: { ...hdrs, Prefer: 'return=minimal' },
-            body: JSON.stringify({ content: rParsed.content || rRaw, mood: 'bearish', angle: 'reflection', prediction: 'neutral', pred_date: twNow.toISOString().slice(0,10), pred_result: 'pending', confidence: '低', market_regime: profile.agent1_market_regime || profile.market_regime || 'normal' }),
-          });
-          reflectionGenerated = true;
-        }
-      } catch(_) {}
-    }
-
-    // 計算 streak
-    let currentStreak = 0;
-    try {
-      const recRes = await fetch(`${SB_URL}/rest/v1/alpha_thoughts?order=created_at.desc&limit=24&select=pred_result`, { headers: hdrs });
-      const recRows = await recRes.json();
-      const rated = recRows.filter(t => t.pred_result === 'correct' || t.pred_result === 'wrong');
-      if (rated.length) {
-        const last = rated[0].pred_result;
-        let s = 0;
-        for (const t of rated) { if (t.pred_result === last) s++; else break; }
-        currentStreak = last === 'correct' ? s : -s;
-      }
-    } catch(_) {}
-
-    // 存回 alpha_profile
-    await fetch(`${SB_URL}/rest/v1/alpha_profile?id=eq.1`, {
-      method: 'PATCH',
-      headers: { ...hdrs, Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        correct_calls:      profile.correct_calls,
-        total_calls:        profile.total_calls,
-        weakness_analysis:  profile._weaknessAnalysis || profile.weakness_analysis || {},
-        weakest_regime:     profile._weakestRegime    || profile.weakest_regime    || null,
-        success_patterns:   profile._successPatterns  || profile.success_patterns  || [],
-        agent2_wrong_items: wrongItems,
-        agent2_streak:      currentStreak,
-        agent2_updated_at:  new Date().toISOString(),
-        updated_at:         new Date().toISOString(),
-      }),
-    });
-
-    console.log(`[Agent 2] 完成，評分 ${newTotalCalls} 筆（正確 ${newCorrect}），streak=${currentStreak}，檢討篇=${reflectionGenerated}`);
-    return res.status(200).json({ ok: true, scored: newTotalCalls, correct: newCorrect, streak: currentStreak, reflection: reflectionGenerated, wrong_count: wrongItems.length });
   }
 
   // ── Alpha 週報（每週五收盤後生成）──
@@ -1925,7 +1705,7 @@ ${weekSummary}
           'Authorization': `Bearer ${GROQ_KEY}`
         },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'openai/gpt-oss-20b',
           messages: [
             { role: 'system', content: `你是資深股票研究分析師，專精台灣與全球金融市場。
 語言規則：務必使用繁體中文，嚴禁使用簡體中文。
@@ -1954,7 +1734,7 @@ ${weekSummary}
           console.warn(`[Groq] 429 rate limit — waiting ${retrySec}s then retry`);
           await new Promise(r => setTimeout(r, retrySec * 1000));
           // 重試一次
-          const r2   = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` }, body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'system', content: `你是資深股票研究分析師，專精台灣與全球金融市場。\n語言規則：務必使用繁體中文，嚴禁使用簡體中文。` }, { role: 'user', content: prompt }], max_tokens: maxTokens, temperature }) });
+          const r2   = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` }, body: JSON.stringify({ model: 'openai/gpt-oss-20b', messages: [{ role: 'system', content: `你是資深股票研究分析師，專精台灣與全球金融市場。\n語言規則：務必使用繁體中文，嚴禁使用簡體中文。` }, { role: 'user', content: prompt }], max_tokens: maxTokens, temperature }) });
           const d2   = await r2.json();
           if (d2.error) {
             console.error('[Groq] Retry also failed:', JSON.stringify(d2.error));
@@ -2349,53 +2129,19 @@ ${weekSummary}
       }
       return null;
     };
-    // 週三選：從 contract_code 解析第幾個週三（例如 202606W4 → 6月第4個週三）
-    const getWeeklyWedExpiry = (cd) => {
-      const mm = cd.match(/^(\d{4})(\d{2})W(\d)$/);
-      if (!mm) return null;
-      const [, y, mo, nth] = mm;
-      let count = 0;
-      for (let day = 1; day <= 31; day++) {
-        const d = new Date(Date.UTC(+y, +mo - 1, day));
-        if (d.getMonth() !== +mo - 1) break;
-        if (d.getDay() === 3) { count++; if (count === +nth) return d; }
-      }
-      return null;
-    };
-    // 週五選：從 contract_code 解析第幾個週五（例如 202606F3 → 6月第3個週五）
-    const getWeeklyFriExpiry = (cd) => {
-      const mm = cd.match(/^(\d{4})(\d{2})F(\d)$/);
-      if (!mm) return null;
-      const [, y, mo, nth] = mm;
-      let count = 0;
-      for (let day = 1; day <= 31; day++) {
-        const d = new Date(Date.UTC(+y, +mo - 1, day));
-        if (d.getMonth() !== +mo - 1) break;
-        if (d.getDay() === 5) { count++; if (count === +nth) return d; }
-      }
+    const getNextWeekday = (targetDay) => {
+      const d = new Date(tradeDateObj);
+      for (let i = 0; i < 7; i++) { if (d.getDay() === targetDay) return d; d.setUTCDate(d.getUTCDate() + 1); }
       return null;
     };
 
     const mpCandidates = [];
-    // 到期當天（結算日）視為已結算，不納入 Max Pain 計算
-    if (nearMonthCD) {
-      const exp = getMonthlyExpiry(nearMonthCD);
-      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
-        mpCandidates.push({ byStrike: monthly.byStrike, expiry: exp });
-    }
-    if (nearWedCD) {
-      const exp = getWeeklyWedExpiry(nearWedCD);
-      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
-        mpCandidates.push({ byStrike: wed.byStrike, expiry: exp });
-    }
-    if (nearFriCD) {
-      const exp = getWeeklyFriExpiry(nearFriCD);
-      if (exp && exp.toISOString().slice(0, 10) > tradeDate)
-        mpCandidates.push({ byStrike: fri.byStrike, expiry: exp });
-    }
+    if (nearMonthCD) { const exp = getMonthlyExpiry(nearMonthCD); if (exp) mpCandidates.push({ byStrike: monthly.byStrike, expiry: exp }); }
+    if (nearWedCD)   { const exp = getNextWeekday(3); if (exp) mpCandidates.push({ byStrike: wed.byStrike, expiry: exp }); }
+    if (nearFriCD)   { const exp = getNextWeekday(5); if (exp) mpCandidates.push({ byStrike: fri.byStrike, expiry: exp }); }
 
     const validCandidates = mpCandidates.filter(c => c.expiry >= tradeDateObj).sort((a, b) => a.expiry - b.expiry);
-    const mpCandidate = validCandidates[0] || null;
+    const mpCandidate = validCandidates[0] || mpCandidates[0] || null;
 
     let maxPain = null;
     if (mpCandidate) {
@@ -3105,7 +2851,6 @@ ${weekSummary}
     const unique = articles
       .filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true; })
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-
     res.status(200).json({ data: unique, count: unique.length });
   } catch(e) {
     res.status(500).json({ error: e.message });
