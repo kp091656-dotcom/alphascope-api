@@ -1770,7 +1770,7 @@ ${macroRows.map(fmt).join('\n')}${yieldCurveNote}`;
 
     const stockTable = stocks.slice(0, 50).map(s => {
       const v = valMap[s.stock_id] || {};
-      return `${s.stock_id} ${s.name} 收${s.close} 漲跌${s.chg_pct != null ? (s.chg_pct*100).toFixed(2) : 'N/A'}% 量${s.volume} PE${v.pe_ratio ?? '-'} PB${v.pb_ratio ?? '-'} 殖${v.dividend_yield ?? '-'}%`;
+      return `${s.stock_id} ${s.name} 收${s.close} 漲跌${s.chg_pct != null ? (s.chg_pct*100).toFixed(2) : 'N/A'}% 量${s.volume} PE${v.pe_ratio ?? '-'}`;
     }).join('\n');
 
     const newsTitles = (Array.isArray(news) ? news : []).slice(0, 30)
@@ -1782,7 +1782,7 @@ ${macroRows.map(fmt).join('\n')}${yieldCurveNote}`;
 【核心分析框架】
 1. 全觀研究（Research Everything）：不迷信單一指標。必須綜合評估：
    - 籌碼面：三大法人方向、融資增減、散戶多空比
-   - 基本面：PE/PB/殖利率是否合理
+   - 基本面：PE 是否合理
    - 事件面：新聞催化劑、產業鏈邏輯
    - 供需邏輯：誰在買？誰在賣？市場有需求嗎？
    - 總經面：SOX/DXY/美債/台幣/聯準會利率/Fear&Greed 綜合研判
@@ -1912,7 +1912,7 @@ ${pttTitles}
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        max_tokens: 4000,
+        max_tokens: 3000,
         temperature: 0.3,
         reasoning_effort: 'low',
       }),
