@@ -1910,7 +1910,7 @@ ${pttTitles}
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
+        model: 'openai/gpt-oss-20b',
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         max_tokens: 4000,
         temperature: 0.3,
@@ -1919,7 +1919,11 @@ ${pttTitles}
       signal: AbortSignal.timeout(60000),
     });
 
-    if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
+    if (!groqRes.ok) {
+      let bodyText = '';
+      try { bodyText = (await groqRes.text()).slice(0, 300); } catch (_) {}
+      throw new Error(`Groq HTTP ${groqRes.status}${bodyText ? ` — ${bodyText}` : ''}`);
+    }
     const groqData = await groqRes.json();
     let raw = groqData.choices?.[0]?.message?.content || '';
     if (!raw.trim()) {
