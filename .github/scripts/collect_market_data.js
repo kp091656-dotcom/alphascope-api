@@ -1910,10 +1910,11 @@ ${pttTitles}
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        max_tokens: 3000,
+        max_tokens: 4000,
         temperature: 0.3,
+        reasoning_effort: 'low',
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -1921,6 +1922,10 @@ ${pttTitles}
     if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
     const groqData = await groqRes.json();
     let raw = groqData.choices?.[0]?.message?.content || '';
+    if (!raw.trim()) {
+      const finishReason = groqData.choices?.[0]?.finish_reason || 'unknown';
+      throw new Error(`Groq 回傳空內容（finish_reason: ${finishReason}，可能是思維鏈吃光 max_tokens）`);
+    }
     raw = raw
       .replace(/```json|```/g, '')
       .replace(/"|"|'|'/g, '"')
