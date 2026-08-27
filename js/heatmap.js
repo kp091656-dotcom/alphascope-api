@@ -873,6 +873,47 @@ async function loadSectorIndexBar() {
   }
 }
 
+// ── 產業貢獻拆解（點擊產業列展開，顯示該產業內貢獻最大的個股） ──
+let _hmExpandedSector = null;
+
+function hmToggleSectorContrib(sector, event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  _hmExpandedSector = (_hmExpandedSector === sector) ? null : sector;
+  // 用目前快取的資料重繪，不重抓
+  renderSectorBar(window.heatmapData, window._hmActiveSector || 'all', window._sectorIndexData || null);
+}
+
+// 算出某產業內，貢獻度（chgPct × mcap）最大的前 N 檔個股
+function _computeSectorContrib(sector, topN = 6) {
+  const rows = (window.heatmapData || []).filter(d => d.sector === sector);
+  if (!rows.length) return [];
+  const withContrib = rows.map(d => ({ ...d, contrib: (d.chgPct || 0) * (d.mcap || 0) }));
+  withContrib.sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib));
+  return withContrib.slice(0, topN);
+}
+
+function _renderContribBreakdown(sector) {
+  const stocks = _computeSectorContrib(sector);
+  if (!stocks.length) {
+    return `<div style="padding:6px 0 6px 20px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">無個股資料（熱圖尚未載入該產業）</div>`;
+  }
+  const maxAbs = Math.max(...stocks.map(s => Math.abs(s.contrib)), 0.0001);
+  const rows = stocks.map(s => {
+    const pct   = (s.chgPct || 0) * 100;
+    const sign  = pct >= 0 ? '+' : '';
+    const color = pct >= 0.2 ? '#dc2626' : pct <= -0.2 ? '#16a34a' : '#9ca3af';
+    const width = Math.max(2, (Math.abs(s.contrib) / maxAbs) * 100);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0 2px 20px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:var(--text);width:64px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name}</div>
+      <div style="flex:1;height:6px;background:var(--bg);border-radius:1px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;width:${width.toFixed(1)}%;height:100%;background:${color};opacity:0.75;border-radius:1px;"></div>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;color:${color};width:42px;text-align:right;flex-shrink:0;">${sign}${pct.toFixed(2)}%</div>
+    </div>`;
+  }).join('');
+  return `<div style="padding:2px 0 4px;border-left:1px solid var(--border-dark);margin-left:3px;">${rows}</div>`;
+}
+
 // ── 產業漲跌幅 bar（官方指數優先，fallback 市值加權） ──
 function renderSectorBar(data, activeSector, officialData) {
   const barWrap = document.getElementById('hmSectorBar');
@@ -946,9 +987,14 @@ function renderSectorBar(data, activeSector, officialData) {
     // tooltip：官方模式顯示完整指數名稱
     const titleAttr = s.indexName ? `title="${s.indexName}"` : '';
 
-    return `<div ${titleAttr} style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:1px 0;border-radius:3px;transition:opacity 0.15s;${isActive ? 'background:var(--surface);padding:1px 3px;box-shadow:0 0 0 1px var(--border-dark);' : ''}"
+    const isExpanded = _hmExpandedSector === s.sector;
+    const caret = `<div onclick="hmToggleSectorContrib('${s.sector}', event)"
+        style="width:10px;flex-shrink:0;text-align:center;font-size:0.6rem;color:var(--muted);cursor:pointer;transform:rotate(${isExpanded ? '90deg' : '0deg'});transition:transform 0.15s;">▸</div>`;
+
+    const row = `<div ${titleAttr} style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:1px 0;border-radius:3px;transition:opacity 0.15s;${isActive ? 'background:var(--surface);padding:1px 3px;box-shadow:0 0 0 1px var(--border-dark);' : ''}"
       onclick="hmFilterSectorByName('${s.sector}')"
       onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
+      ${caret}
       <div style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;"></div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text);width:52px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.sector}</div>
       <div style="flex:1;height:8px;background:var(--bg);border-radius:1px;position:relative;overflow:hidden;">
@@ -958,6 +1004,8 @@ function renderSectorBar(data, activeSector, officialData) {
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;font-weight:700;color:${barColor};width:46px;text-align:right;flex-shrink:0;">${sign}${pct.toFixed(2)}%</div>
       ${tagLabel}
     </div>`;
+
+    return isExpanded ? row + _renderContribBreakdown(s.sector) : row;
   }).join('');
 
   barWrap.style.display = 'block';
