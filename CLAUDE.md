@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-07-16（對話二十一，含 sectorIndex/valuation fallback）
+> 更新日期：2026-08-27（對話二十五，heatmap.js 產業貢獻拆解 + heatmapData window 存取修正）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -22,6 +22,9 @@
 - **BFIAMU**：`⚠️ BFIAMU 無匹配資料` 屬正常 warning，不中斷主流程。
 - **openapi.twse.com.tw 偶爾整批回傳 HTML（維護中），不限週一**：`collectTWSEDaily`／`collectSectorIndex`／`collectValuation` 三支都打這個網域。曾在 Jul 6、Jul 13 兩個週一失敗（含手動重跑仍失敗，持續 2 小時以上），**Jul 16（週四）早上又失敗一次**，證實不是「週一限定」，樣本太少導致之前誤判規律。根因未 100% 確認（找不到官方維護公告），但同時間 `www.twse.com.tw`（舊版網域）是正常的。`collectTWSEDaily` 的 fallback（見「對話二十」）已於 Jul 16 實戰驗證成功（log 出現預期訊息，1198 筆 upsert）。`collectSectorIndex`／`collectValuation` 已於「對話二十一」補上 fallback，但**尚未在真實失敗情境下驗證過**（只用截圖資料離線模擬過解析邏輯），需要時再手動重跑觀察 log。
 - ~~`alpha_profile.specialties` 被 Agent 2 覆寫成物件陣列，畫面顯示 `[object Object]`／市場環境代碼~~：已於「對話二十二」修正，改用獨立的 `success_patterns` 欄位，`specialties` 只留給 Agent 3 寫入專長字串。
+- **`collect_market_data.js` 的 Alpha 報告生成 Groq prompt，目前離 TPM 上限緩衝不算多**：詳見「對話二十四」，已把股票表格從 50 檔精簡欄位（拿掉 PB/殖利率）、`max_tokens` 降到 3000，估算約落在 7000/8000 TPM，緩衝約 1000。若之後新聞則數增加、個股名稱變長，或想加回 PB/殖利率，有可能再次觸發 413，屆時可考慮：① 進一步精簡 prompt ② 升級 Groq Dev Tier。
+- **PTT JSON API（`ptt.cc/api/board/Stock/index`）持續 404 屬預期行為，非 bug**：PTT 從未提供正式穩定的公開 JSON API，這個端點本來就是非官方/實驗性質，說不通就不通。程式已有兩層防呆（JSON 失敗 → fallback 抓 HTML 頁面解析 → 都失敗才顯示「無法取得」），目前 HTML fallback 運作正常，不影響報告產出。若想省一次無謂的 fetch，可考慮直接拿掉 JSON 嘗試、只留 HTML 解析（尚未執行，待使用者確認是否要做）。
+- ~~`heatmap.js` 新功能（產業貢獻拆解）展開全部顯示「無個股資料」~~：已於「對話二十五」修正，見下方章節。**通用提醒**：`heatmap.js` 內的全域變數 `heatmapData` 疑似用 `let` 宣告（非 `var`），**不會**自動掛在 `window` 物件上，之後在這個檔案裡新增功能時，一律用裸變數 `heatmapData` 存取，不要寫成 `window.heatmapData`（會拿到 `undefined`）。
 
 ---
 
@@ -484,8 +487,8 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 
 **受影響範圍確認：**
 - `api/news.js` 的 `endpoint === 'groq'`（通用 AI proxy，前端透過 `js/news_feed.js` 的 `callGroq()` 呼叫）：唯一直接寫死 `llama-3.1-8b-instant` 的地方，共 2 處（正常呼叫 + 429 重試）
-- `alpha_analyze`／`alpha_agent1/2/3` 等 Alpha 隨筆主流程：用的是 `llama-3.3-70b-versatile`，**未停用，不受影響，未改動**
-- `collect_market_data.js` 內建的 Groq 呼叫：同樣是 `llama-3.3-70b-versatile`，**未改動**
+- `alpha_analyze`／`alpha_agent1/2/3` 等 Alpha 隨筆主流程：用的是 `llama-3.3-70b-versatile`，**當時未停用，不受影響，未改動**（⚠️ 更正：Groq 已於 2026-06-17 同時公告停用 `llama-3.3-70b-versatile`，這條在「對話二十四」踩到，8/16 停用生效後才 404，並非本次判斷錯誤，而是 Groq 分兩批停用同一輪公告的模型）
+- `collect_market_data.js` 內建的 Groq 呼叫：同樣是 `llama-3.3-70b-versatile`，**當時未改動**（同上，已於「對話二十四」換掉）
 - `js/alpha.js`：不直接呼叫 Groq，走 `alpha_*` endpoint，**未改動**
 - `index.html`：首頁 UI 提示文字 `llama-3.1-8b` 已同步改為 `gpt-oss-20b`（純顯示用途，不影響功能）
 
@@ -505,4 +508,63 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 
 **模型差異速記（供之後排查參考）：** `gpt-oss-20b` 是 MoE 架構、有推理鏈機制，`llama-3.1-8b-instant` 是傳統 dense 架構、無推理鏈。前者跑分/品質明顯較好，Groq 上實測速度更快、綜合成本更低，但呼叫方式不能直接無縫替換——任何未來要換成推理模型（reasoning model）的 Groq 呼叫，都要記得處理 `reasoning_effort` 與 token 額度，否則會重演這次「空內容」的坑。
 
+---
+
+## 對話二十四更新（2026-08-19）
+
+### `collect_market_data.js` Alpha 報告生成連續三輪修正：模型停用 → TPM 超標 → prompt 精簡
+
+**觸發：** GitHub Actions 排程執行 `collect_market_data.js` 時，Alpha 每日報告生成失敗，`❌ Alpha 報告生成失敗：Groq HTTP 404`。
+
+**第一輪— 模型停用（HTTP 404）**
+
+**根因：** Groq 已於 2026-06-17 公告同時停用 `llama-3.1-8b-instant` 與 `llama-3.3-70b-versatile`，後者正是 `collect_market_data.js` 主流程寫死呼叫的模型，8/16 停用生效後直接 404。（對話二十三當時只確認了前者停用，誤判後者「未受影響」，見上方更正註記。）
+
+**修正：** 模型換成官方推薦替代品 `openai/gpt-oss-120b`，同步比照對話二十三的教訓加上 `reasoning_effort: 'low'`（避免推理模型思維鏈吃光 `max_tokens` 導致空內容），並新增空內容檢查（`raw` 為空字串時明確拋錯，附 `finish_reason`）。
+
+**第二輪 — 換模型後改踩 TPM 上限（HTTP 413）**
+
+**根因：** `openai/gpt-oss-120b` 免費層的 TPM（每分鐘 token 上限）比 `llama-3.3-70b-versatile` 更低。`collect_market_data.js` 的 prompt（前 50 檔股票表格 + 30 則新聞標題 + PTT 熱門 + 選擇權/總經數據）份量不小，加上當時 `max_tokens: 4000`，單次請求就超過 120b 免費層的 TPM 門檻，回傳 413。
+
+**修正：** 模型再換成 TPM 額度較寬鬆的 `openai/gpt-oss-20b`（比照對話二十三 `api/news.js` 已驗證過的模型），並在 `!groqRes.ok` 分支補上讀取並印出 Groq 回應 body（截斷至 300 字），下次再失敗能直接看到 Groq 回傳的精確數字，不用再靠第三方文件猜測額度。
+
+**第三輪 — 仍超標，用精確錯誤數字定位（HTTP 413，附精確數字）**
+
+**根因：** 換 20b 後仍 413，這次 Groq 回應 body 給出精確數字：`Limit 8000, Requested 8639`，超標 639 tokens。
+
+**修正（`collect_market_data.js`）：**
+- 股票表格一度從 50 檔縮到 35 檔、`max_tokens` 4000→3000 先驗證方向正確
+- 使用者要求維持 50 檔，改為精簡欄位：`stockTable` 拿掉 `PB${...}` 與 `殖${...}%`，只留 PE（原本欄位：代號/名稱/收盤/漲跌/量/PE/PB/殖利率 → 精簡後：代號/名稱/收盤/漲跌/量/PE）
+- `max_tokens` 維持 3000（不變）
+- 同步修正 `systemPrompt` 的分析框架指示，「基本面：PE/PB/殖利率是否合理」改為「基本面：PE 是否合理」，避免 Alpha 對著已不存在的資料欄位瞎猜
+
+**驗證：** 使用者實際跑過 GitHub Actions，`✅ Alpha 報告已生成並儲存（2026-08-19，3 檔推薦，3 檔進場）`，三修正皆已在真實環境驗證成功。
+
+**待觀察：** 目前估算 TPM 用量約 7000/8000，緩衝約 1000，不算寬裕（詳見「已知問題」）。若之後想加回 PB/殖利率或新聞則數增加，需重新評估是否再次逼近上限。
+
+**通用教訓：** Groq 換模型時不能只確認「模型是否還存在」，還要一併確認該模型在**目前帳號的免費層 rate limit（尤其 TPM）**是否足夠——不同模型的免費層額度差異很大（120b 的 TPM 反而比 70b 更低，跟參數量大小沒有直接關係），且 Groq 常常同一輪公告分批停用多個模型，光看單一模型公告很容易誤判「另一個模型還安全」。
+
+---
+
+## 對話二十五更新（2026-08-27）
+
+### `heatmap.js` 新增「產業貢獻拆解」+ 修正 heatmapData window 存取 bug
+
+**緣起：** 參考 sinotrade/shioaji-pro-app（永豐金開源交易終端）的 Market Pulse 功能，討論後決定不另開大面板，改為輕量整合進現有 `hmSectorBar`（產業漲跌幅 bar）。
+
+**新功能：** `hmSectorBar` 每個產業列前加入可點擊 ▸ 箭頭，點擊展開該產業內「貢獻最大的前 6 檔個股」（依 `|chgPct × mcap|` 排序），用小型橫條呈現方向與相對貢獻大小。完全複用 `loadHeatmap()` 已抓好的 `heatmapData`，**零額外 API 成本**，不用重抓、不動後端。原本點整列篩選 treemap 的行為（`hmFilterSectorByName`）完全不變，兩個互動互不干擾。
+
+**新增函式：** `hmToggleSectorContrib()`、`_computeSectorContrib()`、`_renderContribBreakdown()`。
+
+**踩到的 bug（HTTP 無關，是變數作用域問題）：**
+
+**現象：** 功能上線後，使用者回報無論點哪個產業，展開都顯示「無個股資料（熱圖尚未載入該產業）」，但截圖確認熱圖本體（treemap）其實有正常資料（台積電、聯電等個股都在）。
+
+**根因：** `heatmap.js` 裡的全域變數 `heatmapData` 在別處（推測是 `index.html` 內聯 script 或其他檔案）用 `let heatmapData = []` 宣告。`let`／`const` 宣告的頂層變數**不會**自動掛到 `window` 物件上（跟 `var` 不同）。首版 `_computeSectorContrib()` 誤寫成 `window.heatmapData`，永遠拿到 `undefined`，篩選自然找不到任何股票。
+
+**修正：** 全部改用裸變數 `heatmapData`（改成 `typeof heatmapData !== 'undefined' ? heatmapData : []` 防呆）。順便發現既有的 `hmFilterSectorByName()` 函式裡也有同樣的 `window.heatmapData` 誤用（判斷式 `if (!found && window.heatmapData)`），只是這個 fallback 分支平常很少觸發所以沒被發現，這次一併修正。
+
+**驗證：** 語法用 `node --check` 驗證通過；使用者尚未回報第二次實測結果，**下次對話請先確認使用者是否已實際點擊測試過**。
+
+**通用教訓：** 這個檔案（以及任何用 `<script>` classic script 拆成多檔、彼此共用全域變數的架構）裡，新增程式碼要存取別的檔案宣告的全域變數時，優先比照該變數在同檔案內既有的存取方式（裸變數 or `window.` 前綴），不要自行假設用 `window.` 前綴一定安全——`let`/`const` 宣告的全域變數是例外。
 
