@@ -880,12 +880,14 @@ function hmToggleSectorContrib(sector, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
   _hmExpandedSector = (_hmExpandedSector === sector) ? null : sector;
   // 用目前快取的資料重繪，不重抓
-  renderSectorBar(window.heatmapData, window._hmActiveSector || 'all', window._sectorIndexData || null);
+  renderSectorBar(heatmapData, window._hmActiveSector || 'all', window._sectorIndexData || null);
 }
 
 // 算出某產業內，貢獻度（chgPct × mcap）最大的前 N 檔個股
 function _computeSectorContrib(sector, topN = 6) {
-  const rows = (window.heatmapData || []).filter(d => d.sector === sector);
+  // 注意：heatmapData 是裸的全域變數（可能用 let 宣告，不會掛在 window 上），
+  // 不可用 window.heatmapData 存取，否則會是 undefined
+  const rows = (typeof heatmapData !== 'undefined' ? heatmapData : []).filter(d => d.sector === sector);
   if (!rows.length) return [];
   const withContrib = rows.map(d => ({ ...d, contrib: (d.chgPct || 0) * (d.mcap || 0) }));
   withContrib.sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib));
@@ -1023,7 +1025,7 @@ function hmFilterSectorByName(sector) {
     }
   });
   // 若 btn 還沒建立（資料未完全載入），直接用 heatmapData 篩選
-  if (!found && window.heatmapData) {
+  if (!found && typeof heatmapData !== 'undefined' && heatmapData.length) {
     const filtered = heatmapData.filter(d => d.sector === sector);
     if (filtered.length) renderTreemap(filtered, true);
   }
