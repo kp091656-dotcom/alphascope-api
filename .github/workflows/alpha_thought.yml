@@ -17,11 +17,23 @@ jobs:
       - name: Agent 1 — 市場資料員
         run: |
           echo "▶ Agent 1：抓市場資料 + 技術指標 + 市場環境感知"
-          curl -s -X POST \
+          response=$(curl -s -w "\n%{http_code}" -X POST \
             "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_agent1" \
             -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq .
+            -H "Content-Type: application/json")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "$body" | jq . || echo "$body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Agent 1 失敗：HTTP $http_code"
+            exit 1
+          fi
+          if echo "$body" | jq -e 'has("error")' > /dev/null 2>&1; then
+            echo "❌ Agent 1 回應含有 error 欄位"
+            exit 1
+          fi
+          echo "✅ Agent 1 完成"
 
   agent2:
     runs-on: ubuntu-latest
@@ -31,11 +43,23 @@ jobs:
       - name: Agent 2 — 分析師
         run: |
           echo "▶ Agent 2：評分昨日預測 + 弱點分析 + 生成檢討篇"
-          curl -s -X POST \
+          response=$(curl -s -w "\n%{http_code}" -X POST \
             "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_agent2" \
             -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq .
+            -H "Content-Type: application/json")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "$body" | jq . || echo "$body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Agent 2 失敗：HTTP $http_code"
+            exit 1
+          fi
+          if echo "$body" | jq -e 'has("error")' > /dev/null 2>&1; then
+            echo "❌ Agent 2 回應含有 error 欄位"
+            exit 1
+          fi
+          echo "✅ Agent 2 完成"
 
   agent3:
     runs-on: ubuntu-latest
@@ -49,16 +73,26 @@ jobs:
 
           if [ "$HOUR" = "08" ]; then
             echo "週五 16:00 → 觸發週報"
-            curl -s -X POST \
-              "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=weekly_recap" \
-              -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              | jq .
+            endpoint="weekly_recap"
           else
             echo "→ 觸發 Alpha 隨筆"
-            curl -s -X POST \
-              "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=alpha_thought" \
-              -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              | jq .
+            endpoint="alpha_thought"
           fi
+
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.VERCEL_API_URL }}/api/news?endpoint=${endpoint}" \
+            -H "x-owner-token: ${{ secrets.OWNER_TOKEN }}" \
+            -H "Content-Type: application/json")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "$body" | jq . || echo "$body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Agent 3（${endpoint}）失敗：HTTP $http_code"
+            exit 1
+          fi
+          if echo "$body" | jq -e 'has("error")' > /dev/null 2>&1; then
+            echo "❌ Agent 3（${endpoint}）回應含有 error 欄位"
+            exit 1
+          fi
+          echo "✅ Agent 3（${endpoint}）完成"
