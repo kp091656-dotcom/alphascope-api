@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-08-27（對話二十五，heatmap.js 產業貢獻拆解 + heatmapData window 存取修正）
+> 更新日期：2026-08-31（對話二十六，alpha_thought 系列模型停用修復 + workflow 失敗偵測強化）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -13,6 +13,7 @@
 4. ⚠️ Claude 不使用任何 MCP push 功能，一律生成檔案讓使用者手動上傳。
 5. ⚠️ CLAUDE.md 只在使用者主動要求切換新對話時才更新。
 6. Commit message 必須 50 字元以內（超過拆 subject + body）。
+7. ⚠️ 因為 repo 是 public，Claude 可主動用 `raw.githubusercontent.com` 抓取檔案內容來對照除錯（不用每次都等使用者手動上傳），使用者已於「對話二十六」確認傾向維持這個做法。
 
 ---
 
@@ -25,6 +26,7 @@
 - **`collect_market_data.js` 的 Alpha 報告生成 Groq prompt，目前離 TPM 上限緩衝不算多**：詳見「對話二十四」，已把股票表格從 50 檔精簡欄位（拿掉 PB/殖利率）、`max_tokens` 降到 3000，估算約落在 7000/8000 TPM，緩衝約 1000。若之後新聞則數增加、個股名稱變長，或想加回 PB/殖利率，有可能再次觸發 413，屆時可考慮：① 進一步精簡 prompt ② 升級 Groq Dev Tier。
 - **PTT JSON API（`ptt.cc/api/board/Stock/index`）持續 404 屬預期行為，非 bug**：PTT 從未提供正式穩定的公開 JSON API，這個端點本來就是非官方/實驗性質，說不通就不通。程式已有兩層防呆（JSON 失敗 → fallback 抓 HTML 頁面解析 → 都失敗才顯示「無法取得」），目前 HTML fallback 運作正常，不影響報告產出。若想省一次無謂的 fetch，可考慮直接拿掉 JSON 嘗試、只留 HTML 解析（尚未執行，待使用者確認是否要做）。
 - ~~`heatmap.js` 新功能（產業貢獻拆解）展開全部顯示「無個股資料」~~：已於「對話二十五」修正，見下方章節。**通用提醒**：`heatmap.js` 內的全域變數 `heatmapData` 疑似用 `let` 宣告（非 `var`），**不會**自動掛在 `window` 物件上，之後在這個檔案裡新增功能時，一律用裸變數 `heatmapData` 存取，不要寫成 `window.heatmapData`（會拿到 `undefined`）。
+- ~~`alpha_thoughts` 停更 15 天（8/16 後無新資料），GitHub Actions 卻顯示綠燈~~：已於「對話二十六」修正，見下方章節。**通用提醒**：`api/news.js` 裡任何寫死 Groq 模型名稱的呼叫點，日後 Groq 停用模型時要**逐一盤點全檔案**（`grep -n "model: '"`），不要只改「這次踩雷的那一個」——對話二十三/二十四只改了 `collect_market_data.js` 和通用 proxy，漏了 `alpha_thought` 系列與 `alpha_analyze` 共 6 處，導致問題延遲兩週才被發現。⚠️ **`market_regime` 欄位待觀察**：修復後新寫入的隨筆（id 94）該欄位是 `null`，尚未確認是否為既有行為，下次對話請比對 8/16 前的正常資料是否也是 null。
 
 ---
 
@@ -567,4 +569,37 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 **驗證：** 語法用 `node --check` 驗證通過；使用者尚未回報第二次實測結果，**下次對話請先確認使用者是否已實際點擊測試過**。
 
 **通用教訓：** 這個檔案（以及任何用 `<script>` classic script 拆成多檔、彼此共用全域變數的架構）裡，新增程式碼要存取別的檔案宣告的全域變數時，優先比照該變數在同檔案內既有的存取方式（裸變數 or `window.` 前綴），不要自行假設用 `window.` 前綴一定安全——`let`/`const` 宣告的全域變數是例外。
+
+---
+
+## 對話二十六更新（2026-08-31）
+
+### Bug 修正：`alpha_thoughts` 停更 15 天，`alpha_thought.yml` 卻一路顯示綠燈
+
+**現象：** 使用者在 Supabase 截圖發現 `alpha_thoughts` 表最新一筆卡在 2026-08-16 22:43，但 GitHub Actions 上「Alpha 隨筆生成」（`alpha_thought.yml`）每天都顯示 ✅ succeeded，agent1/agent2/agent3 三個 job 都是綠燈，完全沒有任何失敗跡象。
+
+**根因（雙重問題）：**
+
+1. **模型停用（本體）：** `api/news.js` 裡的 `alpha_thought` endpoint（agent3 撰稿員呼叫）共 5 處仍寫死 `llama-3.3-70b-versatile`，另外 `alpha_analyze` endpoint（個股/大盤 AI 分析報告，`js/stock_modal.js` 觸發）也有 1 處，合計 6 處。此模型已於 2026-06-17 由 Groq 公告停用，8/16 停用生效——與 `alpha_thoughts` 停更的日期完全吻合。對話二十三、二十四當時只修了 `collect_market_data.js` 主流程和 `api/news.js` 通用 Groq proxy（`endpoint === 'groq'`），**遺漏了 `alpha_thought` 系列與 `alpha_analyze` 這 6 個獨立寫死模型名稱的呼叫點**，是這次問題延遲兩週才被發現的根本原因。
+2. **「假成功」（掩護問題）：** `alpha_thought.yml` 的三個 job 都是 `curl -s ... | jq .`，只要 curl 打到 API、拿到合法 JSON（哪怕內容是 `{"error": "Groq HTTP 404"}`），管線最後一個指令 `jq` 的 exit code 就是 0，GitHub Actions 因此判定 job 成功，不會變紅燈、不會寄失敗通知信。這正是問題被隱藏 15 天都沒人發現的原因。
+
+**除錯過程（供之後排查參考）：**
+- Supabase 排序容易誤判：一開始使用者看到的排序畫面其實捲到了資料表最舊的一批（id 1~13，2026-06-10~12），並非真正最新資料，捲回最上面才確認到真正卡住的日期（8/16）
+- 用 GitHub Actions 網頁介面點進 `alpha_thought.yml` 執行紀錄 → 找到 agent3 log，裡面直接印出 `{"error": "Groq HTTP 404"}`，才鎖定根因
+- 因為 repo 是 public，Claude 直接用 `raw.githubusercontent.com` 抓 `api/news.js` 原始碼比對 log，不需要使用者手動上傳（見上方操作規則第 7 條）
+
+**修正內容：**
+
+1. **`api/news.js`**：全部 6 處 `model: 'llama-3.3-70b-versatile'` 改成 `model: 'openai/gpt-oss-20b'`（比照對話二十三已驗證過的模型），所有 8 個 Groq 呼叫（含原本已用 gpt-oss-20b 的 2 處）統一補上 `reasoning_effort: 'low'`，避免推理鏈吃光 `max_tokens` 導致空內容（對話二十三的教訓）
+2. **`api/news.js` 靜默 catch 補強**：風格分析、專長標籤分析、檢討篇這 3 處原本 `catch(e) { /* 不中斷主流程 */ }` 完全吞掉錯誤，改為額外印 `console.error(...)`，日後這幾個小功能壞掉至少 log 看得到
+3. **`.github/workflows/alpha_thought.yml` 重寫**：三個 job 的 curl 改用 `curl -s -w "\n%{http_code}"` 取得真實 HTTP status，若 status 非 200 或回應 JSON 含 `error` 欄位 → `exit 1`，讓 job 真正變紅燈；搭配既有的 `needs: [agent1, agent2]` + `if: success()`，上游一失敗，下游 agent 會自動連鎖停止，不再產生半套資料
+
+**驗證：** 使用者實際部署後手動觸發「Alpha 隨筆生成」，agent3 log 顯示 `"ok": true`，新一筆隨筆（id 94，`created_at: 2026-08-31T06:31:13`）成功寫入，`content` 為正常繁體中文內容，非空字串或錯誤訊息。模型修正確認生效；workflow 失敗偵測強化的部分屬於「下次真的失敗時才會驗證到」，目前只驗證過正常流程沒被改壞、語法（`node --check` / YAML `safe_load`）通過。
+
+**待辦：**
+- [ ] `alpha_thought` 系列新寫入的隨筆 `market_regime` 欄位是 `null`（id 94），需比對 8/16 前的正常資料是否也是如此，確認是既有行為還是另一個小問題
+- [ ] `alpha_thought.yml` 的失敗偵測邏輯（HTTP status + error 欄位檢查）尚未在真實失敗情境下驗證過，下次 Groq 又出問題時，需確認 job 真的會變紅燈、且有收到 GitHub 失敗通知信
+- [ ] `alpha_analyze` endpoint（個股 AI 分析報告）同樣受模型停用影響，且本來就有正確拋錯（`res.status(500)`），代表過去若使用者曾在前端觸發過，應該會看到明確錯誤畫面（非靜默失敗）；建議下次使用這個功能時順便留意是否正常
+
+**通用教訓：** Groq／任何第三方服務公告「模型即將停用」時，換模型不能只改「這次踩雷的那一個呼叫點」，要對整個 repo 做 `grep -n "model: '"` 全面盤點，逐一確認每個寫死模型名稱的地方都有跟上。另外，`curl ... | jq .` 這種寫法在 shell 裡永遠不會因為 API 回傳錯誤內容而失敗（只要回應是合法 JSON），CI/CD 裡呼叫外部 API 一定要額外檢查 HTTP status 或回應內容本身，否則「假成功」會讓問題不知不覺潛伏很多天才被發現。
 
