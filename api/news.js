@@ -415,13 +415,14 @@ ${redditTitles || '無'}
 
       // ── 9. 呼叫 Groq（含 web_search tool）──
       const groqBody = {
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-20b',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userPrompt },
         ],
         max_tokens: 2000,
         temperature: 0.4,
+        reasoning_effort: 'low',
         tools: [{
           type: 'function',
           function: {
@@ -732,10 +733,11 @@ ${redditTitles || '無'}
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
             body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
+              model: 'openai/gpt-oss-20b',
               messages: [{ role: 'user', content: stylePrompt }],
               max_tokens: 150,
               temperature: 0.5,
+              reasoning_effort: 'low',
             }),
             signal: AbortSignal.timeout(10000),
           });
@@ -754,10 +756,11 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
             body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
+              model: 'openai/gpt-oss-20b',
               messages: [{ role: 'user', content: specPrompt }],
               max_tokens: 80,
               temperature: 0.4,
+              reasoning_effort: 'low',
             }),
             signal: AbortSignal.timeout(10000),
           });
@@ -868,13 +871,14 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
             body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
+              model: 'openai/gpt-oss-20b',
               messages: [
                 { role: 'system', content: reflectSystem },
                 { role: 'user',   content: reflectUser },
               ],
               max_tokens: 300,
               temperature: 0.8,
+              reasoning_effort: 'low',
             }),
             signal: AbortSignal.timeout(15000),
           });
@@ -968,13 +972,14 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: 'openai/gpt-oss-20b',
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user',   content: userPrompt },
             ],
             max_tokens: 400,
             temperature: 0.85,
+            reasoning_effort: 'low',
           }),
           signal: AbortSignal.timeout(20000),
         });
@@ -1125,13 +1130,14 @@ ${weekSummary}
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: 'openai/gpt-oss-20b',
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user',   content: userPrompt },
             ],
             max_tokens: 600,
             temperature: 0.8,
+            reasoning_effort: 'low',
           }),
           signal: AbortSignal.timeout(20000),
         });
