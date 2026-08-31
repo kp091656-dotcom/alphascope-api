@@ -743,7 +743,7 @@ ${redditTitles || '無'}
           });
           const styleData = await styleRes.json();
           styleMemo = styleData.choices?.[0]?.message?.content?.trim() || styleMemo;
-        } catch(e) { /* 風格分析失敗不影響主流程 */ }
+        } catch(e) { console.error('[alpha_thought] 風格分析失敗（不中斷主流程）：', e.message); }
 
         // ── 專長標籤分析（和 style_memo 同批觸發）──
         try {
@@ -770,7 +770,7 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
           if (Array.isArray(specParsed) && specParsed.length) {
             specialties = specParsed.slice(0, 3).map(s => String(s).slice(0, 10));
           }
-        } catch(e) { /* 專長標籤失敗不影響主流程 */ }
+        } catch(e) { console.error('[alpha_thought] 專長標籤分析失敗（不中斷主流程）：', e.message); }
       }
 
       // ── 評分昨日預測（補跑）──
@@ -916,7 +916,7 @@ ${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
             });
           }
         }
-      } catch(e) { /* 檢討篇失敗不中斷主流程 */ }
+      } catch(e) { console.error('[alpha_thought] 檢討篇生成失敗（不中斷主流程）：', e.message); }
 
       // ── 計算新頭銜 ──
       const newTotal = profile.total_posts + 1;
