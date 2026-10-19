@@ -832,7 +832,10 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           }),
           signal: AbortSignal.timeout(20000),
         });
-        if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
+        if (!groqRes.ok) {
+          const errBody = await groqRes.text().catch(() => "");
+          throw new Error(`Groq HTTP ${groqRes.status}: ${errBody.slice(0, 300)}`);
+        }
         const groqData = await groqRes.json();
         let raw = groqData.choices?.[0]?.message?.content?.trim() || '';
         if (!raw) throw new Error('Groq 回傳空內容');
@@ -1358,7 +1361,10 @@ ${weekSummary}
           }),
           signal: AbortSignal.timeout(20000),
         });
-        if (!groqRes.ok) throw new Error(`Groq HTTP ${groqRes.status}`);
+        if (!groqRes.ok) {
+          const errBody = await groqRes.text().catch(() => "");
+          throw new Error(`Groq HTTP ${groqRes.status}: ${errBody.slice(0, 300)}`);
+        }
         const groqData = await groqRes.json();
         let raw = groqData.choices?.[0]?.message?.content?.trim() || '';
         if (!raw) throw new Error('Groq 回傳空內容');
