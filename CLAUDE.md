@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-10-19（對話二十七，週報停更修復 + AIAutoStocks 研究與移植規劃）
+> 更新日期：2026-10-19（對話二十八，還原 8/14 news.js 回歸 + agent 鏈恢復 + Groq 429 自動重試）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -14,6 +14,8 @@
 5. ⚠️ CLAUDE.md 只在使用者主動要求切換新對話時才更新。
 6. Commit message 必須 50 字元以內（超過拆 subject + body）。
 7. ⚠️ 因為 repo 是 public，Claude 可主動用 `raw.githubusercontent.com` 抓取檔案內容來對照除錯（不用每次都等使用者手動上傳），使用者已於「對話二十六」確認傾向維持這個做法。⚠️ **對話二十七實測限制**：WebFetch 抓 `github.com/.../raw/...` 會回 `ROBOTS_DISALLOWED`，抓 `blob` 頁面對大檔只顯示前約 1000 行（`api/news.js` 共 2865 行，後半段讀不到）。需要看大檔後半段時，請使用者貼 `grep -n "關鍵字" api/news.js` 的結果或直接上傳檔案，不要硬繞過。
+8. ⚠️ **改 `api/news.js` 一律從 GitHub main 最新版出發，不要用本機放很久的副本**（對話二十八：8/14 就是舊副本蓋掉了 agent 功能，見「對話二十八更新」）。上傳前看 commit 的 diff 行數增減是否合理（該次是 −606 行）。
+9. 需要查歷史時，Claude 可用 `add_repo`（read）取得唯讀存取後 `git clone` 完整歷史（613 commits，實測可行），用 `git log -S"關鍵字" -- 檔案` 找出加入／移除關鍵字的 commit，再用 `git show <commit>^:檔案 | grep -c 關鍵字` 比對前後版本。
 
 ---
 
@@ -26,10 +28,11 @@
 - **`collect_market_data.js` 的 Alpha 報告生成 Groq prompt，目前離 TPM 上限緩衝不算多**：詳見「對話二十四」，已把股票表格從 50 檔精簡欄位（拿掉 PB/殖利率）、`max_tokens` 降到 3000，估算約落在 7000/8000 TPM，緩衝約 1000。若之後新聞則數增加、個股名稱變長，或想加回 PB/殖利率，有可能再次觸發 413，屆時可考慮：① 進一步精簡 prompt ② 升級 Groq Dev Tier。
 - **PTT JSON API（`ptt.cc/api/board/Stock/index`）持續 404 屬預期行為，非 bug**：PTT 從未提供正式穩定的公開 JSON API，這個端點本來就是非官方/實驗性質，說不通就不通。程式已有兩層防呆（JSON 失敗 → fallback 抓 HTML 頁面解析 → 都失敗才顯示「無法取得」），目前 HTML fallback 運作正常，不影響報告產出。若想省一次無謂的 fetch，可考慮直接拿掉 JSON 嘗試、只留 HTML 解析（尚未執行，待使用者確認是否要做）。
 - ~~`heatmap.js` 新功能（產業貢獻拆解）展開全部顯示「無個股資料」~~：已於「對話二十五」修正，見下方章節。**通用提醒**：`heatmap.js` 內的全域變數 `heatmapData` 疑似用 `let` 宣告（非 `var`），**不會**自動掛在 `window` 物件上，之後在這個檔案裡新增功能時，一律用裸變數 `heatmapData` 存取，不要寫成 `window.heatmapData`（會拿到 `undefined`）。
-- ~~`alpha_thoughts` 停更 15 天（8/16 後無新資料），GitHub Actions 卻顯示綠燈~~：已於「對話二十六」修正，見下方章節。**通用提醒**：`api/news.js` 裡任何寫死 Groq 模型名稱的呼叫點，日後 Groq 停用模型時要**逐一盤點全檔案**（`grep -n "model: '"`），不要只改「這次踩雷的那一個」——對話二十三/二十四只改了 `collect_market_data.js` 和通用 proxy，漏了 `alpha_thought` 系列與 `alpha_analyze` 共 6 處，導致問題延遲兩週才被發現。⚠️ **`market_regime` 欄位待觀察**：修復後新寫入的隨筆（id 94）該欄位是 `null`，尚未確認是否為既有行為，下次對話請比對 8/16 前的正常資料是否也是 null。
+- ~~`alpha_thoughts` 停更 15 天（8/16 後無新資料），GitHub Actions 卻顯示綠燈~~：已於「對話二十六」修正，見下方章節。**通用提醒**：`api/news.js` 裡任何寫死 Groq 模型名稱的呼叫點，日後 Groq 停用模型時要**逐一盤點全檔案**（`grep -n "model: '"`），不要只改「這次踩雷的那一個」——對話二十三/二十四只改了 `collect_market_data.js` 和通用 proxy，漏了 `alpha_thought` 系列與 `alpha_analyze` 共 6 處，導致問題延遲兩週才被發現。`market_regime` 欄位為 `null` 的問題已於「對話二十八」查明並修復（原因是 8/14 回歸，不是既有行為）。
 - ~~Alpha 頁「本週總結」停在 65 天前（`weekly_recap` 只產生過 id 86、92 兩筆，8/14 後再無）~~：已於「對話二十七」修正（`alpha_thought.yml` 週報判斷由「UTC 小時 = 08」改為依觸發來源），手動補跑已成功（id 134）。**待驗證**：2026-10-23（週五）16:00 台灣時間的自動觸發路徑，見「對話二十七更新」。
-- **Groq 429 偶發一次**（Run #122，agent3，2026-10-19 前後）：免費層限流，非系統性問題，暫不加重試/backoff；若再發生再評估（可參考 AIAutoStocks 的多 key 輪替與冷卻）。同一事件也是 `alpha_thought.yml` 失敗偵測的首次實戰驗證（job 如預期變紅）。
-- **程式碼與文件可能不一致，待確認**：見「對話二十七更新」§4（`news.js` 的 `alpha_thought` 區塊與「Alpha 成長系統」章節描述不符）。
+- **Groq 429（TPM 暫時超額）**：Run #122、#156 都發生過。#156 的回應顯示 `openai/gpt-oss-20b` TPM 上限 8000、當分鐘已用 6667、此次需 1477、等約 1.08 秒即可。對話二十八起 `alpha_thought` 與 `weekly_recap` 已用 `groqFetch()` 自動重試（最多 2 次、需等 >8 秒則不重試）；額度為帳號共用，前端翻譯／簡報與其他 workflow 也會用到。若仍頻繁失敗，可考慮 Groq Dev Tier 或 AIAutoStocks 式的多 key 輪替。同一事件也是 `alpha_thought.yml` 失敗偵測的實戰驗證（job 如預期變紅）。
+- ~~程式碼與文件可能不一致，待確認~~：已於「對話二十八」查明並修復——原因是 8/14 commit `551fb2f` 以舊檔蓋掉 `news.js`，不是文件寫錯。
+- **8/14～10/19 期間的資料空缺**：`alpha_thoughts.market_regime` 在這段時間為 NULL，agent1／agent2 也沒有真正執行；各環境命中率（近 60 篇統計）需重新累積一陣子才準。詳見「對話二十八更新」。
 
 ---
 
@@ -116,6 +119,7 @@ agent1（市場資料員）→ agent2（分析師）→ agent3（撰稿員）
 - **Agent 2**：評分昨日預測 + 弱點分析 + 生成檢討篇 → 存 `alpha_profile.agent2_*`
 - **Agent 3**：讀 agent1/2 快取 → 生成隨筆 → 寫入 `alpha_thoughts`
 - 任一 Agent 失敗，後續 job 停止（`if: success()`）
+- Agent 1／2 對應 `api/news.js` 的 `alpha_agent1`／`alpha_agent2` endpoint。⚠️ 這兩個 endpoint 若不存在，未知 endpoint 會落入 RSS 預設流程、回 HTTP 200 且無 `error` 欄位，現行失敗偵測會判成功（對話二十八實例）；待辦已列補強。
 - **Agent 3 的 endpoint 選擇（對話二十七起）**：`github.event_name == schedule`（只有週五 cron 觸發）或手動 `mode=weekly` → `weekly_recap`；其餘（`workflow_run` 鏈、一般手動）→ `alpha_thought`。⚠️ 不要再用 `date -u +%H` 判斷，GitHub 排程延遲加上前兩個 job 的執行時間會讓小時錯位（對話二十七根因）。
 
 ---
@@ -288,8 +292,11 @@ create table public.alpha_profile (
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表，不可提前刪除）
+- [ ] 2026-10-20：確認 `Collect TWSE` 10/19 的資料已入庫（對話二十八時 `stock_daily_twse` 的 TAIEX 最後一天還停在 10/16），且 agent2 log 的 `scored` > 0（今天的預測 id 135 被評分）
 - [ ] 2026-10-23（週五）16:00 台灣時間後：確認 `alpha_thought.yml` agent3 log 出現「週報觸發 → weekly_recap」、`alpha_thoughts` 新增 `angle='weekly_recap'` 一筆（驗證週報自動路徑）
-- [ ] 氣候分類器升級與 Skills 輕量版規劃（見「對話二十七更新」§3），新對話從 Phase 0 開始
+- [ ] `alpha_thought.yml` 失敗偵測再加一道檢查回應 `ok == true`（目前只擋 HTTP 非 200 與 `error` 欄位）；`api/news.js` 結尾對未知 endpoint 回 404，而不是落入 RSS 預設流程（建議項，尚未做）
+- [ ] 目前部署的 `news.js` 缺 `c8b7f45` 的三處 `console.error`（風格分析、專長標籤、檢討篇的靜默 catch），需要時補回
+- [ ] 氣候分類器 Phase 1：待使用者在 A（用現有 104 天先做 shadow，200 日特徵留空）與 B（先補 TAIEX 歷史）擇一；細節見「對話二十七更新」§3 與「對話二十八更新」§3
 
 ---
 
@@ -657,9 +664,9 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 
 **⚠️ 更正：** 口頭評估時曾把「氣候層」當成新功能，但本文件「弱點自覺 + 動態成長系統」已有：規則式 `market_regime`（volatile／trending_up／trending_down／consolidating／normal，依 VIX、FGI、當日加權漲跌、外資淨買賣判斷，`api/news.js` 的 `alpha_thought` 區塊可見）、近 60 篇各環境命中率、三層提示（weakness／dynamicWeight／success）。因此可移植價值縮小為：① 升級氣候分類器（現行只看單日資料，沒有均線／趨勢／200 日高點特徵）② Skills 的版本化與驗證流程。
 
-**Phase 0（前置）：**
-- 確認 `stock_daily_twse` 的 TAIEX 歷史天數（MA60 需 60 天、200 日高點需 200 天，無法從文件確認）。
-- 查清 `market_regime` 為何新隨筆是 `null`（見「已知問題」），並釐清程式碼與文件是否一致（§4）。
+**Phase 0（前置，已於對話二十八完成）：**
+- TAIEX 歷史天數：104 天（2026-05-15 ~ 10-16）。MA20／MA60／量能比可算；200 日高點約需等到 2027 年 2～3 月，暫以期間高點代替，或先補歷史資料。
+- `market_regime` 為 `null` 與程式碼／文件不一致，皆為 8/14 回歸造成，已修復（見「對話二十八更新」）。
 
 **Phase 1（氣候分類器，shadow 模式）：**
 - JS 規則式判定，特徵：MA20／MA60 排列與收盤相對位置、距 200 日高點的天數與幅度、5 日／20 日量能比、既有 VIX／FGI／外資淨額。LLM 最多寫一段說明，可併入現有 Agent 1 呼叫，不要把 30 行原始 K 線塞 prompt（TPM 緊，見「已知問題」）。
@@ -680,13 +687,51 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 
 **風險：** 氣候誤判會讓 Alpha 過度保守（所以先 shadow）；「建議現金水位／風險乘數」類輸出容易被讀成投資建議，網站宜以市場狀態描述呈現，正式上線前建議找專業人士確認；注入 Skills 會增加 token。
 
-### 4. 待確認：`news.js` 程式碼與本文件描述可能不一致
+### 4. ~~待確認：`news.js` 程式碼與本文件描述可能不一致~~
 
-對話二十七用 WebFetch 讀 `api/news.js`（只讀到前約 1000 行）時看到：`alpha_thought` endpoint 區塊自行抓市場資料、評分昨日預測、生成檢討篇、判斷 `marketRegime`，且 systemPrompt 只注入 `styleHint`／`streakHint`／`regimeHint`，**沒看到** `weaknessHint`／`dynamicWeightHint`／`successHint`；而本文件「Alpha 成長系統」寫三層提示同時注入 Agent 3，且 workflow 的 Agent 2 負責評分與檢討篇。`alpha_agent1`／`alpha_agent2` endpoint 與 `weekly_recap` 本體沒讀到。需要對照原始碼確認實際運作的版本，再決定文件或程式要改哪邊（可請使用者貼 `grep -n "endpoint === 'alpha_\|weekly_recap\|weaknessHint" api/news.js` 的結果）。
+已於「對話二十八」查明：是 8/14 commit `551fb2f` 以舊檔蓋掉 `news.js`，文件描述本來是對的，程式碼已還原。
+
+---
+
+## 對話二十八更新（2026-10-19）
+
+### 1. 事故：8/14 commit `551fb2f` 以舊檔蓋掉 `news.js`，agent 鏈空轉約 66 天
+
+**發現過程：** 對話二十七 §4 懷疑文件與程式不一致。使用者上傳 `news.js`（2865 行）與 `alpha_thought.yml` 後發現：workflow 的 Agent 1／Agent 2 打 `?endpoint=alpha_agent1`／`alpha_agent2`，但 `news.js` 完全沒有這兩個 endpoint。未知 endpoint 會落入檔案尾端的 RSS 預設流程，回 HTTP 200 且無 `error` 欄位，所以失敗偵測判定成功——這是繼對話二十六（`curl | jq` 假成功）之後的第二種「假成功」。
+
+**根因：** `551fb2f`（2026-08-14 09:03，「groq endpoint換 gpt-oss-20b」）本應只換 2 處模型名稱，實際 diff 為 +351／−606，`api/news.js` 由 3113 行變 2858 行。推測是用舊的本地副本修改後上傳（未證實，commit 本身不會說明）。
+
+**因此遺失的功能**（以 `551fb2f^` 與 `551fb2f` 的關鍵字計數驗證）：
+- `alpha_agent1`／`alpha_agent2` endpoint（`b1a7069`，06-24）
+- `weaknessHint`／`dynamicWeightHint`／`successHint`（`be1d398`，06-17 起）
+- `success_patterns` 欄位分離（`c0f246c`，07-29）
+- Max Pain 到期日統一為 `getWeeklyWedExpiry`／`getWeeklyFriExpiry`（`87e5671`，07-09；被退回 `getNextWeekday`）
+- `pred_date` 對齊當天（`42da0ee`，06-30）、Agent 1 讀 `alpha_daily_report`（`31d93ed`，06-30）
+- 副作用：`alpha_thoughts` 的寫入從沒帶 `market_regime`，所以一直是 NULL
+
+### 2. 修復
+
+- 以 `551fb2f^` 為基底還原，重新套用 8 處 Groq 呼叫改 `openai/gpt-oss-20b` + `reasoning_effort: 'low'`（與對話二十六的 HEAD 一致）。
+- 新增兩項：① `alpha_thought`、`weekly_recap` 的 `Groq HTTP` 錯誤訊息附上 Groq 回應前 300 字；② handler 開頭新增 `groqFetch()`，這兩處遇 429 時依 `retry-after`／訊息「try again in Xs」等待後重試最多 2 次，需等 >8 秒（如每日額度）則不重試。以假 429 單元測試過邏輯（兩次 429 後成功，約 3.2 秒）。
+- Supabase 欄位檢查：`alpha_profile` 9 個欄位與 `alpha_thoughts.market_regime` 共 10 個欄位齊全，無需補 SQL。
+- **驗證：** Run #156 重跑 agent3 成功。agent1 回 `ok:true, market_regime:consolidating, lines:11`；agent2 回 `ok:true, scored:0, streak:2, reflection:false`（當時無到期預測，`scored:0` 正常）。Supabase：id 135（2026-10-19 08:13 UTC）`market_regime=consolidating`、`pred_date=2026-10-19`；對照還原前的 id 133，`pred_date` 為隔天、`market_regime` 為 NULL。隨筆內容出現 RSI／KD，證明 agent1 的技術指標有傳到 agent3。
+- **429 實際內容：** `gpt-oss-20b` TPM Limit 8000、Used 6667、Requested 1477，等約 1.08 秒。額度為帳號共用，誰用掉 6667 未查明。
+
+### 3. 資料現況
+
+- `stock_daily_twse` 的 TAIEX：104 天（2026-05-15 ~ 10-16）。MA20／MA60／量能比可算；距 200 日高點需約到 2027 年 2～3 月，暫以期間高點代替。
+- 10/19 當日 TAIEX 於 16:20 尚未入庫（最後一天 10-16），需確認 `Collect TWSE`（見待辦）；這會影響 id 135 的評分。
+- 8/14～10/19 的 `alpha_thoughts.market_regime` 為 NULL，各環境命中率需重新累積。
+
+### 4. 教訓
+
+- **別用舊副本改檔**：改 `news.js` 一律從 GitHub main 最新版出發，上傳前檢查 diff 行數是否異常（該次 −606）。
+- **打到不存在的 endpoint 不會報錯**（落入 RSS 預設流程回 200），失敗偵測應檢查 `ok` 欄位，`news.js` 結尾宜對未知 endpoint 回 404。
+- **Groq 429 要看回應內容**：TPM（每分鐘）等 1～2 秒就好，TPD（每日）才需要等很久；錯誤訊息要把回應 body 帶出來才分辨得出。
+- **Groq 換模型時**：除了全檔 `grep -n "model: '"` 盤點，也要確認上傳的檔案確實是最新版（對話二十六教訓的延伸）。
 
 ### 5. 新對話建議起手式
 
-1. 先確認 10/23 週五週報是否自動產生（見「待辦」）。
-2. 做 §3 Phase 0：查 TAIEX 歷史天數、`market_regime` 為何為 `null`、§4 的程式碼與文件一致性。
-3. 再決定是否進 Phase 1（氣候分類器 shadow 模式）。
-
+1. 確認 `Collect TWSE` 10/19 資料已入庫，以及 agent2 log 的 `scored` > 0。
+2. 10/23（週五）16:00 後驗證週報自動觸發。
+3. 決定氣候分類器 Phase 1 走 A 或 B（見「對話二十七更新」§3、「對話二十八更新」§3）。
