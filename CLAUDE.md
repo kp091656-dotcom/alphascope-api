@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-08-31（對話二十六，alpha_thought 系列模型停用修復 + workflow 失敗偵測強化）
+> 更新日期：2026-10-19（對話二十七，週報停更修復 + AIAutoStocks 研究與移植規劃）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -13,7 +13,7 @@
 4. ⚠️ Claude 不使用任何 MCP push 功能，一律生成檔案讓使用者手動上傳。
 5. ⚠️ CLAUDE.md 只在使用者主動要求切換新對話時才更新。
 6. Commit message 必須 50 字元以內（超過拆 subject + body）。
-7. ⚠️ 因為 repo 是 public，Claude 可主動用 `raw.githubusercontent.com` 抓取檔案內容來對照除錯（不用每次都等使用者手動上傳），使用者已於「對話二十六」確認傾向維持這個做法。
+7. ⚠️ 因為 repo 是 public，Claude 可主動用 `raw.githubusercontent.com` 抓取檔案內容來對照除錯（不用每次都等使用者手動上傳），使用者已於「對話二十六」確認傾向維持這個做法。⚠️ **對話二十七實測限制**：WebFetch 抓 `github.com/.../raw/...` 會回 `ROBOTS_DISALLOWED`，抓 `blob` 頁面對大檔只顯示前約 1000 行（`api/news.js` 共 2865 行，後半段讀不到）。需要看大檔後半段時，請使用者貼 `grep -n "關鍵字" api/news.js` 的結果或直接上傳檔案，不要硬繞過。
 
 ---
 
@@ -27,6 +27,9 @@
 - **PTT JSON API（`ptt.cc/api/board/Stock/index`）持續 404 屬預期行為，非 bug**：PTT 從未提供正式穩定的公開 JSON API，這個端點本來就是非官方/實驗性質，說不通就不通。程式已有兩層防呆（JSON 失敗 → fallback 抓 HTML 頁面解析 → 都失敗才顯示「無法取得」），目前 HTML fallback 運作正常，不影響報告產出。若想省一次無謂的 fetch，可考慮直接拿掉 JSON 嘗試、只留 HTML 解析（尚未執行，待使用者確認是否要做）。
 - ~~`heatmap.js` 新功能（產業貢獻拆解）展開全部顯示「無個股資料」~~：已於「對話二十五」修正，見下方章節。**通用提醒**：`heatmap.js` 內的全域變數 `heatmapData` 疑似用 `let` 宣告（非 `var`），**不會**自動掛在 `window` 物件上，之後在這個檔案裡新增功能時，一律用裸變數 `heatmapData` 存取，不要寫成 `window.heatmapData`（會拿到 `undefined`）。
 - ~~`alpha_thoughts` 停更 15 天（8/16 後無新資料），GitHub Actions 卻顯示綠燈~~：已於「對話二十六」修正，見下方章節。**通用提醒**：`api/news.js` 裡任何寫死 Groq 模型名稱的呼叫點，日後 Groq 停用模型時要**逐一盤點全檔案**（`grep -n "model: '"`），不要只改「這次踩雷的那一個」——對話二十三/二十四只改了 `collect_market_data.js` 和通用 proxy，漏了 `alpha_thought` 系列與 `alpha_analyze` 共 6 處，導致問題延遲兩週才被發現。⚠️ **`market_regime` 欄位待觀察**：修復後新寫入的隨筆（id 94）該欄位是 `null`，尚未確認是否為既有行為，下次對話請比對 8/16 前的正常資料是否也是 null。
+- ~~Alpha 頁「本週總結」停在 65 天前（`weekly_recap` 只產生過 id 86、92 兩筆，8/14 後再無）~~：已於「對話二十七」修正（`alpha_thought.yml` 週報判斷由「UTC 小時 = 08」改為依觸發來源），手動補跑已成功（id 134）。**待驗證**：2026-10-23（週五）16:00 台灣時間的自動觸發路徑，見「對話二十七更新」。
+- **Groq 429 偶發一次**（Run #122，agent3，2026-10-19 前後）：免費層限流，非系統性問題，暫不加重試/backoff；若再發生再評估（可參考 AIAutoStocks 的多 key 輪替與冷卻）。同一事件也是 `alpha_thought.yml` 失敗偵測的首次實戰驗證（job 如預期變紅）。
+- **程式碼與文件可能不一致，待確認**：見「對話二十七更新」§4（`news.js` 的 `alpha_thought` 區塊與「Alpha 成長系統」章節描述不符）。
 
 ---
 
@@ -101,7 +104,7 @@
 | `backup.yml` | 週日 09:00 + push main | Supabase + pCloud 備份 | ✅ |
 | `scrape_gifts.yml` | 手動 | 爬股東紀念品 | ✅（停用自動）|
 | `scrape_egift.yml` | 每週日 09:30 | 爬 eGift | ✅ |
-| `alpha_thought.yml` | Collect Alpha Report 完成後 + 週五 16:00 | 三 job：Agent1→Agent2→Agent3 | ✅ |
+| `alpha_thought.yml` | Collect Alpha Report 完成後 + 週五 16:00（cron `0 8 * * 5`，`schedule` 事件→週報）+ 手動（`mode=weekly` 可補跑週報） | 三 job：Agent1→Agent2→Agent3 | ✅（週五自動路徑待 10/23 驗證）|
 
 ### alpha_thought.yml 三 Job 架構
 
@@ -113,6 +116,7 @@ agent1（市場資料員）→ agent2（分析師）→ agent3（撰稿員）
 - **Agent 2**：評分昨日預測 + 弱點分析 + 生成檢討篇 → 存 `alpha_profile.agent2_*`
 - **Agent 3**：讀 agent1/2 快取 → 生成隨筆 → 寫入 `alpha_thoughts`
 - 任一 Agent 失敗，後續 job 停止（`if: success()`）
+- **Agent 3 的 endpoint 選擇（對話二十七起）**：`github.event_name == schedule`（只有週五 cron 觸發）或手動 `mode=weekly` → `weekly_recap`；其餘（`workflow_run` 鏈、一般手動）→ `alpha_thought`。⚠️ 不要再用 `date -u +%H` 判斷，GitHub 排程延遲加上前兩個 job 的執行時間會讓小時錯位（對話二十七根因）。
 
 ---
 
@@ -284,6 +288,8 @@ create table public.alpha_profile (
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表，不可提前刪除）
+- [ ] 2026-10-23（週五）16:00 台灣時間後：確認 `alpha_thought.yml` agent3 log 出現「週報觸發 → weekly_recap」、`alpha_thoughts` 新增 `angle='weekly_recap'` 一筆（驗證週報自動路徑）
+- [ ] 氣候分類器升級與 Skills 輕量版規劃（見「對話二十七更新」§3），新對話從 Phase 0 開始
 
 ---
 
@@ -598,8 +604,89 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 
 **待辦：**
 - [ ] `alpha_thought` 系列新寫入的隨筆 `market_regime` 欄位是 `null`（id 94），需比對 8/16 前的正常資料是否也是如此，確認是既有行為還是另一個小問題
-- [ ] `alpha_thought.yml` 的失敗偵測邏輯（HTTP status + error 欄位檢查）尚未在真實失敗情境下驗證過，下次 Groq 又出問題時，需確認 job 真的會變紅燈、且有收到 GitHub 失敗通知信
+- [x] `alpha_thought.yml` 的失敗偵測邏輯（HTTP status + error 欄位檢查）：已於「對話二十七」實戰驗證（Run #122，Groq 429 → HTTP 500 → job 變紅）；GitHub 失敗通知信是否收到**未確認**
 - [ ] `alpha_analyze` endpoint（個股 AI 分析報告）同樣受模型停用影響，且本來就有正確拋錯（`res.status(500)`），代表過去若使用者曾在前端觸發過，應該會看到明確錯誤畫面（非靜默失敗）；建議下次使用這個功能時順便留意是否正常
 
 **通用教訓：** Groq／任何第三方服務公告「模型即將停用」時，換模型不能只改「這次踩雷的那一個呼叫點」，要對整個 repo 做 `grep -n "model: '"` 全面盤點，逐一確認每個寫死模型名稱的地方都有跟上。另外，`curl ... | jq .` 這種寫法在 shell 裡永遠不會因為 API 回傳錯誤內容而失敗（只要回應是合法 JSON），CI/CD 裡呼叫外部 API 一定要額外檢查 HTTP status 或回應內容本身，否則「假成功」會讓問題不知不覺潛伏很多天才被發現。
+
+---
+
+## 對話二十七更新（2026-10-19）
+
+### 1. 修復：Alpha 頁「本週總結」停在 65 天前（週報停更）
+
+**現象：** Alpha 頁「本週總結」顯示「65 天前」。Supabase 查 `select id, created_at, angle from alpha_thoughts where angle='weekly_recap' order by created_at desc` 只有兩筆：id 86（2026-08-07 08:46 UTC）、id 92（2026-08-14 08:58 UTC）。8/14 之後的 9 個週五（8/21～10/16）都沒有週報。（週報是 `alpha_thoughts` 裡 `angle='weekly_recap'` 的一種列，評分邏輯以 `angle=neq.weekly_recap` 排除它。）
+
+**根因（推論，尚未用 10/16 的 agent3 log 佐證）：** `alpha_thought.yml` 的 agent3 原本用 `HOUR=$(date -u +%H)`、`[ "$HOUR" = "08" ]` 決定呼叫 `weekly_recap` 還是 `alpha_thought`。cron `0 8 * * 5` 常被 GitHub 延遲，agent1→agent2 又要先跑完，agent3 一旦跨過 09:00 UTC 就默默改產一般隨筆（HTTP 200，失敗偵測不會變紅）。證據：前兩筆建立時間離 09:00 邊界只差 14 分鐘與 1 分多鐘（08:58:35）。對話二十六修復只驗證了日常隨筆（id 94），週五路徑沒驗到，所以 8/31 之後週報仍沒回來。
+
+**修正（`.github/workflows/alpha_thought.yml`）：**
+- agent3 改依觸發來源判斷：`github.event_name == schedule` 或手動 `mode=weekly` → `weekly_recap`；其餘 → `alpha_thought`。事件名稱與 mode 經 `env:` 傳入 shell。
+- `workflow_dispatch` 新增 input `mode`（`auto`／`weekly`），可手動補跑週報。
+- Agent 1/2 與失敗偵測邏輯不動。
+
+**驗證：** 手動執行 Run #155（`mode=weekly`）三個 job 皆成功，`alpha_thoughts` 新增 id 134（2026-10-19 03:21:05 UTC，`angle='weekly_recap'`），證明 `weekly_recap` endpoint 本身與對話二十六的模型修復正常。YAML `safe_load`、`bash -n` 通過。**尚未驗證**：週五自動觸發路徑（`schedule` 事件），待 2026-10-23 16:00 台灣時間後確認。
+
+**已知小問題／未確認：**
+- 週五 `workflow_run` 鏈與 `schedule` 兩條路徑都會跑 agent1/agent2，Groq 用量多一份；暫不處理。
+- 本次沒讀到 `weekly_recap` endpoint 本體，是否有「本週已存在則跳過」的防重複檢查未確認。
+- 失敗偵測首次實戰（Run #122）：agent3 回 `{"error":"Groq HTTP 429"}`，API 回 HTTP 500，log 印 `❌ Agent 3（alpha_thought）失敗：HTTP 500`，job 變紅，符合預期。
+- GitHub 通知 `ubuntu-latest` 自 2026-10-19 起逐步遷移到 Ubuntu 26，目前無影響；必要時可把 `runs-on` 釘成 `ubuntu-24.04`。
+
+**通用教訓：** 用「執行當下的時鐘小時」判斷分支，遇到排程延遲就會靜默走錯路；分支條件應依「觸發來源」（`github.event_name`）或明確參數，而不是時間。
+
+### 2. 研究記錄：Jpopaholic/AIAutoStocks（第三方開源專案，僅作參考，未複製任何程式碼）
+
+**網址：** https://github.com/Jpopaholic/AIAutoStocks（137 commits、0 star、README 未公開任何績效數據）
+
+**是什麼：** Python + Supabase + Gemini/OpenAI 的台股自動量化交易系統，可接永豐 Shioaji 實盤／模擬／沙盒，Fly.io 部署，FastAPI 控制台（TOTP）、Discord 通報。台灣時間 15:00–18:00 盤後執行，送次日開盤預約單。核心是三層 AI 代理（大盤氣候 → 技術分析師 → 組合經理）+ Python 硬護欄（同日不反向沖銷、虧損冷卻、型態機率低於 50% 過濾模型說法等）+ 月度／季度 AI 復盤自我演化 Skills。
+
+**大盤氣候代理（`src/agents/regime_agent.py`，176 行）：**
+- 輸入：加權指數近 30 天日 K（含 MA5/20/60、5/20 日均量、RSI、MACD、DMI）整段文字餵 LLM。
+- 輸出（Pydantic schema）：`regime`（6 階：STRONG_BULL／REBOUND_BULL／CALM_RANGE／VOLATILE_RANGE／CORRECTION_BEAR／PANIC_BEAR）、`posture`（5 階）、`risk_multiplier`（0.15–1.0）、`target_cash_ratio`（0.05–0.90）、`allowed_buy_styles`、`tactical_directive`、`reason`。
+- 6 階定義與姿態對照表全寫在 prompt，但定義本身是規則（例如 MA5>MA20>MA60 且站穩均線＝強勢多頭），本可用程式判斷；Python 端只做數值夾值與失敗時退回 CALM_RANGE，沒看到 regime↔posture 一致性與 enum 檢查。
+
+**自我演化 Skills（`monthly_review_agent.py`、`quarterly_review_agent.py`、`services/trading_memory.py`）：**
+- 月度：Python 先聚合硬指標（勝率、盈虧比、滑價、取消率、進場分位數、ATR）→ 對每檔股票各打一次 LLM 做指標檢討與執行檢討，再各 reduce 一次 → 產出 `indicator_skills` 與 `execution_skills`（買入門檻、單檔權重、停損停利、ATR 乘數、追價／讓價階梯、V 轉／A 頂規則、個股特徵）→ 寫入 `monthly_skills`。門檻：當月 `daily_analysis` ≥ 10 筆。
+- 季度：同樣流程，再加一次「策略委員會」LLM 呼叫審視三個月 Skills 軌跡、輸出過度擬合裁定與校準參數 → 寫入 `quarterly_skills`；三個月都要有月檢討才執行。
+- 注入：取最新一筆月度＋季度，純量參數季度覆蓋月度，規則列表季度排前面、字串去重，整包 JSON 塞進決策代理 prompt。
+- 好設計：規則被要求「單日即可判定」，禁止「再觀望三天」這類跨日條文（避免前視偏誤）。
+- 弱點：新 Skills 寫入即生效，無回測／樣本外驗證、無回滾；`expected_probability_pct` 是 LLM 自編數字；過度擬合審查是另一次 LLM 判斷而非統計檢定；10 天門檻樣本很薄；參數範圍（如買入門檻 40–90）只寫在欄位描述，這幾支檔案沒有強制檢查（下游 `decision_agent` 未讀）；氣候代理用 STRONG_BULL 等 6 階，Skills 內卻用 BULLISH_TREND 等另一套詞彙。
+- 我沒讀到的檔案：`analyst_agent`、`decision_agent`、兩支 aggregator；無法驗證這套演化是否真的改善績效。
+
+### 3. 移植 AlphaScope 評估與計畫（尚未動工）
+
+**⚠️ 更正：** 口頭評估時曾把「氣候層」當成新功能，但本文件「弱點自覺 + 動態成長系統」已有：規則式 `market_regime`（volatile／trending_up／trending_down／consolidating／normal，依 VIX、FGI、當日加權漲跌、外資淨買賣判斷，`api/news.js` 的 `alpha_thought` 區塊可見）、近 60 篇各環境命中率、三層提示（weakness／dynamicWeight／success）。因此可移植價值縮小為：① 升級氣候分類器（現行只看單日資料，沒有均線／趨勢／200 日高點特徵）② Skills 的版本化與驗證流程。
+
+**Phase 0（前置）：**
+- 確認 `stock_daily_twse` 的 TAIEX 歷史天數（MA60 需 60 天、200 日高點需 200 天，無法從文件確認）。
+- 查清 `market_regime` 為何新隨筆是 `null`（見「已知問題」），並釐清程式碼與文件是否一致（§4）。
+
+**Phase 1（氣候分類器，shadow 模式）：**
+- JS 規則式判定，特徵：MA20／MA60 排列與收盤相對位置、距 200 日高點的天數與幅度、5 日／20 日量能比、既有 VIX／FGI／外資淨額。LLM 最多寫一段說明，可併入現有 Agent 1 呼叫，不要把 30 行原始 K 線塞 prompt（TPM 緊，見「已知問題」）。
+- 新表 `market_regime_daily`（date、regime、features jsonb、rule_version）。先只記錄、不注入 prompt，跑 2–4 週比對命中率。
+- ⚠️ 改分類定義會讓既有 `market_regime` 命中率統計失去可比性（目前已有 130 篇），需加 `regime_version` 或另起統計。
+- 與構想中的 Utility Screen 共用特徵（距 200 日高點天數正是它的觸發條件）。
+
+**Phase 2：** 以新氣候標籤重算命中率，沿用 `alpha_profile.weakness_analysis`，不另建系統。
+
+**Phase 3（Skills 輕量版）：**
+- 新表 `alpha_skills`（version、status：candidate／active／retired、evidence jsonb、parent_id 以便回滾）。
+- 每週一次 Actions：程式先算命中率分組（氣候 × 產業 × 信心）→ 一次 Groq 呼叫提出候選規則 → 用歷史預測重播驗證（樣本數與提升幅度達標才升 active，最多 5 條）→ 只把 3–5 行注入 Agent 3，**不要注入 `collect_market_data.js`**（TPM 約 7000/8000）。
+- 資料量限制：每天約 3 檔預測，月約 60 筆；只演化文字經驗與信心校準，不自動調數值門檻。
+
+**不移植：** 執行 Skills（ATR 停損、追價／讓價階梯、滑價，AlphaScope 沒有真實委託）、逐股 map-reduce（每次 2N+2 次呼叫，Groq 免費層撐不住）、季度委員會（資料量不足）。
+
+**可借鏡的小設計：** 規則限定「單日可判定」；多 key 輪替＋冷卻處理 429；用 Python 護欄覆寫 LLM 輸出。
+
+**風險：** 氣候誤判會讓 Alpha 過度保守（所以先 shadow）；「建議現金水位／風險乘數」類輸出容易被讀成投資建議，網站宜以市場狀態描述呈現，正式上線前建議找專業人士確認；注入 Skills 會增加 token。
+
+### 4. 待確認：`news.js` 程式碼與本文件描述可能不一致
+
+對話二十七用 WebFetch 讀 `api/news.js`（只讀到前約 1000 行）時看到：`alpha_thought` endpoint 區塊自行抓市場資料、評分昨日預測、生成檢討篇、判斷 `marketRegime`，且 systemPrompt 只注入 `styleHint`／`streakHint`／`regimeHint`，**沒看到** `weaknessHint`／`dynamicWeightHint`／`successHint`；而本文件「Alpha 成長系統」寫三層提示同時注入 Agent 3，且 workflow 的 Agent 2 負責評分與檢討篇。`alpha_agent1`／`alpha_agent2` endpoint 與 `weekly_recap` 本體沒讀到。需要對照原始碼確認實際運作的版本，再決定文件或程式要改哪邊（可請使用者貼 `grep -n "endpoint === 'alpha_\|weekly_recap\|weaknessHint" api/news.js` 的結果）。
+
+### 5. 新對話建議起手式
+
+1. 先確認 10/23 週五週報是否自動產生（見「待辦」）。
+2. 做 §3 Phase 0：查 TAIEX 歷史天數、`market_regime` 為何為 `null`、§4 的程式碼與文件一致性。
+3. 再決定是否進 Phase 1（氣候分類器 shadow 模式）。
 
