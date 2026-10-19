@@ -6,6 +6,23 @@ export default async function handler(req, res) {
 
   const { endpoint = 'news' } = req.query;
 
+  // Groq 429（TPM 暫時超額）時，依 retry-after／錯誤訊息短暫等待後重試；
+  // 若需等待超過 8 秒（例如每日額度）就不重試，直接回傳讓呼叫端處理
+  async function groqFetch(url, init, maxRetries = 2) {
+    for (let attempt = 0; ; attempt++) {
+      const r = await fetch(url, init);
+      if (r.status !== 429 || attempt >= maxRetries) return r;
+      let waitSec = parseFloat(r.headers.get('retry-after'));
+      if (!Number.isFinite(waitSec)) {
+        const body = await r.clone().text().catch(() => '');
+        const m = body.match(/try again in ([\d.]+)s/i);
+        waitSec = m ? parseFloat(m[1]) : 3;
+      }
+      if (waitSec > 8) return r;
+      await new Promise(resolve => setTimeout(resolve, Math.ceil(waitSec * 1000) + 500));
+    }
+  }
+
   // ── 從 Supabase 讀快取新聞 ──
   if (endpoint === 'news_cached') {
     const SUPABASE_URL  = 'https://fdxedcwtmlurumfjmlys.supabase.co';
@@ -817,7 +834,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       const userPrompt = `現在市場狀況：\n${context}\n\n請以「${angle}」為主題，用你的風格說說你的想法，並給出今日方向預測。`;
 
       try {
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const groqRes = await groqFetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
           body: JSON.stringify({
@@ -1346,7 +1363,7 @@ ${weekSummary}
 語氣要像在跟老朋友聊，不要寫成報告格式。`;
 
       try {
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const groqRes = await groqFetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
           body: JSON.stringify({
