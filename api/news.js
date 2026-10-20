@@ -1,3 +1,55 @@
+// ── 市場氣候分類器 v1（規則式，shadow 模式）──
+// 目前只由 alpha_agent1 呼叫並寫入 market_regime_daily，不影響 market_regime 與任何 prompt。
+// 輸入：TAIEX 日收盤序列（日期由舊到新）＋ 可選的 VIX / FGI / 外資淨買賣（億）
+// 輸出：{ regime, rule_version, features }；資料不足時 regime 為 null
+// ⚠️ 門檻是初版估計值：所有特徵都會存入 features，之後可離線重算；要調門檻請升版（v2…），不要直接改 v1。
+// ⚠️ 序列不足 200 天時，「高點」是期間高點（high_window_days 記錄實際視窗長度）。
+const REGIME_RULE_VERSION = 'v1';
+function classifyRegimeV1(series, ctx = {}) {
+  const rows = (Array.isArray(series) ? series : []).filter(r => r && Number.isFinite(+r.close) && +r.close > 0);
+  const N = rows.length;
+  if (N < 25) return { regime: null, rule_version: REGIME_RULE_VERSION, features: { n_bars: N, reason: 'insufficient_history' } };
+  const closes = rows.map(r => +r.close);
+  const last = closes[N - 1];
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const r4 = x => (x == null || !Number.isFinite(x)) ? null : Math.round(x * 10000) / 10000;
+  const ma20 = mean(closes.slice(-20));
+  const ma60 = N >= 60 ? mean(closes.slice(-60)) : null;
+  const ma20Prev = mean(closes.slice(-25, -5));            // 5 個交易日前的 MA20
+  const slope = ma20 / ma20Prev - 1;
+  const ret5  = last / closes[N - 6] - 1;
+  const ret20 = N >= 21 ? last / closes[N - 21] - 1 : null;
+  const win = closes.slice(-200);
+  const hi = Math.max(...win);
+  const daysSinceHigh = win.length - 1 - win.lastIndexOf(hi);
+  const ddFromHigh = last / hi - 1;
+  const rets = [];
+  for (let i = N - 20; i < N; i++) rets.push(Math.log(closes[i] / closes[i - 1]));
+  const mr = mean(rets);
+  const rv20 = Math.sqrt(rets.reduce((s, v) => s + (v - mr) ** 2, 0) / (rets.length - 1)) * Math.sqrt(252) * 100;
+  const vsMa20 = last / ma20 - 1;
+  const vsMa60 = ma60 ? last / ma60 - 1 : null;
+  const vix = Number.isFinite(ctx.vix) ? ctx.vix : null;
+  let regime = 'normal';
+  if ((vix !== null && vix >= 25) || rv20 >= 28 || ret5 <= -0.05) regime = 'volatile';
+  else if (ma60 !== null && last > ma20 && ma20 > ma60 && slope > 0.002) regime = 'trending_up';
+  else if (ma60 !== null && last < ma20 && ma20 < ma60 && slope < -0.002) regime = 'trending_down';
+  else if (Math.abs(vsMa20) <= 0.02 && Math.abs(slope) <= 0.003) regime = 'consolidating';
+  return {
+    regime,
+    rule_version: REGIME_RULE_VERSION,
+    features: {
+      asof: rows[N - 1].date, n_bars: N, close: last,
+      ma20: Math.round(ma20 * 100) / 100, ma60: ma60 == null ? null : Math.round(ma60 * 100) / 100,
+      vs_ma20: r4(vsMa20), vs_ma60: r4(vsMa60), ma20_slope_5d: r4(slope),
+      ret_5d: r4(ret5), ret_20d: r4(ret20), rv20: Math.round(rv20 * 100) / 100,
+      high_window_days: win.length, days_since_high: daysSinceHigh, dd_from_high: r4(ddFromHigh),
+      vix, fgi: Number.isFinite(ctx.fgi) ? ctx.fgi : null,
+      foreign_net: Number.isFinite(ctx.foreignNet) ? ctx.foreignNet : null,
+    },
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -931,6 +983,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
     const hdrs = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
 
     let contextLines = [];
+    let taiexSeries = [];   // TAIEX 日收盤序列（由舊到新），供技術指標與氣候分類器共用
     try {
       const [
         taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData, dailyReportRes,
@@ -957,8 +1010,11 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         const taiex = (await taiexRes.value.json())[0];
         if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
         try {
-          const techR = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.asc&limit=120&select=date,close`, { headers: hdrs, signal: AbortSignal.timeout(6000) });
-          const techRows = await techR.json();
+          // 取「最新」260 筆（desc）再反轉成由舊到新。
+          // 舊寫法 order=date.asc&limit=120 取的是最舊的 120 筆，TAIEX 累積超過 120 天後技術指標會凍結在舊資料。
+          const techR = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?stock_id=eq.TAIEX&order=date.desc&limit=260&select=date,close`, { headers: hdrs, signal: AbortSignal.timeout(6000) });
+          const techRows = (await techR.json()).reverse();
+          taiexSeries = techRows;
           const closes = techRows.map(r => r.close);
           const N = closes.length;
           if (N >= 26) {
@@ -1060,6 +1116,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
     // 市場環境感知
     let marketRegime = 'normal';
     let marketRegimeLabel = '正常盤整';
+    let shadowInfo = null;   // 氣候分類器 v1（shadow）執行結果，只用於回應與 log
     try {
       const taiexLine   = contextLines.find(l => l.startsWith('加權指數'));
       const chipsLine   = contextLines.find(l => l.startsWith('法人現貨'));
@@ -1079,6 +1136,33 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       else if (chgPct !== null && chgPct < -1.0 && foreignNet !== null && foreignNet < 0) { marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭'; }
       else if (Math.abs(chgPct || 0) < 0.3) { marketRegime = 'consolidating'; marketRegimeLabel = '窄幅震盪'; }
       contextLines.push(`市場環境判斷：${marketRegimeLabel}（regime=${marketRegime}）`);
+
+      // 氣候分類器 v1（shadow）：只記錄，不影響 marketRegime、contextLines 與任何 prompt。
+      // 寫入失敗（例如資料表尚未建立）只記 log，不中斷 Agent 1。
+      let shadow = null;
+      try {
+        shadow = classifyRegimeV1(taiexSeries, { vix: vixVal, fgi: fgiVal, foreignNet });
+        if (!shadow.regime) {
+          shadowInfo = { regime: null, saved: false, reason: shadow.features.reason };
+        } else {
+          const todayTW = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' })).toISOString().slice(0, 10);
+          const sRes = await fetch(`${SB_URL}/rest/v1/market_regime_daily?on_conflict=asof_date,rule_version`, {
+            method: 'POST',
+            headers: { ...hdrs, Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify({
+              asof_date: shadow.features.asof, rule_version: shadow.rule_version, regime: shadow.regime,
+              legacy_regime: marketRegime, features: shadow.features, run_date: todayTW,
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!sRes.ok) throw new Error(`Supabase HTTP ${sRes.status} ${(await sRes.text()).slice(0, 200)}`);
+          shadowInfo = { regime: shadow.regime, saved: true };
+          console.log(`[Agent 1] 氣候分類器 ${shadow.rule_version}：${shadow.regime}（舊規則：${marketRegime}，asof ${shadow.features.asof}）`);
+        }
+      } catch(e) {
+        console.error('[Agent 1] 氣候分類器 shadow 寫入失敗（不中斷）:', e.message);
+        shadowInfo = { regime: shadow?.regime ?? null, saved: false, error: e.message };
+      }
     } catch(_) {}
 
     // 存入 alpha_profile
@@ -1094,7 +1178,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
     });
 
     console.log(`[Agent 1] 完成，market_regime=${marketRegime}，contextLines=${contextLines.length} 行`);
-    return res.status(200).json({ ok: true, market_regime: marketRegime, lines: contextLines.length });
+    return res.status(200).json({ ok: true, market_regime: marketRegime, lines: contextLines.length, shadow: shadowInfo });
   }
 
   // ════════════════════════════════════════════════════════════
