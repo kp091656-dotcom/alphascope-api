@@ -41,6 +41,10 @@ jobs:
             echo "❌ Agent 1 回應含有 error 欄位"
             exit 1
           fi
+          if ! echo "$body" | jq -e '.ok == true' > /dev/null 2>&1; then
+            echo "❌ Agent 1 回應缺少 ok:true（可能是未知 endpoint 或流程未完成）"
+            exit 1
+          fi
           echo "✅ Agent 1 完成"
 
   agent2:
@@ -64,6 +68,10 @@ jobs:
           fi
           if echo "$body" | jq -e 'has("error")' > /dev/null 2>&1; then
             echo "❌ Agent 2 回應含有 error 欄位"
+            exit 1
+          fi
+          if ! echo "$body" | jq -e '.ok == true' > /dev/null 2>&1; then
+            echo "❌ Agent 2 回應缺少 ok:true（可能是未知 endpoint 或流程未完成）"
             exit 1
           fi
           echo "✅ Agent 2 完成"
@@ -103,6 +111,10 @@ jobs:
           fi
           if echo "$body" | jq -e 'has("error")' > /dev/null 2>&1; then
             echo "❌ Agent 3（${endpoint}）回應含有 error 欄位"
+            exit 1
+          fi
+          if ! echo "$body" | jq -e '.ok == true' > /dev/null 2>&1; then
+            echo "❌ Agent 3（${endpoint}）回應缺少 ok:true（未知 endpoint，或週報當週無隨筆資料）"
             exit 1
           fi
           echo "✅ Agent 3（${endpoint}）完成"
