@@ -714,7 +714,7 @@ ${redditTitles || '無'}
           });
           const styleData = await styleRes.json();
           styleMemo = styleData.choices?.[0]?.message?.content?.trim() || styleMemo;
-        } catch(e) {}
+        } catch(e) { console.error('[alpha_thought] 風格分析失敗（不中斷）:', e.message); }
         try {
           const specPrompt = `你是分析師，根據以下交易員隨筆，用最精簡的詞（每個 4~8 字）列出他 2~3 個最明顯的市場專長或習慣特徵。\n格式：只回傳 JSON 陣列，例如 ["外資動向敏感","善抓恐慌底部","偏好短線波段"]，不要任何其他文字。\n\n隨筆內容：\n${recentThoughts.map(t => t.content).join('\n---\n').slice(0, 2000)}`;
           const specRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -727,7 +727,7 @@ ${redditTitles || '無'}
           const specRaw = specData.choices?.[0]?.message?.content?.trim() || '';
           const specParsed = JSON.parse(specRaw.replace(/```json|```/g, '').trim());
           if (Array.isArray(specParsed) && specParsed.length) specialties = specParsed.slice(0, 3).map(s => String(s).slice(0, 10));
-        } catch(e) {}
+        } catch(e) { console.error('[alpha_thought] 專長標籤分析失敗（不中斷）:', e.message); }
       }
 
             // ── 計算新頭銜 ──
@@ -1248,7 +1248,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           });
           reflectionGenerated = true;
         }
-      } catch(_) {}
+      } catch(e) { console.error('[Agent 2] 檢討篇生成失敗（不中斷）:', e.message); }
     }
 
     // 計算 streak
@@ -3065,6 +3065,12 @@ ${weekSummary}
     global._hmCache = { data: payload, ts: Date.now() };
     res.status(200).json({ ...payload, cached: false });
     return;
+  }
+
+  // 未知 endpoint 回 404，避免落入下方 RSS 預設流程而回 200（呼叫端會誤判成功）
+  // 預設 endpoint 為 'news'（前端 fetch(API_BASE) 不帶參數即走這裡）
+  if (endpoint !== 'news') {
+    return res.status(404).json({ error: `Unknown endpoint: ${endpoint}` });
   }
 
   // RSS news feeds
