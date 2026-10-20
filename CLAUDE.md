@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-10-19（對話二十八，還原 8/14 news.js 回歸 + agent 鏈恢復 + Groq 429 自動重試）
+> 更新日期：2026-10-20（對話二十九，chg_pct 單位三處修正 + Alpha 歷史評分重算 + 氣候分類器 v1 shadow + cron 改非整點）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -15,7 +15,9 @@
 6. Commit message 必須 50 字元以內（超過拆 subject + body）。
 7. ⚠️ 因為 repo 是 public，Claude 可主動用 `raw.githubusercontent.com` 抓取檔案內容來對照除錯（不用每次都等使用者手動上傳），使用者已於「對話二十六」確認傾向維持這個做法。⚠️ **對話二十七實測限制**：WebFetch 抓 `github.com/.../raw/...` 會回 `ROBOTS_DISALLOWED`，抓 `blob` 頁面對大檔只顯示前約 1000 行（`api/news.js` 共 2865 行，後半段讀不到）。需要看大檔後半段時，請使用者貼 `grep -n "關鍵字" api/news.js` 的結果或直接上傳檔案，不要硬繞過。
 8. ⚠️ **改 `api/news.js` 一律從 GitHub main 最新版出發，不要用本機放很久的副本**（對話二十八：8/14 就是舊副本蓋掉了 agent 功能，見「對話二十八更新」）。上傳前看 commit 的 diff 行數增減是否合理（該次是 −606 行）。
-9. 需要查歷史時，Claude 可用 `add_repo`（read）取得唯讀存取後 `git clone` 完整歷史（613 commits，實測可行），用 `git log -S"關鍵字" -- 檔案` 找出加入／移除關鍵字的 commit，再用 `git show <commit>^:檔案 | grep -c 關鍵字` 比對前後版本。
+9. 需要查歷史時，Claude 可用 `add_repo`（read）取得唯讀存取後 `git clone` 完整歷史（613 commits，實測可行），用 `git log -S"關鍵字" -- 檔案` 找出加入／移除關鍵字的 commit，再用 `git show <commit>^:檔案 | grep -c 關鍵字` 比對前後版本。預設 clone 是 `--depth 1`，要歷史請先 `git fetch --depth=1000 origin main`。
+10. ⚠️ **改檔流程（對話二十九實測）**：`add_repo`（read）→ clone 到 `/home/claude/kp091656-dotcom/alphascope-api`（讀得到 `api/news.js` 全文）→ 改檔 → `node --check`／YAML `safe_load`／`bash -n` → 用模擬 `fetch` 呼叫 handler 驗證邏輯 → 複製到輸出目錄並 `SendUserFile`。repo 唯讀，不 commit／push。Stop hook 會提醒「有未提交變更」，改完用 `git fetch origin main && git reset --hard origin/main` 清掉暫存 clone（先確認與使用者已上傳的版本一致，不會遺失內容）。
+11. 使用者上傳前可用 GitHub 網頁 Edit → Preview changes（commit 前）或 commit 頁的 `+N −N`（commit 後）檢查 diff 行數是否合理。
 
 ---
 
@@ -33,6 +35,10 @@
 - **Groq 429（TPM 暫時超額）**：Run #122、#156 都發生過。#156 的回應顯示 `openai/gpt-oss-20b` TPM 上限 8000、當分鐘已用 6667、此次需 1477、等約 1.08 秒即可。對話二十八起 `alpha_thought` 與 `weekly_recap` 已用 `groqFetch()` 自動重試（最多 2 次、需等 >8 秒則不重試）；額度為帳號共用，前端翻譯／簡報與其他 workflow 也會用到。若仍頻繁失敗，可考慮 Groq Dev Tier 或 AIAutoStocks 式的多 key 輪替。同一事件也是 `alpha_thought.yml` 失敗偵測的實戰驗證（job 如預期變紅）。
 - ~~程式碼與文件可能不一致，待確認~~：已於「對話二十八」查明並修復——原因是 8/14 commit `551fb2f` 以舊檔蓋掉 `news.js`，不是文件寫錯。
 - **8/14～10/19 期間的資料空缺**：`alpha_thoughts.market_regime` 在這段時間為 NULL，agent1／agent2 也沒有真正執行；各環境命中率（近 60 篇統計）需重新累積一陣子才準。詳見「對話二十八更新」。
+- **`chg_pct` 是小數（0.0122 = +1.22%），不是百分比**：對話二十九發現三處當成百分比使用——Agent 1 顯示（少 100 倍）、Agent 1 regime 判斷（另有全形／半形括號 regex 比對不到，結果幾乎恆為 `consolidating`）、Agent 2 評分（自 6/10 起拿小數比 `0.3`，實際漲跌幾乎永遠被判 neutral）。三處皆已修正；歷史評分已用 `rescore_alpha_thoughts.sql` 重算，命中率由 81% 降到約 22%（27/123）。詳見「對話二十九更新」§5。**之後任何用到 `chg_pct` 的新程式，先確認單位**。
+- **舊 `market_regime` 標籤不可靠、新舊語意不同**：`alpha_thoughts.market_regime` 在對話二十九修正前由有 bug 的規則標記（幾乎都是 `consolidating`，或 8/14～10/19 為 NULL）。近 60 篇各環境命中率要數週後才有參考價值；目前整體命中率只有約 22%，各環境（樣本 ≥3）幾乎都 <50%，`dynamicWeightHint` 會一律強制信心度「低」——是如實反映資料，不是 bug，但文章語氣會偏保守。
+- **GitHub `schedule` 事件常延遲約 2 小時**：10/19～10/20 實測 Collect TWSE 晚 1 小時 54 分～2 小時 53 分。對話二十九把 cron 改成非整點（見「對話二十九更新」§1），是否改善待觀察。下游 `Collect Alpha Report`、`Alpha 隨筆生成` 以 `workflow_run` 串接，會連帶延後。
+- **`stock_daily_twse` 的 TAIEX `volume` 一律為 0**（`collectSectorIndex` 寫入時 `volume: 0`），沒有指數量能；氣候分類器 v1 因此沒有量能特徵。
 
 ---
 
@@ -100,8 +106,8 @@
 
 | 檔案 | 觸發 | 功能 | 狀態 |
 |------|------|------|------|
-| `collect-twse.yml` | 週一~五 14:30 | TWSE 股價/估值/產業指數 + `collectChips()` | ✅ |
-| `collect-finmind.yml` | 週一~五 15:30 | FinMind 籌碼/選擇權/期貨；PATCH 現貨欄位 | ✅ |
+| `collect-twse.yml` | 週一~五 06:17（台灣時間；cron `17 22 * * 0-4`，UTC 前一天 22:17；實際常延遲約 2 小時） | TWSE 股價/估值/產業指數 + `collectChips()`，收的是上一個交易日資料 | ✅ |
+| `collect-finmind.yml` | 週一~五 06:47（cron `47 22 * * 0-4`；同上會延遲） | FinMind 籌碼/選擇權/期貨；PATCH 現貨欄位 | ✅ |
 | `collect-alpha.yml` | FinMind 完成後觸發 | Alpha 每日報告（`alpha_analyze` endpoint） | ✅ |
 | `collect-news.yml` | 每小時 | 財經新聞 RSS | ✅ |
 | `backup.yml` | 週日 09:00 + push main | Supabase + pCloud 備份 | ✅ |
@@ -119,7 +125,10 @@ agent1（市場資料員）→ agent2（分析師）→ agent3（撰稿員）
 - **Agent 2**：評分昨日預測 + 弱點分析 + 生成檢討篇 → 存 `alpha_profile.agent2_*`
 - **Agent 3**：讀 agent1/2 快取 → 生成隨筆 → 寫入 `alpha_thoughts`
 - 任一 Agent 失敗，後續 job 停止（`if: success()`）
-- Agent 1／2 對應 `api/news.js` 的 `alpha_agent1`／`alpha_agent2` endpoint。⚠️ 這兩個 endpoint 若不存在，未知 endpoint 會落入 RSS 預設流程、回 HTTP 200 且無 `error` 欄位，現行失敗偵測會判成功（對話二十八實例）；待辦已列補強。
+- Agent 1／2 對應 `api/news.js` 的 `alpha_agent1`／`alpha_agent2` endpoint。
+- **失敗偵測（對話二十九補強）**：每個 agent 依序檢查 HTTP 200 → 無 `error` 欄位 → 回應 `.ok == true`，任一不符 `exit 1`。`api/news.js` 結尾對 `endpoint !== 'news'`（預設 endpoint 為 `news`，前端 `fetch(API_BASE)` 不帶參數走 RSS 流程）回 404，未知 endpoint 不再落入 RSS 流程回 200（對話二十八的假成功）。⚠️ `weekly_recap` 在本週無隨筆時回 `{ok:false}`，job 會變紅（預期）。
+- Agent 1 回應多一個 `shadow: { regime, saved }` 欄位（氣候分類器 v1，見「對話二十九更新」§3）。
+- Agent 2 評分的單位與排除規則見「Alpha 成長系統」與「對話二十九更新」§5。
 - **Agent 3 的 endpoint 選擇（對話二十七起）**：`github.event_name == schedule`（只有週五 cron 觸發）或手動 `mode=weekly` → `weekly_recap`；其餘（`workflow_run` 鏈、一般手動）→ `alpha_thought`。⚠️ 不要再用 `date -u +%H` 判斷，GitHub 排程延遲加上前兩個 job 的執行時間會讓小時錯位（對話二十七根因）。
 
 ---
@@ -146,6 +155,8 @@ agent1（市場資料員）→ agent2（分析師）→ agent3（撰稿員）
 | `news_daily` | RSS + TheNewsAPI | 財經新聞 | |
 | `alpha_thoughts` | Groq | Alpha 隨筆（含預測/評分/信心度） | |
 | `alpha_profile` | 系統維護 | Alpha 成長檔案（id=1） | |
+| `market_regime_daily` | `api/news.js` Agent 1 | 氣候分類器 v1 shadow 記錄：PK(`asof_date`,`rule_version`)，`regime`、`legacy_regime`、`features` jsonb、`run_date`；僅 service_role 可讀寫（RLS 啟用、無 policy） | 對話二十九新增；建表 SQL 是否已執行未確認，以 Agent 1 回應 `shadow.saved` 為準 |
+| `alpha_thoughts_backup_20261020`／`alpha_profile_backup_20261020`／`alpha_rescore_20261020` | 重算評分時建立 | 備份與新舊對照 | 暫存，觀察一兩週後可刪 |
 | `alpha_analyze` | Groq | 個股/大盤 AI 分析報告 | |
 | `stock_gifts` | 爬蟲 | 股東紀念品 | |
 | `egift_items` | 爬蟲 | 電子禮券 | |
@@ -162,6 +173,7 @@ create table public.alpha_profile (
   style_memo text null,
   updated_at timestamptz null default now(),
   specialties jsonb null default '[]',
+  success_patterns jsonb null default '[]',   -- 對話二十二新增：Agent 1／2 的成功模式 [{regime,confidence,rate,total}]
   market_regime text null default 'normal',
   weakness_analysis jsonb null default '{}',
   weakest_regime text null,
@@ -197,7 +209,7 @@ create table public.alpha_profile (
 - `toB(n)` 解析到 n===0 → 回傳 null，避免覆蓋後續 FinMind 正確值
 - TWSE 失敗 → spotOK=false → fallback FinMind
 - 全失敗時：只寫期貨欄位，不寫 spot_ 欄位
-- `collectInstitutional()`（15:30）用 PATCH 補填現貨欄位，不覆蓋 fut_ 欄位
+- `collectInstitutional()`（FinMind workflow，現為台灣 06:47）用 PATCH 補填現貨欄位，不覆蓋 fut_ 欄位
 
 ### lastTradingDay() 邏輯
 
@@ -250,7 +262,9 @@ create table public.alpha_profile (
 
 - `alpha_thoughts.market_regime`：每篇記錄生成當下環境（volatile/trending_up/trending_down/consolidating/normal）
 - 評分後自動統計最近 60 篇各 regime 命中率（樣本 ≥ 3 才計入）
-- `alpha_profile.specialties`：`[{ regime, confidence, rate, total }, ...]` 成功模式物件陣列（Agent 2 每日更新）
+- `alpha_profile.success_patterns`：`[{ regime, confidence, rate, total }, ...]` 成功模式物件陣列（Agent 2 每日更新）；`alpha_profile.specialties` 只放 Agent 3 每 10 篇產生的專長字串（對話二十二起分離）
+- **評分規則（Agent 2，對話二十九修正）**：對 `pred_result='pending'` 且 `pred_date <= 今天` 的隨筆，取當日 TAIEX（目標為 4 位數股票代號則取該股，查無則退回 TAIEX）的 `chg_pct`，**先 ×100 轉成百分比**；> +0.3% → bullish、< −0.3% → bearish、其餘 neutral，與 `prediction` 相同為 correct。`chg_pct` 為 null 或當日無資料者跳過（維持 pending）。`weekly_recap` 與 `reflection` 不評分。預測錯且 |漲跌| > 0.3% 時，每次執行最多產生一篇檢討篇（`angle='reflection'`、`prediction='neutral'`、`pred_result='pending'`）。
+- **regime 規則（Agent 1，現行規則）**：VIX ≥ 25 → volatile；FGI ≥ 75 → trending_up；FGI ≤ 25 → trending_down；當日漲 > 1% 且外資買超 → trending_up；跌 < −1% 且外資賣超 → trending_down；|漲跌| < 0.3% → consolidating；其餘 normal。漲跌幅缺值不判 consolidating。氣候分類器 v1（shadow）見「對話二十九更新」§3。
 - **三層提示同時注入 Agent 3（alpha_thought）+ alpha_analyze**：
   - `weaknessHint`：最弱環境 < 50% → 警示
   - `dynamicWeightHint`（B）：當前環境 < 50% → 強制 confidence「低」；≥ 65% → 正常
@@ -292,11 +306,12 @@ create table public.alpha_profile (
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表，不可提前刪除）
-- [ ] 2026-10-20：確認 `Collect TWSE` 10/19 的資料已入庫（對話二十八時 `stock_daily_twse` 的 TAIEX 最後一天還停在 10/16），且 agent2 log 的 `scored` > 0（今天的預測 id 135 被評分）
-- [ ] 2026-10-23（週五）16:00 台灣時間後：確認 `alpha_thought.yml` agent3 log 出現「週報觸發 → weekly_recap」、`alpha_thoughts` 新增 `angle='weekly_recap'` 一筆（驗證週報自動路徑）
-- [ ] `alpha_thought.yml` 失敗偵測再加一道檢查回應 `ok == true`（目前只擋 HTTP 非 200 與 `error` 欄位）；`api/news.js` 結尾對未知 endpoint 回 404，而不是落入 RSS 預設流程（建議項，尚未做）
-- [ ] 目前部署的 `news.js` 缺 `c8b7f45` 的三處 `console.error`（風格分析、專長標籤、檢討篇的靜默 catch），需要時補回
-- [ ] 氣候分類器 Phase 1：待使用者在 A（用現有 104 天先做 shadow，200 日特徵留空）與 B（先補 TAIEX 歷史）擇一；細節見「對話二十七更新」§3 與「對話二十八更新」§3
+- [ ] 2026-10-21 起：確認 Agent 1 log 有 `[Agent 1] 氣候分類器 v1：…`、回應 `shadow.saved: true`，且 `select * from market_regime_daily` 有資料（若 `saved:false` 且 error 為 404，代表尚未建表，執行 `market_regime_daily.sql`）
+- [ ] 觀察 cron 改為 06:17／06:47 後的實際觸發延遲（改前延遲 1 小時 54 分～2 小時 53 分）
+- [ ] 2026-10-23（週五）16:00 台灣時間後（排程可能延遲，建議晚上再看）：確認 `alpha_thought.yml` agent3 log 出現「週報觸發 → weekly_recap」、`alpha_thoughts` 新增 `angle='weekly_recap'` 一筆（驗證週報自動路徑）
+- [ ] 觀察一～兩週：預測中性占比（修正前約 81%，修正後是否下降）、`alpha_profile.rank` 是否重算（預期降為「市場老狐狸」，未驗證）、檢討篇是否開始產生、`dynamicWeightHint` 是否讓文章過度保守。沒問題後刪 `alpha_thoughts_backup_20261020`、`alpha_profile_backup_20261020`、`alpha_rescore_20261020`
+- [ ] 氣候分類器 shadow 累積 2～4 週後：比對 v1 與舊規則（`legacy_regime`）對隔日預測命中率的差異，再決定是否升 v2、是否進入 Phase 2（以新標籤重算命中率）；量能特徵需先找 TAIEX 成交金額來源（`stock_daily_twse.volume` 為 0）
+- [ ] （選用）`alpha_thoughts` 加 `regime_version` 欄位，區分對話二十九前後語意不同的 `market_regime` 標籤
 
 ---
 
@@ -660,7 +675,7 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 - 弱點：新 Skills 寫入即生效，無回測／樣本外驗證、無回滾；`expected_probability_pct` 是 LLM 自編數字；過度擬合審查是另一次 LLM 判斷而非統計檢定；10 天門檻樣本很薄；參數範圍（如買入門檻 40–90）只寫在欄位描述，這幾支檔案沒有強制檢查（下游 `decision_agent` 未讀）；氣候代理用 STRONG_BULL 等 6 階，Skills 內卻用 BULLISH_TREND 等另一套詞彙。
 - 我沒讀到的檔案：`analyst_agent`、`decision_agent`、兩支 aggregator；無法驗證這套演化是否真的改善績效。
 
-### 3. 移植 AlphaScope 評估與計畫（尚未動工）
+### 3. 移植 AlphaScope 評估與計畫（Phase 1 已於對話二十九以 A 方案實作 shadow，見該章 §3；Phase 2／3 尚未動工）
 
 **⚠️ 更正：** 口頭評估時曾把「氣候層」當成新功能，但本文件「弱點自覺 + 動態成長系統」已有：規則式 `market_regime`（volatile／trending_up／trending_down／consolidating／normal，依 VIX、FGI、當日加權漲跌、外資淨買賣判斷，`api/news.js` 的 `alpha_thought` 區塊可見）、近 60 篇各環境命中率、三層提示（weakness／dynamicWeight／success）。因此可移植價值縮小為：① 升級氣候分類器（現行只看單日資料，沒有均線／趨勢／200 日高點特徵）② Skills 的版本化與驗證流程。
 
@@ -730,8 +745,67 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 - **Groq 429 要看回應內容**：TPM（每分鐘）等 1～2 秒就好，TPD（每日）才需要等很久；錯誤訊息要把回應 body 帶出來才分辨得出。
 - **Groq 換模型時**：除了全檔 `grep -n "model: '"` 盤點，也要確認上傳的檔案確實是最新版（對話二十六教訓的延伸）。
 
-### 5. 新對話建議起手式
+### 5. 後續
 
-1. 確認 `Collect TWSE` 10/19 資料已入庫，以及 agent2 log 的 `scored` > 0。
-2. 10/23（週五）16:00 後驗證週報自動觸發。
-3. 決定氣候分類器 Phase 1 走 A 或 B（見「對話二十七更新」§3、「對話二十八更新」§3）。
+上述起手式項目已於對話二十九處理（TWSE 10/19 已入庫、id 135 已被評分、Phase 1 走 A），新對話請看「對話二十九更新」§8。
+
+---
+
+## 對話二十九更新（2026-10-20）
+
+### 1. 排程：GitHub `schedule` 延遲，cron 改成非整點
+
+- **現象：** 10/20 08:50 台灣時間，Collect TWSE／FinMind／Alpha Report 還沒自動執行。實際 cron 是 `0 22 * * 0-4`（台灣 06:00）與 `30 22 * * 0-4`（台灣 06:30），本文件舊表寫的 14:30／15:30 是過時資訊，已更正。
+- **證據：** 10/19 的 Collect TWSE #119 實際觸發時間為 UTC 10/18 23:54（台灣 07:54，晚約 1 小時 54 分）；FinMind #110 約 08:15（晚約 1 小時 45 分）。10/20 的 TWSE #120 於 08:53 才跑（晚約 2 小時 53 分），隨後 FinMind #111（09:06）、Alpha Report #119（09:07）、Alpha 隨筆 #157（09:07）依序成功。判斷為 GitHub 排程延遲（整點／半點負載高），不是程式問題；Collect News 同時間照常執行。
+- **修改（commit `d479106`）：** `collect-twse.yml` 改 `17 22 * * 0-4`（台灣 06:17）、`collect-finmind.yml` 改 `47 22 * * 0-4`（台灣 06:47）。只能降低機率，不保證消除；效果待觀察（見待辦）。
+- 這兩支收的是**上一個交易日**資料（`lastTradingDay()`）；FinMind → Collect Alpha Report → Alpha 隨筆以 `workflow_run` 串接，上游延遲會往後連帶。
+
+### 2. 失敗偵測補強（commit `5ae4936`／`15d4348`）
+
+- `alpha_thought.yml`：三個 agent 在 HTTP 200、無 `error` 之後，再檢查 `.ok == true`（用假回應測過：`{ok:true}` 通過；`{error}`、RSS 陣列、`{ok:false}` 皆擋下）。
+- `api/news.js`：結尾 `if (endpoint !== 'news') return 404`。已核對 repo 內所有呼叫端用到的 endpoint 名稱都有對應處理；前端 `fetch(API_BASE)` 不帶參數時預設 `news`，不受影響。以模擬請求驗證未知 endpoint 回 404。
+- 補回 `c8b7f45` 的三處 `console.error`（風格分析、專長標籤、檢討篇）。
+
+### 3. 氣候分類器 Phase 1（走 A，shadow）— commit `d57c75f`
+
+- **實作：** `api/news.js` 模組層級純函式 `classifyRegimeV1(series, ctx)`，由 `alpha_agent1` 在算完現行 regime 後呼叫，寫入 `market_regime_daily`；**不改 `market_regime`、不進任何 prompt**。寫入失敗（例如表不存在）只 `console.error`，不中斷 Agent 1。
+- **規則 v1（依序，第一個符合者）：** volatile＝VIX ≥ 25 或 20 日年化波動 `rv20` ≥ 28（%）或 5 日報酬 ≤ −5%；trending_up＝收盤 > MA20 > MA60 且 MA20 的 5 日斜率 > +0.2%；trending_down＝收盤 < MA20 < MA60 且斜率 < −0.2%；consolidating＝|收盤/MA20 − 1| ≤ 2% 且 |斜率| ≤ 0.3%；其餘 normal。MA60 需 ≥ 60 筆；序列 < 25 筆回傳 `regime: null`。
+- **門檻是初版估計值**，要調請升版（v2…）並保留 v1 的紀錄，不要直接改 v1。
+- **features（jsonb）：** `asof, n_bars, close, ma20, ma60, vs_ma20, vs_ma60, ma20_slope_5d, ret_5d, ret_20d, rv20, high_window_days, days_since_high, dd_from_high, vix, fgi, foreign_net`。高點取最近 200 筆最大值；目前不足 200 天，所以是期間高點（`high_window_days` 記錄實際視窗長度）。**沒有量能特徵**（TAIEX `volume` 為 0）。
+- **資料表：** `market_regime_daily`，PK(`asof_date`,`rule_version`)，另有 `regime`、`legacy_regime`（同一次執行現行規則的判斷）、`run_date`、`created_at`；RLS 啟用、無 policy。建表 SQL 為 `market_regime_daily.sql`（交付過；使用者是否已執行**未確認**）。
+- **驗證：** 六種合成情境與 `alpha_agent1` 全流程（資料表正常／回 404 兩條路徑）以模擬資料通過；**尚未在線上驗證**。
+
+### 4. 修正：Agent 1 的 TAIEX 序列取到最舊 120 筆（潛伏 bug）
+
+技術指標原本用 `order=date.asc&limit=120`，取到的是最舊的 120 筆；TAIEX 累積超過 120 天（約 11 月中）後，RSI／KD／MA 會凍結在舊資料。改為 `order=date.desc&limit=260` 再 `reverse()`，目前結果與修正前相同，分類器共用同一份序列（`taiexSeries`）。
+
+### 5. 修正：`chg_pct` 單位（顯示、regime、評分）— commit `b43d382`
+
+- **事實：** `stock_daily_twse.chg_pct`、`sector_index_daily.chg_pct` 是小數（0.0122 ＝ +1.22%）。`collect_market_data.js` 自 4～5 月起以 `toFixed(6)` 小數寫入；`heatmap.js`、`valuation.js`、`collect_market_data.js` 內的顯示都有 ×100。
+- **Agent 1 顯示：** 加權指數、成交量前 5 大印成 `+0.0122%`（少 100 倍），Agent 3 看到的漲跌幅小了 100 倍；`alpha_analyze` 的個股表格同樣。已改為 ×100。
+- **Agent 1 regime：** 原本用半形括號 regex 去解析全形括號的文字（永遠比對不到）→ 漲跌幅視為 0 → 除非 VIX ≥ 25 或 FGI 極端，一律 `consolidating`；就算比對到，小數也過不了 `> 1.0` 門檻。已改成直接用數值 `taiexChgPct`（百分比）；漲跌幅缺值時不再判 consolidating。模擬測試：+1.22% 且外資買超 → trending_up；−1.5% 且外資賣超 → trending_down；±0.3% 內 → consolidating；其餘 normal。
+- **Agent 2 評分（最嚴重）：** 自 6/10 第一版（`366fa21`）起，`chg > 0.3 ? 'bullish' : chg < -0.3 ? 'bearish' : 'neutral'` 拿小數比 0.3，實際漲跌幾乎永遠是 neutral：只有預測中性才算對，檢討篇條件（|chg| > 0.3）永遠不成立。已改 `chg = chg_pct * 100`；`chg_pct` 為 null 者跳過；pending 查詢改成 `angle=not.in.(weekly_recap,reflection)`（否則修正後新產生的檢討篇會被當成 neutral 預測計入準確率）。模擬測試涵蓋上漲／盤整／個股／休市／null。
+- **診斷（Supabase，已排除 weekly_recap／reflection）：** bearish → wrong 18、bullish → wrong 5、neutral → correct 100，共 123 筆，證實上述推測。
+- **重新評分：** 執行 `rescore_alpha_thoughts.sql`（備份 → 對照表 → 更新 `pred_result` → 校正 `alpha_profile` 累計次數）。結果：correct→correct 20、correct→wrong 80、wrong→correct 7、wrong→wrong 16，123 筆全部查得到當日資料；`alpha_profile.total_calls = 123`、`correct_calls = 27`（約 22%）。預測中性 100 筆只有 20 筆對；方向預測 23 筆只有 7 筆對（樣本少，勿過度解讀）。Alpha 約 81% 的預測是中性。**推測（未證實）：** 與 Agent 1 把漲跌幅少報 100 倍有關。
+- **連帶效果（預期，尚未全部驗證）：** ① 整體命中率僅約 22%，各環境（樣本 ≥ 3）幾乎都 < 50%，`dynamicWeightHint` 會一律強制信心度「低」；② `alpha_profile.rank` 仍顯示舊的「鐵血操盤手」，要到下次 Agent 3 發文才重算，預期降為「市場老狐狸」；③ 修正後 Agent 2 每次最多產生一篇檢討篇；④ 舊隨筆的 `market_regime` 是舊（有 bug）規則標的，近 60 篇各環境命中率需數週才有參考價值。
+
+### 6. 作業備忘
+
+- 改檔流程見「Claude 操作規則」第 10、11 條（clone → 改 → 驗證 → SendUserFile；Stop hook 提醒時以 `git reset --hard origin/main` 清暫存 clone）。
+- 本次上傳的 commit：`d479106`（cron）、`5ae4936`／`15d4348`（失敗偵測）、`d57c75f`（regime shadow）、`b43d382`（單位修正）。
+- 本次交付的 SQL：`market_regime_daily.sql`（建表）、`rescore_alpha_thoughts.sql`（已執行，含備份與還原語法；備份與對照表暫存於資料庫）。
+
+### 7. 教訓
+
+- **欄位單位要查寫入端與前端用法，不要靠名稱猜**：`chg_pct` 看名稱像百分比，實際是小數；同一個值在 Agent 1 顯示、regime 判斷、Agent 2 評分三處都被誤用。
+- **別用 regex 去解析自己剛組出來的 prompt 文字**（全形／半形括號、格式改了就壞）；直接傳數值。
+- **`order=date.asc&limit=N` 取的是最舊的 N 筆**；要最新 N 筆用 `desc` 再反轉。
+- **自我成長的回饋迴路（評分 → 命中率 → 提示）建立在評分之上**，評分一壞整套都失真；新增這類機制要抽樣核對評分結果。
+- **GitHub `schedule` 不準時**，整點／半點最容易延遲。
+
+### 8. 新對話建議起手式
+
+1. 確認 10/21 起 Agent 1 log／回應 `shadow.saved: true`，並查 `market_regime_daily`；若 `saved:false` 且 error 為 404，執行 `market_regime_daily.sql`。
+2. 看 cron 06:17／06:47 實際觸發延遲有無改善。
+3. 10/23（週五）16:00 後（建議晚上看）驗證週報自動觸發。
+4. 觀察預測中性占比、`rank`、檢討篇與文章語氣；shadow 累積 2～4 週後比對 v1 與舊規則，再決定 Phase 2 或升 v2（細節見待辦）。
