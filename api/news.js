@@ -393,7 +393,7 @@ export default async function handler(req, res) {
         id:      s.stock_id,
         name:    s.name,
         close:   s.close,
-        chgPct:  s.chg_pct,
+        chgPct:  s.chg_pct != null ? (s.chg_pct * 100).toFixed(2) : null,   // 資料庫是小數，轉成百分比字串
         volume:  s.volume,
         pe:      valMap[s.stock_id]?.pe_ratio    ?? null,
         pb:      valMap[s.stock_id]?.pb_ratio    ?? null,
@@ -984,6 +984,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
 
     let contextLines = [];
     let taiexSeries = [];   // TAIEX 日收盤序列（由舊到新），供技術指標與氣候分類器共用
+    let taiexChgPct = null; // TAIEX 最新日漲跌幅（百分比，+1.22 代表 +1.22%）；資料庫的 chg_pct 是小數，需 ×100
     try {
       const [
         taiexRes, chipsRes, newsRes, marginRes, optionsRes, topStocksRes, fgiData, vixData, dailyReportRes,
@@ -1008,7 +1009,12 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       // 加權指數 + 技術指標
       if (taiexRes.status === 'fulfilled') {
         const taiex = (await taiexRes.value.json())[0];
-        if (taiex) contextLines.push(`加權指數：${taiex.close}（${taiex.chg_pct >= 0 ? '+' : ''}${taiex.chg_pct}%）日期：${taiex.date}`);
+        if (taiex) {
+          // chg_pct 在資料庫是小數（0.0122 = +1.22%），顯示與 regime 判斷都用百分比
+          taiexChgPct = taiex.chg_pct == null ? null : taiex.chg_pct * 100;
+          const chgTxt = taiexChgPct == null ? '' : `（${taiexChgPct >= 0 ? '+' : ''}${taiexChgPct.toFixed(2)}%）`;
+          contextLines.push(`加權指數：${taiex.close}${chgTxt}日期：${taiex.date}`);
+        }
         try {
           // 取「最新」260 筆（desc）再反轉成由舊到新。
           // 舊寫法 order=date.asc&limit=120 取的是最舊的 120 筆，TAIEX 累積超過 120 天後技術指標會凍結在舊資料。
@@ -1085,7 +1091,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       if (topStocksRes.status === 'fulfilled' && topStocksRes.value) {
         const stocksJson = await topStocksRes.value.json();
         if (Array.isArray(stocksJson) && stocksJson.length) {
-          const list = stocksJson.map(s => `${s.name}(${s.stock_id}) ${s.close}（${s.chg_pct >= 0 ? '+' : ''}${s.chg_pct}%）`).join('、');
+          const list = stocksJson.map(s => `${s.name}(${s.stock_id}) ${s.close}（${s.chg_pct == null ? 'N/A' : (s.chg_pct >= 0 ? '+' : '') + (s.chg_pct * 100).toFixed(2) + '%'}）`).join('、');
           contextLines.push(`成交量前5大：${list}`);
         }
       }
@@ -1118,11 +1124,11 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
     let marketRegimeLabel = '正常盤整';
     let shadowInfo = null;   // 氣候分類器 v1（shadow）執行結果，只用於回應與 log
     try {
-      const taiexLine   = contextLines.find(l => l.startsWith('加權指數'));
       const chipsLine   = contextLines.find(l => l.startsWith('法人現貨'));
       const emotionLine = contextLines.find(l => l.startsWith('市場情緒'));
-      const chgMatch    = taiexLine?.match(/\(([+-]?\d+\.?\d*)%\)/);
-      const chgPct      = chgMatch ? parseFloat(chgMatch[1]) : null;
+      // 漲跌幅直接用數值（百分比）。舊寫法用半形括號正規式去解析全形括號的文字，永遠比對不到，
+      // 加上單位錯 100 倍，結果 regime 幾乎恆為 consolidating。
+      const chgPct      = taiexChgPct;
       const fgiMatch    = emotionLine?.match(/Fear & Greed：(\d+)/);
       const fgiVal      = fgiMatch ? parseInt(fgiMatch[1]) : null;
       const vixMatch    = emotionLine?.match(/VIX：([\d.]+)/);
@@ -1134,7 +1140,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       else if (fgiVal !== null && fgiVal <= 25) { marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭（恐慌）'; }
       else if (chgPct !== null && chgPct > 1.0 && foreignNet !== null && foreignNet > 0) { marketRegime = 'trending_up'; marketRegimeLabel = '趨勢多頭'; }
       else if (chgPct !== null && chgPct < -1.0 && foreignNet !== null && foreignNet < 0) { marketRegime = 'trending_down'; marketRegimeLabel = '趨勢空頭'; }
-      else if (Math.abs(chgPct || 0) < 0.3) { marketRegime = 'consolidating'; marketRegimeLabel = '窄幅震盪'; }
+      else if (chgPct !== null && Math.abs(chgPct) < 0.3) { marketRegime = 'consolidating'; marketRegimeLabel = '窄幅震盪'; }
       contextLines.push(`市場環境判斷：${marketRegimeLabel}（regime=${marketRegime}）`);
 
       // 氣候分類器 v1（shadow）：只記錄，不影響 marketRegime、contextLines 與任何 prompt。
@@ -1220,7 +1226,7 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
       const twToday = twNow.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
         .replace(/\//g, '-').replace(/(\d+)-(\d+)-(\d+)/, (_, y, m, d) => `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
       const pendingRes = await fetch(
-        `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&angle=neq.weekly_recap&select=id,prediction,pred_date,content,confidence,pred_target`,
+        `${SB_URL}/rest/v1/alpha_thoughts?pred_result=eq.pending&pred_date=lte.${twToday}&angle=not.in.(weekly_recap,reflection)&select=id,prediction,pred_date,content,confidence,pred_target`,
         { headers: hdrs }
       );
       const pending = await pendingRes.json();
@@ -1243,10 +1249,13 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         }
         for (const p of pending) {
           const target = p.pred_target || 'TAIEX';
-          const chg = (/^\d{4}$/.test(target) && target !== 'TAIEX')
+          const rawChg = (/^\d{4}$/.test(target) && target !== 'TAIEX')
             ? (stockMap[`${p.pred_date}_${target}`] ?? taiexMap[p.pred_date])
             : taiexMap[p.pred_date];
-          if (chg === undefined) continue;
+          if (rawChg === undefined || rawChg === null) continue;
+          // 資料庫的 chg_pct 是小數（0.0122 = +1.22%），下面 ±0.3 門檻與檢討 prompt 都以百分比為單位。
+          // 舊版直接拿小數去比 0.3，實際漲跌幾乎永遠被判成 neutral。
+          const chg = rawChg * 100;
           const actual = chg > 0.3 ? 'bullish' : chg < -0.3 ? 'bearish' : 'neutral';
           const result = p.prediction === actual ? 'correct' : 'wrong';
           if (result === 'correct') newCorrect++;
