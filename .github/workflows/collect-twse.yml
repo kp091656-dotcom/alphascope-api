@@ -2,8 +2,8 @@ name: Collect TWSE
 
 on:
   schedule:
-    # 台灣時間 06:00（UTC 前一天 22:00）
-    - cron: '0 22 * * 0-4'
+    # 台灣時間 06:17（UTC 前一天 22:17）；避開整點降低 GitHub 排程延遲
+    - cron: '17 22 * * 0-4'
   workflow_dispatch:
 
 jobs:
