@@ -2,8 +2,8 @@ name: Collect FinMind
 
 on:
   schedule:
-    # 台灣時間 06:30（UTC 前一天 22:30）
-    - cron: '30 22 * * 0-4'
+    # 台灣時間 06:47（UTC 前一天 22:47）；避開半點降低 GitHub 排程延遲
+    - cron: '47 22 * * 0-4'
   workflow_dispatch:
 
 jobs:
