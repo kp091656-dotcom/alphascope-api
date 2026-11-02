@@ -113,8 +113,13 @@ export default async function handler(req, res) {
 
   async function fetchFGI() {
     const r = await fetch('https://production.dataviz.cnn.io/index/fearandgreed/graphdata', {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://edition.cnn.com/', 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(6000),
+      // User-Agent 與 endpoint=fgi 一致（完整瀏覽器字串）；CNN 對過短的 UA 可能拒絕
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://edition.cnn.com/',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(8000),
     });
     if (!r.ok) throw new Error(`FGI HTTP ${r.status}`);
     return r.json();
@@ -138,8 +143,14 @@ export default async function handler(req, res) {
           }),
         ]);
         const [vixJson, vvixJson] = await Promise.all([vixRes.json(), vvixRes.json()]);
+        // FinMind USStockPrice 的收盤欄位是大寫 Close（見 endpoint=futures），不是 close；
+        // 舊寫法讀 .close 得到 undefined → price 為 null，且因為有回傳列而不會 fallback 到 Yahoo。
+        const px = (r) => {
+          const v = Number(r?.Close ?? r?.close);
+          return Number.isFinite(v) && v > 0 ? v : null;
+        };
         const getLatest = (json) => {
-          const rows = (json.data || []).sort((a, b) => b.date.localeCompare(a.date));
+          const rows = (json.data || []).filter(r => px(r) !== null).sort((a, b) => b.date.localeCompare(a.date));
           return rows[0] || null;
         };
         const vixLatest  = getLatest(vixJson);
@@ -147,13 +158,12 @@ export default async function handler(req, res) {
         if (vixLatest) {
           return {
             data: [
-              { symbol: '^VIX',  price: vixLatest.close,              name: 'CBOE Volatility Index', source: 'finmind' },
-              vvixLatest
-                ? { symbol: '^VVIX', price: vvixLatest.close, name: 'CBOE VVIX Index', source: 'finmind' }
-                : { symbol: '^VVIX', price: null,             name: 'CBOE VVIX Index', source: 'finmind' },
+              { symbol: '^VIX',  price: px(vixLatest), name: 'CBOE Volatility Index', source: 'finmind' },
+              { symbol: '^VVIX', price: vvixLatest ? px(vvixLatest) : null, name: 'CBOE VVIX Index', source: 'finmind' },
             ],
           };
         }
+        console.warn('[fetchVIX] FinMind 無有效 ^VIX 資料，fallback Yahoo');
       } catch (e) {
         console.warn('[fetchVIX] FinMind 失敗，fallback Yahoo:', e.message);
       }
@@ -1002,8 +1012,8 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
           if (!latestDate) return null;
           return fetch(`${SB_URL}/rest/v1/stock_daily_twse?date=eq.${latestDate}&stock_id=neq.TAIEX&order=volume.desc&limit=5&select=stock_id,name,close,chg_pct,volume`, { headers: hdrs });
         })(),
-        fetchFGI().catch(() => null),
-        fetchVIX().catch(() => null),
+        fetchFGI().catch(e => { console.error('[Agent 1] fetchFGI 失敗:', e.message); return null; }),
+        fetchVIX().catch(e => { console.error('[Agent 1] fetchVIX 失敗:', e.message); return null; }),
       ]);
 
       // 加權指數 + 技術指標
