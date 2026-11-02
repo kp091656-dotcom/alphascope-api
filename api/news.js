@@ -1004,7 +1004,6 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         fetch(`${SB_URL}/rest/v1/news_daily?order=published_at.desc&limit=8&select=title_zh,source`, { headers: hdrs }),
         fetch(`${SB_URL}/rest/v1/margin_daily?order=date.desc&limit=2&select=date,margin_balance,margin_chg,short_balance,short_chg`, { headers: hdrs }),
         fetch(`${SB_URL}/rest/v1/options_analytics_daily?order=date.desc&limit=3&select=date,contract_type,pc_ratio_oi,max_pain,call_foreign_net,put_foreign_net`, { headers: hdrs }),
-        fetch(`${SB_URL}/rest/v1/alpha_daily_report?order=report_date.desc&limit=1&select=report_date,market_mood,market_summary,dominant_player`, { headers: hdrs }),
         (async () => {
           const dateRes = await fetch(`${SB_URL}/rest/v1/stock_daily_twse?order=date.desc&limit=1&select=date`, { headers: hdrs });
           const dateJson = await dateRes.json();
@@ -1014,6 +1013,10 @@ pred_target 是你預測的對象：若預測加權指數填"TAIEX"，若是特�
         })(),
         fetchFGI().catch(e => { console.error('[Agent 1] fetchFGI 失敗:', e.message); return null; }),
         fetchVIX().catch(e => { console.error('[Agent 1] fetchVIX 失敗:', e.message); return null; }),
+        // ⚠️ 順序必須與上方解構變數一致（…, topStocksRes, fgiData, vixData, dailyReportRes）。
+        // 先前把這筆查詢插在陣列中間，導致後面四個結果全部錯位一格：FGI／VIX 恆為 null、
+        // 「成交量前5大」印出 undefined、每日報告區塊拋錯而落入「市場資料暫時無法取得」。
+        fetch(`${SB_URL}/rest/v1/alpha_daily_report?order=report_date.desc&limit=1&select=report_date,market_mood,market_summary,dominant_player`, { headers: hdrs }),
       ]);
 
       // 加權指數 + 技術指標
