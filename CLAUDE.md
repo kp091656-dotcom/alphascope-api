@@ -1,6 +1,6 @@
 # AlphaScope — 專案記憶文件 (CLAUDE.md)
 
-> 更新日期：2026-10-20（對話二十九，chg_pct 單位三處修正 + Alpha 歷史評分重算 + 氣候分類器 v1 shadow + cron 改非整點）
+> 更新日期：2026-11-02（對話三十，Agent 1 Promise 陣列錯位修正（VIX／FGI／每日報告） + 休市日確認 + shadow 首批資料觀察）
 > 給 Claude 看的專案上下文。每次新對話開始請先讀這個檔案。
 
 ---
@@ -36,9 +36,12 @@
 - ~~程式碼與文件可能不一致，待確認~~：已於「對話二十八」查明並修復——原因是 8/14 commit `551fb2f` 以舊檔蓋掉 `news.js`，不是文件寫錯。
 - **8/14～10/19 期間的資料空缺**：`alpha_thoughts.market_regime` 在這段時間為 NULL，agent1／agent2 也沒有真正執行；各環境命中率（近 60 篇統計）需重新累積一陣子才準。詳見「對話二十八更新」。
 - **`chg_pct` 是小數（0.0122 = +1.22%），不是百分比**：對話二十九發現三處當成百分比使用——Agent 1 顯示（少 100 倍）、Agent 1 regime 判斷（另有全形／半形括號 regex 比對不到，結果幾乎恆為 `consolidating`）、Agent 2 評分（自 6/10 起拿小數比 `0.3`，實際漲跌幾乎永遠被判 neutral）。三處皆已修正；歷史評分已用 `rescore_alpha_thoughts.sql` 重算，命中率由 81% 降到約 22%（27/123）。詳見「對話二十九更新」§5。**之後任何用到 `chg_pct` 的新程式，先確認單位**。
-- **舊 `market_regime` 標籤不可靠、新舊語意不同**：`alpha_thoughts.market_regime` 在對話二十九修正前由有 bug 的規則標記（幾乎都是 `consolidating`，或 8/14～10/19 為 NULL）。近 60 篇各環境命中率要數週後才有參考價值；目前整體命中率只有約 22%，各環境（樣本 ≥3）幾乎都 <50%，`dynamicWeightHint` 會一律強制信心度「低」——是如實反映資料，不是 bug，但文章語氣會偏保守。
-- **GitHub `schedule` 事件常延遲約 2 小時**：10/19～10/20 實測 Collect TWSE 晚 1 小時 54 分～2 小時 53 分。對話二十九把 cron 改成非整點（見「對話二十九更新」§1），是否改善待觀察。下游 `Collect Alpha Report`、`Alpha 隨筆生成` 以 `workflow_run` 串接，會連帶延後。
+- **舊 `market_regime` 標籤不可靠、新舊語意不同**：`alpha_thoughts.market_regime` 在對話二十九修正前由有 bug 的規則標記（幾乎都是 `consolidating`，或 8/14～10/19 為 NULL）。近 60 篇各環境命中率要數週後才有參考價值；目前整體命中率只有約 22%，各環境（樣本 ≥3）幾乎都 <50%，`dynamicWeightHint` 會一律強制信心度「低」——是如實反映資料，不是 bug，但文章語氣會偏保守。**另：舊規則的 FGI／VIX 分支直到 2026-11-02 部署修正後才真正生效**（之前因 Promise 陣列錯位恆為 null，見「對話三十更新」§4），比對新舊規則時以 asof 10/29 為分界。
+- **GitHub `schedule` 事件常延遲約 2 小時**：10/19～10/20 實測 Collect TWSE 晚 1 小時 54 分～2 小時 53 分。對話二十九把 cron 改成非整點（見「對話二十九更新」§1），10/21 實測仍晚 2 小時 12 分～2 小時 21 分，沒有明顯改善（見「對話三十更新」§3）。下游 `Collect Alpha Report`、`Alpha 隨筆生成` 以 `workflow_run` 串接，會連帶延後。
 - **`stock_daily_twse` 的 TAIEX `volume` 一律為 0**（`collectSectorIndex` 寫入時 `volume: 0`），沒有指數量能；氣候分類器 v1 因此沒有量能特徵。
+- **氣候分類器 v1 目前幾乎沒有區分力**：10/20～10/29 共 6 筆全為 `normal`（同期大盤距高點回落 5.6%～7.6%）。原因是 v1 的下跌規則要求 MA20 < MA60，而這段期間 MA20 仍在 MA60 之上（上升趨勢中的拉回／修正）會被歸入 `normal`。v2 構想見「待辦」；v1 不要直接改，要升版保留紀錄。
+- ~~`alpha_agent1` 的 VIX／FGI 恆為 NULL、「成交量前5大」印出 `undefined`、每日報告區塊拋錯~~：已於「對話三十」修正，根因是 `Promise.allSettled` 陣列順序與解構變數錯位一格，詳見「對話三十更新」§4。**通用提醒**：`Promise.allSettled([...])` 搭配陣列解構時，新增項目一律加在陣列**最後**，並核對解構名稱順序；`alpha_analyze` 那一段（stockRows…futuresData）已核對順序正確。
+- **Vercel Runtime Logs 有 `url.parse()` DeprecationWarning 噪音**（Node 24，stderr，Level 顯示 Error，一次冷啟動會有多筆）：與功能無關，來源未查，先忽略；找真正錯誤時請用關鍵字（如 `[Agent 1]`）搜尋。
 
 ---
 
@@ -113,7 +116,7 @@
 | `backup.yml` | 週日 09:00 + push main | Supabase + pCloud 備份 | ✅ |
 | `scrape_gifts.yml` | 手動 | 爬股東紀念品 | ✅（停用自動）|
 | `scrape_egift.yml` | 每週日 09:30 | 爬 eGift | ✅ |
-| `alpha_thought.yml` | Collect Alpha Report 完成後 + 週五 16:00（cron `0 8 * * 5`，`schedule` 事件→週報）+ 手動（`mode=weekly` 可補跑週報） | 三 job：Agent1→Agent2→Agent3 | ✅（週五自動路徑待 10/23 驗證）|
+| `alpha_thought.yml` | Collect Alpha Report 完成後 + 週五 16:00（cron `0 8 * * 5`，`schedule` 事件→週報）+ 手動（`mode=weekly` 可補跑週報） | 三 job：Agent1→Agent2→Agent3 | ✅（週五自動路徑待驗證：10/23 因颱風休市，見待辦）|
 
 ### alpha_thought.yml 三 Job 架構
 
@@ -155,7 +158,7 @@ agent1（市場資料員）→ agent2（分析師）→ agent3（撰稿員）
 | `news_daily` | RSS + TheNewsAPI | 財經新聞 | |
 | `alpha_thoughts` | Groq | Alpha 隨筆（含預測/評分/信心度） | |
 | `alpha_profile` | 系統維護 | Alpha 成長檔案（id=1） | |
-| `market_regime_daily` | `api/news.js` Agent 1 | 氣候分類器 v1 shadow 記錄：PK(`asof_date`,`rule_version`)，`regime`、`legacy_regime`、`features` jsonb、`run_date`；僅 service_role 可讀寫（RLS 啟用、無 policy） | 對話二十九新增；建表 SQL 是否已執行未確認，以 Agent 1 回應 `shadow.saved` 為準 |
+| `market_regime_daily` | `api/news.js` Agent 1 | 氣候分類器 v1 shadow 記錄：PK(`asof_date`,`rule_version`)，`regime`、`legacy_regime`、`features` jsonb、`run_date`；僅 service_role 可讀寫（RLS 啟用、無 policy） | 對話二十九新增；10/21 起線上寫入正常（`shadow.saved: true`），已有 10/20～10/29 共 6 筆；asof 10/29 起 features 才有 vix／fgi（舊資料列不會回補） |
 | `alpha_thoughts_backup_20261020`／`alpha_profile_backup_20261020`／`alpha_rescore_20261020` | 重算評分時建立 | 備份與新舊對照 | 暫存，觀察一兩週後可刪 |
 | `alpha_analyze` | Groq | 個股/大盤 AI 分析報告 | |
 | `stock_gifts` | 爬蟲 | 股東紀念品 | |
@@ -296,7 +299,7 @@ create table public.alpha_profile (
 
 ## 工程原則
 
-- **Debug**：遇到 bug 必須先看程式碼找根源，不可憑推測直接改。HTTP 500 → Vercel Logs；HTTP 400 → Supabase 欄位問題
+- **Debug**：遇到 bug 必須先看程式碼找根源，不可憑推測直接改。`api/news.js` 的 `console.*` 輸出在 **Vercel → Logs → Runtime Logs**，不在 GitHub Actions log（Actions 只看得到 `curl` 印出的回應 JSON）。HTTP 500 → Vercel Logs；HTTP 400 → Supabase 欄位問題
 - **Security**：API key 只存 Vercel env 或 GitHub Secrets；Groq endpoint 走 `requireOwner()` + `x-owner-token`
 - **Supabase**：查詢加 `limit`；Upsert 必須指定 `on_conflict`；schema cache 更新：`NOTIFY pgrst, 'reload schema';`
 - **全域變數**：全在 `api.js` 定義（`SUPABASE_URL`、`API_BASE`、`CLAUDE_MODEL` 等）
@@ -306,11 +309,12 @@ create table public.alpha_profile (
 ## 待辦
 
 - [ ] 確認新表資料穩定 1～2 個月後再刪舊表（`chips_daily` 今日仍用於補正新表，不可提前刪除）
-- [ ] 2026-10-21 起：確認 Agent 1 log 有 `[Agent 1] 氣候分類器 v1：…`、回應 `shadow.saved: true`，且 `select * from market_regime_daily` 有資料（若 `saved:false` 且 error 為 404，代表尚未建表，執行 `market_regime_daily.sql`）
-- [ ] 觀察 cron 改為 06:17／06:47 後的實際觸發延遲（改前延遲 1 小時 54 分～2 小時 53 分）
-- [ ] 2026-10-23（週五）16:00 台灣時間後（排程可能延遲，建議晚上再看）：確認 `alpha_thought.yml` agent3 log 出現「週報觸發 → weekly_recap」、`alpha_thoughts` 新增 `angle='weekly_recap'` 一筆（驗證週報自動路徑）
-- [ ] 觀察一～兩週：預測中性占比（修正前約 81%，修正後是否下降）、`alpha_profile.rank` 是否重算（預期降為「市場老狐狸」，未驗證）、檢討篇是否開始產生、`dynamicWeightHint` 是否讓文章過度保守。沒問題後刪 `alpha_thoughts_backup_20261020`、`alpha_profile_backup_20261020`、`alpha_rescore_20261020`
-- [ ] 氣候分類器 shadow 累積 2～4 週後：比對 v1 與舊規則（`legacy_regime`）對隔日預測命中率的差異，再決定是否升 v2、是否進入 Phase 2（以新標籤重算命中率）；量能特徵需先找 TAIEX 成交金額來源（`stock_daily_twse.volume` 為 0）
+- [ ] 部署修正後觀察（2026-11-02 起）：① Agent 3 新隨筆是否開始出現市場情緒（FGI／VIX）與每日報告對齊的內容；② Vercel Logs `[Agent 1] 完成` 的 `contextLines` 數字（修正前 11 行，其中含兩行垃圾）；③ 今天 Collect TWSE 收進 10/30 後，`select asof_date, features->>'vix' as vix, features->>'fgi' as fgi from market_regime_daily order by asof_date desc limit 3;` 應仍有值
+- [ ] 週報自動路徑驗證：原定 10/23（週五）因颱風休市，需確認當天 16:00 `schedule` 是否照跑；另外 10/30（週五）也可驗證。查 `select id, created_at, angle from alpha_thoughts where angle='weekly_recap' order by created_at desc limit 5;`，並看 agent3 log 是否出現「週報觸發 → weekly_recap」
+- [ ] 觀察一～兩週：預測中性占比（修正前約 81%）、`alpha_profile.rank` 是否重算（預期降為「市場老狐狸」，未驗證）、檢討篇是否開始產生、`dynamicWeightHint` 是否讓文章過度保守。沒問題後刪 `alpha_thoughts_backup_20261020`、`alpha_profile_backup_20261020`、`alpha_rescore_20261020`
+- [ ] 氣候分類器 shadow 累積 2～4 週後：v1 目前 6/6 都是 `normal`，沒有區分力 → 考慮 v2 新增 `pullback` 類別（構想：距高點跌幅 ≥ 5% 且收盤仍在 MA60 之上；尚未實作，v1 紀錄保留）。比對 v1 與舊規則（`legacy_regime`）對命中率的差異時，**以 asof 10/29 為分界**（舊規則自此才吃到 FGI／VIX）；量能特徵需先找 TAIEX 成交金額來源（`stock_daily_twse.volume` 為 0）；再決定是否進入 Phase 2
+- [ ] （選用）查 Agent 1 的 Promise 陣列錯位是何時引入：`git fetch --depth=1000 origin main` 後 `git log -S"dailyReportRes" --oneline -- api/news.js`，判斷對話十七「每日報告 → Agent 3 對齊」是何時失效、是否與 8/14 回歸有關
+- [ ] （選用）cron 延遲：已證實改非整點無明顯改善；若想要穩定時間，可改用外部排程呼叫 `workflow_dispatch`（要多管一組 token），目前下游只是晚約 2 小時、不影響資料正確性
 - [ ] （選用）`alpha_thoughts` 加 `regime_version` 欄位，區分對話二十九前後語意不同的 `market_regime` 標籤
 
 ---
@@ -773,7 +777,7 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 - **門檻是初版估計值**，要調請升版（v2…）並保留 v1 的紀錄，不要直接改 v1。
 - **features（jsonb）：** `asof, n_bars, close, ma20, ma60, vs_ma20, vs_ma60, ma20_slope_5d, ret_5d, ret_20d, rv20, high_window_days, days_since_high, dd_from_high, vix, fgi, foreign_net`。高點取最近 200 筆最大值；目前不足 200 天，所以是期間高點（`high_window_days` 記錄實際視窗長度）。**沒有量能特徵**（TAIEX `volume` 為 0）。
 - **資料表：** `market_regime_daily`，PK(`asof_date`,`rule_version`)，另有 `regime`、`legacy_regime`（同一次執行現行規則的判斷）、`run_date`、`created_at`；RLS 啟用、無 policy。建表 SQL 為 `market_regime_daily.sql`（交付過；使用者是否已執行**未確認**）。
-- **驗證：** 六種合成情境與 `alpha_agent1` 全流程（資料表正常／回 404 兩條路徑）以模擬資料通過；**尚未在線上驗證**。
+- **驗證：** 六種合成情境與 `alpha_agent1` 全流程（資料表正常／回 404 兩條路徑）以模擬資料通過；線上寫入已於對話三十確認正常（見該章 §1）。
 
 ### 4. 修正：Agent 1 的 TAIEX 序列取到最舊 120 筆（潛伏 bug）
 
@@ -803,9 +807,87 @@ Jul 16（週四）06:56 台灣時間執行再次觸發 `openapi.twse.com.tw` 失
 - **自我成長的回饋迴路（評分 → 命中率 → 提示）建立在評分之上**，評分一壞整套都失真；新增這類機制要抽樣核對評分結果。
 - **GitHub `schedule` 不準時**，整點／半點最容易延遲。
 
-### 8. 新對話建議起手式
+### 8. 新對話建議起手式（已過期，改看「對話三十更新」§8）
 
 1. 確認 10/21 起 Agent 1 log／回應 `shadow.saved: true`，並查 `market_regime_daily`；若 `saved:false` 且 error 為 404，執行 `market_regime_daily.sql`。
 2. 看 cron 06:17／06:47 實際觸發延遲有無改善。
 3. 10/23（週五）16:00 後（建議晚上看）驗證週報自動觸發。
 4. 觀察預測中性占比、`rank`、檢討篇與文章語氣；shadow 累積 2～4 週後比對 v1 與舊規則，再決定 Phase 2 或升 v2（細節見待辦）。
+
+---
+
+## 對話三十更新（2026-11-02）
+
+### 1. 氣候分類器 shadow 已線上運作，首批資料（asof 10/20～10/29，共 6 筆）
+
+- Run #158（10/21）agent1 回應 `shadow: {regime: "normal", saved: true}`，代表 `market_regime_daily` 已存在且寫入正常。
+- 6 筆 v1 全是 `normal`；同期舊規則（`legacy_regime`）逐日翻轉：10/20 trending_down、10/21 trending_up、10/22 trending_down、10/27 consolidating、10/28 trending_up、10/29 trending_down。舊規則幾乎只看當天漲跌加外資買賣超，**這是推論，沒有逐日漲跌幅核對**。
+- 同期特徵：`dd_from_high` −5.6%～−7.6%、`days_since_high` 9～14、`ret_5d` −4.2%～+0.5%。10/20 那筆：收盤 46,292.93、MA20 48,170.13、MA60 46,094.35、MA20 5 日斜率 +0.64%、rv20 20.87。收盤跌破 MA20（約 −3.9%）但仍在 MA60 之上，MA20 仍上揚 → v1 規則逐條都不成立 → `normal`（是照規則算出，不是誤判）。
+- 結論：v1 的 `normal` 混了「上升趨勢中的拉回」與「真的沒方向」，樣本若都是這種型態，命中率比較沒有意義。v2 構想見「待辦」，尚未動工。
+
+### 2. 日期缺口：10/23 與 10/26 都是休市日，不是收集失敗
+
+- `stock_daily_twse` 的 TAIEX 缺 10/23、10/26；`sector_index_daily`、`stock_daily_twse`、`market_chips_daily` 查 10/23 都是 0 筆。
+- 10/23（週五）：薔琵颱風，台北市停止上班上課，台股休市（依 10/22 的新聞報導；**未再核對證交所公告**）。10/26（週一）：光復節 10/25 逢週日，補假 10/26（來源：期貨商假日表頁面，頁面註明以交易所公告為準）。
+- 我一度誤判成「資料缺漏」。**教訓：資料缺日先查休市日（國定假日、補假、颱風）**，再懷疑收集端。
+- `lastTradingDay()` 讀程式碼的結論：週一／週二執行時候選日 10/23、10/26 查不到資料，會改問 TWSE `STOCK_DAY`（2330）取得最新交易日 10/22，所以不會寫錯日期。這是讀程式碼推論，沒有逐一核對當天 log。
+
+### 3. cron 改非整點的結果：沒有明顯改善
+
+- 10/21：Collect TWSE #121 排程 06:17、實際 08:38（晚 2 小時 21 分）；Collect FinMind #112 排程 06:47、實際 08:59（晚 2 小時 12 分）；Collect Alpha Report #120、Alpha 隨筆 #158 於 08:59 依序完成，三個 agent 皆綠。
+- 改前延遲 1 小時 54 分～2 小時 53 分，範圍相近。目前只有一天的新樣本，傾向「GitHub 對這個 repo 的 `schedule` 整體排隊」而不是整點負載。
+
+### 4. VIX／FGI 恆為 NULL 的根因：`Promise.allSettled` 陣列錯位（`alpha_agent1`）
+
+**現象：** `market_regime_daily.features` 的 `vix`、`fgi` 在 6 筆資料全為 null；但手動打 `/api/news?endpoint=fgi`（score 26.24）與 `endpoint=vix`（VIX 19.42）都正常，Vercel Logs 沒有任何抓取錯誤、Warning 為 0。
+
+**根因（主因）：** `alpha_agent1` 的陣列把 `alpha_daily_report` 查詢插在第 6 位，但解構變數第 6 位是 `topStocksRes`，後面四個結果各錯位一格：
+
+| 變數 | 實際拿到 | 後果 |
+|---|---|---|
+| `topStocksRes` | 每日報告 | 「成交量前5大：undefined(undefined) undefined（N/A）」垃圾行 |
+| `fgiData` | 成交量前 5 大 | FGI 恆為 null |
+| `vixData` | FGI | VIX 恆為 null |
+| `dailyReportRes` | VIX | 該區塊拋錯，落入 `（市場資料暫時無法取得）` |
+
+**次要問題（同時修正；錯位掩蓋了它們，所以是否曾實際造成失敗未驗證）：**
+- `fetchVIX` 讀 FinMind `USStockPrice` 用小寫 `close`，但 `endpoint=futures`（同檔 1765 行附近）讀同一資料集用大寫 `Close`。小寫會得到 `undefined`，又因有回傳列而不會 fallback 到 Yahoo。（依程式碼對照推論，沒有實際打 FinMind API 確認。）
+- `fetchFGI` 的 User-Agent 只有 `Mozilla/5.0`，與可用的 `endpoint=fgi` 的完整 Chrome UA 不同。
+- 失敗時的 `.catch(() => null)` 改為 `console.error(...)`；FinMind 無有效 VIX 時印 `console.warn` 並 fallback Yahoo。
+
+**修正（兩次 commit，皆為使用者手動上傳）：** ① `fetchVIX` 改讀 `Close ?? close`、`fetchFGI` 換完整 UA、補錯誤 log；② 把 `alpha_daily_report` 查詢移到陣列最後，順序與解構變數一致（+4／−1 行）。`alpha_analyze`（stockRows…futuresData）的陣列順序已核對正確，不需動。
+
+**驗證：**
+- 用模擬 `fetch` 跑完整 `alpha_agent1`，修正前出現垃圾行與「市場資料暫時無法取得」、沒有市場情緒與每日報告；修正後全部出現。
+- 線上：2026-11-02 部署後，`market_regime_daily` asof 10/29 這筆 `vix = 19.42`、`fgi = 26`（FGI 因 regex `(\d+)` + `parseInt` 只存整數）。10/20～10/28 的舊資料列仍是 NULL：Agent 1 只寫最新一個交易日，不會回補，也不建議硬補。
+
+**連帶影響：**
+- Agent 3 過去一直收到垃圾行與「市場資料暫時無法取得」，對話十七的「每日報告 → Agent 3 方向對齊」功能實際上沒有運作；何時失效未查（見待辦）。
+- 舊規則（`market_regime`）的 FGI／VIX 分支、v1 的 VIX ≥ 25 條件，到 11/2 才第一次真正生效。FGI 目前約 26，離舊規則 ≤ 25（trending_down）下限很近。
+- Agent 3 的 prompt 多一行市場情緒、一行每日報告，TPM 緩衝約 1000，增加量很小；仍要留意 Groq 429。
+
+### 5. 除錯備忘
+
+- `api/news.js` 的 `console.error`／`console.warn` 在 **Vercel → Logs → Runtime Logs**，不在 GitHub Actions log。我一度叫使用者去 Actions log 找，是錯的。
+- Vercel Logs 可用「Last 30 minutes」時間範圍＋Level 篩選；用 `[Agent 1]` 當關鍵字搜尋可避開 `url.parse()` DeprecationWarning 噪音。
+- 手動觸發 workflow 前，先確認 Vercel Deployments 最新一筆已是剛上傳的 commit 且狀態 Ready，否則 agent1 可能還在打舊版。
+
+### 6. 教訓
+
+- **`Promise.allSettled` + 陣列解構靠位置對應**：新增項目放最後、核對名稱順序；插在中間會讓後面全部錯位且不報錯。
+- **「某欄位恆為 NULL」要追到呼叫端的變數對應**，不要只看抓取函式本身；兩個 endpoint 都正常時，問題多半在呼叫端。
+- **靜默 catch 掩蓋問題**：`.catch(() => null)` 讓錯誤完全看不到，至少要留一行 `console.error`。
+- **缺日先查休市日**（國定假日、補假、颱風），再懷疑收集端。
+- **新舊規則比較要記下生效日**：舊規則吃進的資料在 10/29 起不同，之後比對命中率必須分段。
+
+### 7. 作業備忘
+
+- 本次交付的檔案皆為 `api/news.js`，改檔流程同「Claude 操作規則」第 10、11 條；交付後以 `git reset --hard origin/main` 清掉暫存 clone（先 `cmp` 確認與交付檔一致）。
+- 本次沒有新增 SQL。
+
+### 8. 新對話建議起手式
+
+1. 查 `market_regime_daily` 最新 3 筆，確認 asof 10/30 之後 `vix`、`fgi` 仍有值；看 Agent 3 新隨筆是否引用市場情緒與每日報告。
+2. 驗證週報自動路徑（10/23 颱風休市，改看 10/23 是否照跑與 10/30）。
+3. 觀察預測中性占比、`rank`、檢討篇與文章語氣；shadow 累積 2～4 週後，以 asof 10/29 為分界比對 v1 與舊規則，再決定 v2（`pullback`）與 Phase 2。
+4. 沒問題後清理三張備份表（見待辦）。
